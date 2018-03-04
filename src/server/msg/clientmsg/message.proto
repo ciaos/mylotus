@@ -1,0 +1,184 @@
+package clientmsg;
+
+///////////////////////////////////////////////
+//msg id
+///////////////////////////////////////////////
+
+enum MessageType
+{
+	MT_PING = 0;
+	MT_PONG = 1;
+	MT_REQ_SERVERTIME = 2;
+	MT_RLT_SERVERTIME = 3;
+	MT_REQ_REGISTER = 4;
+	MT_RLT_REGISTER = 5;
+	MT_REQ_SERVERLIST = 6;
+	MT_RLT_SERVERLIST = 7;
+	MT_REQ_LOGIN = 8;
+	MT_RLT_LOGIN = 9;
+	MT_REQ_MATCH = 10;
+	MT_RLT_NOTIFYBATTLEADDRESS = 11;
+	MT_REQ_CONNECTBS = 12;
+	MT_RLT_CONNECTBS = 13;
+	MT_RLT_STARTBATTLE = 14;
+}
+
+///////////////////////////////////////////////
+//for test
+///////////////////////////////////////////////
+message Ping {
+	required uint32 ID = 1;
+}
+
+message Pong {
+	required uint32 ID = 2;
+}
+
+message Req_ServerTime {
+	required uint32 Time = 1;
+}
+
+message Rlt_ServerTime {
+	required uint32 Time = 2;
+}
+
+///////////////////////////////////////////////
+//login server
+///////////////////////////////////////////////
+
+enum Type_LoginRetCode
+{
+	LRC_NONE = 0;
+	LRC_ACCOUNT_EXIST = 1;
+	LRC_ACCOUNT_NOT_EXIST = 2;
+	LRC_PASSWORD_ERROR = 3;
+	
+	LRC_OTHER = 100;
+}
+
+//register and login
+message Req_Register
+{
+	required string	  UserName = 1;	//用户名
+	required string	  Password = 2;	//密码明文
+	required int32    ClientVersion = 3; //客户端版本号
+	required bool	  IsLogin = 4[default = false]; //登录还是注册
+}
+
+message Rlt_Register
+{
+	required Type_LoginRetCode 	  	RetCode = 1; 	// 0 为OK
+	optional string   			UserID   = 2;	//玩家全局ID
+	optional bytes   			SessionKey = 3; //玩家密钥
+}
+
+//req server list
+message Req_ServerList
+{
+	required int32 		Channel = 1[default = 0];
+}
+
+message Rlt_ServerList
+{
+	message ServerInfo
+	{
+		required 	int32 		ServerID = 1;
+		required 	string 		ServerName = 2;
+		required 	int32 		Status = 3;
+		required 	string 		ConnectAddr = 4;
+	}
+
+	required int32		ServerCount = 1;
+	repeated ServerInfo	ServerList = 2;
+}
+
+///////////////////////////////////////////////
+//game server
+///////////////////////////////////////////////
+
+enum Type_GameRetCode
+{
+	GRC_NONE = 0;
+	
+	GRC_OTHER = 100;
+}
+
+message Req_Login
+{
+	required  string	UserID				= 1;
+	required  bytes	 	SessionKey			= 2;
+	required  int32   	ServerID			= 3;
+}
+
+message Rlt_Login
+{
+	required  Type_GameRetCode	RetCode			= 1;
+	required  string 	CharID 				= 2;
+	required  bool 		IsNewCharacter 		= 3;
+}
+
+enum MatchActionType
+{
+	MAT_JOIN = 0;
+	MAT_CANCEL = 1;
+}
+
+enum MatchModeType
+{
+	MMT_NORMAL = 0;
+	MMT_RANK = 1;
+}
+
+message Req_Match
+{
+	required  MatchActionType Action = 1;
+	required  MatchModeType Mode = 2;
+}
+
+message Rlt_NotifyBattleAddress
+{
+	required 	int32 	RoomID 				= 1; //房间号
+	required 	string 	BattleAddr 			= 2;
+	required 	bytes 	BattleKey 			= 3; //战斗秘钥
+}
+
+///////////////////////////////////////////////
+//battle server
+///////////////////////////////////////////////
+
+enum Type_BattleRetCode
+{
+	BRC_NONE = 0;
+	BRC_BATTLEKEY_ERROR = 1;
+	BRC_ROOM_NOT_EXIST = 2;
+	BRC_CHARID_NOT_IN_ROOM = 3;
+	
+	BRC_OTHER = 100;
+}
+
+message Req_ConnectBS
+{
+	required 	int32 	RoomID 	= 1;
+	required 	bytes 	BattleKey = 2; //战斗秘钥
+	required 	string 	CharID = 3;
+}
+
+message Rlt_ConnectBS
+{
+	required 	Type_BattleRetCode  RetCode = 1;
+}
+
+message Rlt_StartBattle
+{
+	message MemberInfo
+	{
+		required  string CharID = 1;
+		required  string CharName = 2;
+		required  int32  CharType = 3;
+		required  int32  TeamType = 4;
+	}
+
+	required 	int32 	RandSeed = 1; //随机战斗种子
+	
+	repeated 	MemberInfo Member = 2;
+}

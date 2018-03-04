@@ -1,0 +1,13 @@
+package proxymsg;
+
+//proxy message protocol
+message InternalMessage {
+	required int32 	fromid = 1;
+	required string fromtype = 2;
+	required int32 	toid = 3;
+	required string totype = 4;
+	optional uint64	charid = 5;
+	optional uint32 msgid = 6;
+	optional bytes 	msgdata = 7;
+}
+
