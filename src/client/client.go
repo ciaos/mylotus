@@ -15,17 +15,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	/*
-		reqMsg := &clientmsg.Hello{
-			Name: proto.String("PJ"),
-		}
-	*/
-	reqMsg := &clientmsg.Req_Register{
+
+	reqMsg := &clientmsg.Ping{
+		ID: proto.Uint32(123),
+	}
+
+	/*	reqMsg := &clientmsg.Req_Register{
 		UserName:      proto.String("PJ"),
 		Password:      proto.String("123456"),
 		ClientVersion: proto.Int32(1),
 		IsLogin:       proto.Bool(false),
-	}
+	}*/
 
 	data, err := proto.Marshal(reqMsg)
 	if err != nil {
@@ -36,7 +36,7 @@ func main() {
 
 	// 默认使用大端序
 	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(1))
+	binary.BigEndian.PutUint16(reqbuf[2:], uint16(0))
 
 	copy(reqbuf[4:], data)
 
@@ -56,13 +56,13 @@ func main() {
 
 	switch int(msgid) {
 	case 0:
-		msg := &clientmsg.Hello{}
+		msg := &clientmsg.Pong{}
 		proto.Unmarshal(rspbuf[4:len], msg)
-		fmt.Println("Recv 0 ", msg.GetName())
+		fmt.Println("Recv 0 ", msg.GetID())
 	case 2:
 		msg := &clientmsg.Rlt_Register{}
 		proto.Unmarshal(rspbuf[4:len], msg)
-		fmt.Println("Recv 2 ", msg.GetCode())
+		fmt.Println("Recv 2 ", msg.GetRetCode())
 	default:
 		fmt.Println("Invalid msgid ", msgid, rspbuf)
 	}

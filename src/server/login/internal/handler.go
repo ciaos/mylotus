@@ -6,6 +6,7 @@ import (
 	"server/msg/clientmsg"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/name5566/leaf/db/mongodb"
 	"github.com/name5566/leaf/gate"
 	"github.com/name5566/leaf/log"
@@ -13,6 +14,7 @@ import (
 )
 
 type Account struct {
+	Id_        bson.ObjectId
 	UserName   string
 	PassWord   string
 	Status     int32
@@ -22,6 +24,7 @@ type Account struct {
 
 func init() {
 	handler(&clientmsg.Req_Register{}, handleRegister)
+	handler(&clientmsg.Req_ServerList{}, handlerReqServerList)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -52,7 +55,9 @@ func handleRegister(args []interface{}) {
 		if m.GetIsLogin() {
 			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST)})
 		} else {
+			userid := bson.NewObjectId()
 			err = c.Insert(&Account{
+				Id_:        userid,
 				UserName:   m.GetUserName(),
 				PassWord:   m.GetPassword(),
 				Status:     0,
@@ -62,7 +67,7 @@ func handleRegister(args []interface{}) {
 			if err != nil {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
 			} else {
-				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE)})
+				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(userid.String())})
 			}
 		}
 	} else {
@@ -74,10 +79,31 @@ func handleRegister(args []interface{}) {
 			if result.PassWord == m.GetPassword() {
 				c.Update(bson.M{"username": m.GetUserName()}, bson.M{"$set": bson.M{"updatetime": time.Now()}})
 
-				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE)})
+				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(result.Id_.String())})
 			} else {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR)})
 			}
 		}
 	}
+}
+
+func handlerReqServerList(args []interface{}) {
+	//m := args[0].(*clientmsg.Req_ServerList)
+	a := args[1].(gate.Agent)
+
+	resMsg := &clientmsg.Rlt_ServerList{}
+	resMsg.ServerCount = proto.Int32(int32(len(conf.Server.GameServerList)))
+
+	for _, serverInfo := range conf.Server.GameServerList {
+
+		si := &clientmsg.Rlt_ServerList_ServerInfo{}
+		si.ServerID = proto.Int32(int32(serverInfo.ServerID))
+		si.ServerName = proto.String(serverInfo.ServerName)
+		si.Status = proto.Int32(int32(serverInfo.Tag))
+		si.ConnectAddr = proto.String(serverInfo.ConnectAddr)
+
+		resMsg.ServerList = append(resMsg.ServerList, si)
+	}
+
+	a.WriteMsg(resMsg)
 }
