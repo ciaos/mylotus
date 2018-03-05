@@ -1,4 +1,4 @@
-package internal
+package g
 
 import (
 	"fmt"
@@ -11,20 +11,19 @@ import (
 	"github.com/name5566/leaf/log"
 )
 
-var p *Proxy
+var Predis *RedisProxy
 
-type Proxy struct {
+type RedisProxy struct {
 	conn redis.Conn
 }
 
-func initRedisConnection() {
-	p = new(Proxy)
-	p.conn, _ = redis.Dial("tcp", conf.Server.RedisHost)
-	p.conn.Do("auth", conf.Server.RedisPassWord)
+func InitRedisConnection() {
+	Predis = new(RedisProxy)
+	Predis.conn, _ = redis.Dial("tcp", conf.Server.RedisHost)
+	Predis.conn.Do("auth", conf.Server.RedisPassWord)
 }
-
-func closeRedisConnection() {
-	p.conn.Close()
+func UninitRedisConnection() {
+	Predis.conn.Close()
 }
 
 func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msgdata interface{}) {
@@ -54,14 +53,9 @@ func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msg
 		return
 	}
 
-	skeleton.Go(func() {
-		initRedisConnection()
-		_, err = redis.DoWithTimeout(p.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
-		if err != nil {
-			log.Error("DoWithTimeout Error")
-			return
-		}
-		closeRedisConnection()
-	}, func() {
-	})
+	_, err = redis.DoWithTimeout(Predis.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
+	if err != nil {
+		log.Error("DoWithTimeout Error")
+		return
+	}
 }

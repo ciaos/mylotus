@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/name5566/leaf/db/mongodb"
 	"github.com/name5566/leaf/gate"
 	"github.com/name5566/leaf/log"
 	"gopkg.in/mgo.v2/bson"
@@ -23,11 +22,7 @@ func init() {
 	handler(&clientmsg.Req_ServerTime{}, handleReqServerTime)
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
-
-	g.Mongo, _ = mongodb.Dial(conf.Server.MongoDBHost, 10)
 }
-
-var mongo *mongodb.DialContext
 
 func handler(m interface{}, h interface{}) {
 	skeleton.RegisterChanRPC(reflect.TypeOf(m), h)
@@ -77,8 +72,8 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
-	s := mongo.Ref()
-	defer mongo.UnRef(s)
+	s := g.Mongo.Ref()
+	defer g.Mongo.UnRef(s)
 
 	c := s.DB("game").C("character")
 
@@ -157,7 +152,10 @@ func handleReqMatch(args []interface{}) {
 		Action:    proto.Int32(int32(m.GetAction())),
 	}
 
-	len(conf.Server.MatchServerList)
+	//todo 固定路由到指定的MatchServer
+	if len(conf.Server.MatchServerList) > 0 {
+		matchserver := conf.Server.MatchServerList[0]
 
-	SendMessageTo(1, "gameserver", charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), &innerReq)
+		g.SendMessageTo(int32(matchserver.ServerID), matchserver.ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), &innerReq)
+	}
 }

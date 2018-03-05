@@ -27,25 +27,34 @@ func queueMessage(args []interface{}) {
 		log.Error("queueMessage InnerMsg Decode Error %v", err)
 		return
 	}
-	switch proxyMsg.GetMsgid() {
-	case 0:
-		innerMsg := &clientmsg.Ping{}
-		err = proto.Unmarshal(proxyMsg.GetMsgdata(), innerMsg)
-		if err != nil {
-			log.Error("queueMessage Hello Decode Error %v", err)
-			return
-		}
-		log.Debug("Recv %v", innerMsg.GetID())
+	switch proxymsg.ProxyMessageType(proxyMsg.GetMsgid()) {
+	case proxymsg.ProxyMessageType_PMT_GS_MS_MATCH:
+		proxyHandleGSMSMatch(proxyMsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", proxyMsg.GetMsgid())
+	}
+}
+
+func proxyHandleGSMSMatch(proxyMsg *proxymsg.InternalMessage) {
+	innerMsg := &proxymsg.Proxy_GS_MS_Match{}
+	err := proto.Unmarshal(proxyMsg.GetMsgdata(), innerMsg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_GS_MS_Match Decode Error %v", err)
+		return
+	}
+	log.Debug("Recv %v", innerMsg.GetCharid(), innerMsg.GetAction())
+
+	if innerMsg.GetAction() == int32(clientmsg.MatchActionType_MAT_JOIN) {
+		g.JoinTable(innerMsg.GetCharid(), innerMsg.GetMatchmode())
 	}
 }
 
 func updateFrame(args []interface{}) {
 
 	a := args[0].(time.Time)
-	log.Debug("Tick %v : %v : %v", time.Now().Unix(), time.Now().UnixNano(), a)
+	//log.Debug("Tick %v : %v : %v", time.Now().Unix(), time.Now().UnixNano(), a)
 
+	g.UpdateTableManager(&a)
 }
 
 func rpcNewAgent(args []interface{}) {
