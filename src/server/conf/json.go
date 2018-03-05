@@ -26,14 +26,28 @@ var Server struct {
 	RedisPassWord string
 	MongoDBHost   string
 
-	GameServerList []GameServerCfg
+	GameServerList   []GameServerCfg
+	BattleServerList []BattleServerCfg
+	MatchServerList  []MatchServerCfg
 }
 
 type GameServerCfg struct {
 	ServerID    int
+	ServerType  string
 	ServerName  string
 	Tag         int
 	ConnectAddr string
+}
+
+type BattleServerCfg struct {
+	ServerID    int
+	ServerType  string
+	ConnectAddr string
+}
+
+type MatchServerCfg struct {
+	ServerID   int
+	ServerType string
 }
 
 func init() {

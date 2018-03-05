@@ -10,7 +10,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/name5566/leaf/db/mongodb"
 	"github.com/name5566/leaf/gate"
-	"github.com/name5566/leaf/log"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -23,9 +22,13 @@ type Account struct {
 	UpdateTime time.Time
 }
 
+var mongo *mongodb.DialContext
+
 func init() {
 	handler(&clientmsg.Req_Register{}, handleRegister)
 	handler(&clientmsg.Req_ServerList{}, handlerReqServerList)
+
+	mongo, _ = mongodb.Dial(conf.Server.MongoDBHost, 10)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -36,21 +39,14 @@ func handleRegister(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Register)
 	a := args[1].(gate.Agent)
 
-	dc, err := mongodb.Dial(conf.Server.MongoDBHost, 10)
-	if err != nil {
-		log.Error("handleRegister mongodb.Dial Error %v %v", conf.Server.MongoDBHost, err)
-		return
-	}
-	defer dc.Close()
-
 	// session
-	s := dc.Ref()
-	defer dc.UnRef(s)
+	s := mongo.Ref()
+	defer mongo.UnRef(s)
 
 	c := s.DB("login").C("account")
 
 	result := Account{}
-	err = c.Find(bson.M{"username": m.GetUserName()}).One(&result)
+	err := c.Find(bson.M{"username": m.GetUserName()}).One(&result)
 	if err != nil {
 		//Account Not Exist
 		if m.GetIsLogin() {

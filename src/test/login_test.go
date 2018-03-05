@@ -39,7 +39,6 @@ func register(t *testing.T, conn *net.Conn, reqMsg *clientmsg.Req_Register, chec
 		if msg.GetRetCode() != checkCode {
 			t.Error("RetCode MisMatch ", msg.GetRetCode(), checkCode)
 		} else {
-			t.Log("Rlt_Register ", msg.GetRetCode())
 			return msg.GetUserID(), msg.GetSessionKey(), nil
 		}
 	default:
@@ -58,7 +57,7 @@ func TestLogin(t *testing.T) {
 
 	//Register First
 	rand.Seed(time.Now().UnixNano())
-	username := fmt.Sprintf("pengjing%d", rand.Intn(1))
+	username := fmt.Sprintf("pengjing%d", rand.Intn(100))
 	registerMsg := &clientmsg.Req_Register{
 		UserName:      proto.String(username),
 		Password:      proto.String("123456"),
@@ -71,7 +70,6 @@ func TestLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal("Register Error")
 	}
-	t.Log("UserID", userid, GameServerID, sessionkey)
 	reqMsg := &clientmsg.Req_Login{
 		UserID:     proto.String(userid),
 		SessionKey: sessionkey,

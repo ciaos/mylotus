@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"reflect"
 	"server/conf"
-	"server/game/internal/data"
+	"server/game/internal/g"
 	"server/msg/clientmsg"
+	"server/msg/proxymsg"
 	"server/tool"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ func init() {
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
 
-	mongo, _ = mongodb.Dial(conf.Server.MongoDBHost, 10)
+	g.Mongo, _ = mongodb.Dial(conf.Server.MongoDBHost, 10)
 }
 
 var mongo *mongodb.DialContext
@@ -36,7 +37,7 @@ func handlePing(args []interface{}) {
 	m := args[0].(*clientmsg.Ping)
 	a := args[1].(gate.Agent)
 
-	log.Debug("RecvPing %v %v", a.RemoteAddr())
+	//log.Debug("RecvPing %v %v", a.RemoteAddr())
 	a.WriteMsg(&clientmsg.Pong{ID: proto.Uint32(m.GetID())})
 
 	//SendMessageTo(int32(conf.Server.ServerID), conf.Server.ServerType, uint64(1), uint32(0), m)
@@ -82,16 +83,16 @@ func handleReqLogin(args []interface{}) {
 	c := s.DB("game").C("character")
 
 	var pcharid string
-	result := data.Character{}
+	result := g.Character{}
 	err = c.Find(bson.M{"userid": m.GetUserID(), "gsid": conf.Server.ServerID}).One(&result)
 	if err != nil {
 		//create new character
 		charid := bson.NewObjectId()
-		err = c.Insert(&data.Character{
+		err = c.Insert(&g.Character{
 			Id:         charid,
 			UserId:     m.GetUserID(),
 			GsId:       m.GetServerID(),
-			Status:     data.STATUS_ONLINE,
+			Status:     g.PLAYER_STATUS_ONLINE,
 			CreateTime: time.Now(),
 		})
 		if err != nil {
@@ -103,7 +104,7 @@ func handleReqLogin(args []interface{}) {
 		}
 
 		c = s.DB("game").C(fmt.Sprintf("userinfo_%d", m.GetServerID()))
-		c.Insert(&data.UserInfo{
+		c.Insert(&g.UserInfo{
 			CharId:   charid.String(),
 			CharName: "",
 			Level:    1,
@@ -119,7 +120,7 @@ func handleReqLogin(args []interface{}) {
 		pcharid = charid.String()
 
 	} else {
-		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": data.STATUS_ONLINE}})
+		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
 
 		a.SetUserData(result.Id.String())
 		a.WriteMsg(&clientmsg.Rlt_Login{
@@ -131,10 +132,32 @@ func handleReqLogin(args []interface{}) {
 		pcharid = result.Id.String()
 	}
 
-	data.PlayerManager[pcharid] = &a
+	agent, ok := g.PlayerManager[pcharid]
+	if ok == true {
+		(*agent).Close()
+		delete(g.PlayerManager, pcharid)
+	}
+	g.PlayerManager[pcharid] = &a
 	log.Debug("PlayerManager Add %v", pcharid)
 }
 
 func handleReqMatch(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Match)
+	a := args[1].(gate.Agent)
 
+	charid := a.UserData()
+	if charid == nil {
+		log.Error("Player Match Not Login")
+		return
+	}
+
+	innerReq := &proxymsg.Proxy_GS_MS_Match{
+		Charid:    proto.String(charid.(string)),
+		Matchmode: proto.Int32(int32(m.GetMode())),
+		Action:    proto.Int32(int32(m.GetAction())),
+	}
+
+	len(conf.Server.MatchServerList)
+
+	SendMessageTo(1, "gameserver", charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), &innerReq)
 }

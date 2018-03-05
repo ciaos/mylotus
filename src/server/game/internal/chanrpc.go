@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"server/game/internal/data"
+	"server/game/internal/g"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"time"
@@ -64,7 +64,7 @@ func rpcCloseAgent(args []interface{}) {
 	_ = a
 
 	if charid != nil {
-		delete(data.PlayerManager, charid.(string))
+		delete(g.PlayerManager, charid.(string))
 		log.Debug("PlayerManager Remove %v", charid)
 	}
 }

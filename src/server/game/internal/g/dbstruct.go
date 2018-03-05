@@ -1,16 +1,9 @@
-package data
+package g
 
 import (
 	"time"
 
-	"github.com/name5566/leaf/gate"
 	"gopkg.in/mgo.v2/bson"
-)
-
-const (
-	STATUS_OFFLINE = 0
-	STATUS_ONLINE  = 1
-	STATUS_BATTLE  = 2
 )
 
 type Character struct {
@@ -27,5 +20,3 @@ type UserInfo struct {
 	CharName string
 	Level    int32
 }
-
-var PlayerManager = make(map[string]*gate.Agent)
