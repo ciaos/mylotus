@@ -18,6 +18,8 @@ var Server struct {
 	ConsolePort int
 	ProfilePath string
 
+	TickInterval int
+
 	ServerID      int
 	ServerType    string
 	RedisHost     string

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"server/base"
+	"server/conf"
 	"server/game"
 	"time"
 
@@ -30,7 +31,7 @@ func (m *Module) Run(closeSig chan bool) {
 		select {
 		case <-closeSig:
 			return
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(time.Duration(conf.Server.TickInterval) * time.Millisecond):
 			game.ChanRPC.Go("TickFrame", time.Now())
 		}
 	}
