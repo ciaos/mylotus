@@ -5,7 +5,7 @@
 	"MaxConnNum": 20000,
 	"ConsolePort": 3333,
 	
-	"TickInterval" : 1000,
+	"TickInterval" : 100000,
 	
 	"ServerID" : 1,
 	"ServerType": "gameserver",

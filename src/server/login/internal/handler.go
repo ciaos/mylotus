@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"server/conf"
 	"server/msg/clientmsg"
+	"server/tool"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -14,7 +15,7 @@ import (
 )
 
 type Account struct {
-	Id_        bson.ObjectId
+	Id         bson.ObjectId `json:"id"        bson:"_id"`
 	UserName   string
 	PassWord   string
 	Status     int32
@@ -57,7 +58,7 @@ func handleRegister(args []interface{}) {
 		} else {
 			userid := bson.NewObjectId()
 			err = c.Insert(&Account{
-				Id_:        userid,
+				Id:         userid,
 				UserName:   m.GetUserName(),
 				PassWord:   m.GetPassword(),
 				Status:     0,
@@ -67,7 +68,12 @@ func handleRegister(args []interface{}) {
 			if err != nil {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
 			} else {
-				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(userid.String())})
+				sessionkey, err := tool.DesEncrypt([]byte(userid.String()), []byte(tool.CRYPT_KEY))
+				if err != nil {
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
+				} else {
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(userid.String()), SessionKey: sessionkey})
+				}
 			}
 		}
 	} else {
@@ -78,8 +84,12 @@ func handleRegister(args []interface{}) {
 		} else {
 			if result.PassWord == m.GetPassword() {
 				c.Update(bson.M{"username": m.GetUserName()}, bson.M{"$set": bson.M{"updatetime": time.Now()}})
-
-				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(result.Id_.String())})
+				sessionkey, err := tool.DesEncrypt([]byte(result.Id.String()), []byte(tool.CRYPT_KEY))
+				if err != nil {
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
+				} else {
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(result.Id.String()), SessionKey: sessionkey})
+				}
 			} else {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR)})
 			}

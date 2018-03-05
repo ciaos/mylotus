@@ -113,8 +113,8 @@ message Req_Login
 message Rlt_Login
 {
 	required  Type_GameRetCode	RetCode			= 1;
-	required  string 	CharID 				= 2;
-	required  bool 		IsNewCharacter 		= 3;
+	optional  string 	CharID 				= 2;
+	optional  bool 		IsNewCharacter 		= 3;
 }
 
 enum MatchActionType

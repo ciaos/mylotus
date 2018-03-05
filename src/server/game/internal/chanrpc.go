@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"server/game/internal/data"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"time"
@@ -58,6 +59,12 @@ func rpcNewAgent(args []interface{}) {
 func rpcCloseAgent(args []interface{}) {
 	a := args[0].(gate.Agent)
 
+	charid := a.UserData()
 	log.Debug("Disconnected %v", a.RemoteAddr())
 	_ = a
+
+	if charid != nil {
+		delete(data.PlayerManager, charid.(string))
+		log.Debug("PlayerManager Remove %v", charid)
+	}
 }

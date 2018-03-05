@@ -5,19 +5,20 @@ import (
 	"net"
 	"server/msg/clientmsg"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 )
 
-func TestPing(t *testing.T) {
+func TestServerTime(t *testing.T) {
 	conn, err := net.Dial("tcp", TestServerAddr)
 	if err != nil {
 		t.Fatal("Connect Server Error ", err)
 	}
 	defer conn.Close()
 
-	reqMsg := &clientmsg.Ping{
-		ID: proto.Uint32(11),
+	reqMsg := &clientmsg.Req_ServerTime{
+		Time: proto.Uint32(uint32(time.Now().Unix())),
 	}
 
 	data, err := proto.Marshal(reqMsg)
@@ -26,7 +27,7 @@ func TestPing(t *testing.T) {
 	}
 	reqbuf := make([]byte, 4+len(data))
 	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_PING))
+	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_REQ_SERVERTIME))
 
 	copy(reqbuf[4:], data)
 
@@ -38,10 +39,10 @@ func TestPing(t *testing.T) {
 	msgid := binary.BigEndian.Uint16(rspbuf[2:])
 
 	switch clientmsg.MessageType(msgid) {
-	case clientmsg.MessageType_MT_PONG:
-		msg := &clientmsg.Pong{}
+	case clientmsg.MessageType_MT_RLT_SERVERTIME:
+		msg := &clientmsg.Rlt_ServerTime{}
 		proto.Unmarshal(rspbuf[4:len], msg)
-		t.Log("Pong ", msg.GetID())
+		t.Log("Rlt_ServerTime ", msg.GetTime())
 	default:
 		t.Error("Invalid msgid ", msgid)
 	}
