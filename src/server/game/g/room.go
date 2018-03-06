@@ -52,7 +52,7 @@ func InitRoomManager() {
 
 func (room *Room) broadcast(msgdata interface{}) {
 	for _, member := range (*room).members {
-		agent, ok := PlayerManager[(*member).charid]
+		agent, ok := BattlePlayerManager[(*member).charid]
 		if ok {
 			(*agent).WriteMsg(msgdata)
 		}

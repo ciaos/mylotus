@@ -106,7 +106,6 @@ func handleReqLogin(args []interface{}) {
 			Level:    1,
 		})
 
-		a.SetUserData(charid.String())
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode:        clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_NONE),
 			CharID:         proto.String(charid.String()),
@@ -118,7 +117,6 @@ func handleReqLogin(args []interface{}) {
 	} else {
 		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
 
-		a.SetUserData(result.Id.String())
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode:        clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_NONE),
 			CharID:         proto.String(result.Id.String()),
@@ -128,13 +126,7 @@ func handleReqLogin(args []interface{}) {
 		pcharid = result.Id.String()
 	}
 
-	agent, ok := g.PlayerManager[pcharid]
-	if ok == true {
-		(*agent).Close()
-		delete(g.PlayerManager, pcharid)
-	}
-	g.PlayerManager[pcharid] = &a
-	log.Debug("PlayerManager Add %v", pcharid)
+	g.AddGamePlayer(pcharid, &a)
 }
 
 func handleReqMatch(args []interface{}) {
@@ -181,7 +173,7 @@ func handleReqConnectBS(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	if g.ConnectRoom(m.GetCharID(), m.GetRoomID(), m.GetBattleKey()) {
-		a.SetUserData(m.GetCharID())
+		g.AddBattlePlayer(m.GetCharID(), &a)
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
 			RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_NONE),
 		})

@@ -13,7 +13,8 @@ func init() {
 	skeleton.RegisterCommand("ltable", "list table info", commandTable)
 	skeleton.RegisterCommand("lseat", "list seat of specified table", commandSeat)
 	skeleton.RegisterCommand("lmember", "list member of specified room", commandMember)
-	skeleton.RegisterCommand("lcount", "list online member count", commandCount)
+	skeleton.RegisterCommand("lgplayercount", "list gameserver online member count", commandGPlayerCount)
+	skeleton.RegisterCommand("lbplayercount", "list battleserver online member count", commandBPlayerCount)
 }
 
 func commandEcho(args []interface{}) interface{} {
@@ -56,6 +57,10 @@ func commandMember(args []interface{}) interface{} {
 	return ""
 }
 
-func commandCount(args []interface{}) interface{} {
-	return fmt.Sprintf("Player Count : %d", len(g.PlayerManager))
+func commandGPlayerCount(args []interface{}) interface{} {
+	return fmt.Sprintf("Player Count : %d", len(g.GamePlayerManager))
+}
+
+func commandBPlayerCount(args []interface{}) interface{} {
+	return fmt.Sprintf("Player Count : %d", len(g.BattlePlayerManager))
 }

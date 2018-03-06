@@ -22,8 +22,6 @@ func init() {
 }
 
 func queueMessage(args []interface{}) {
-
-	log.Debug("queueMessage Len %v", len(args))
 	pmsg := &proxymsg.InternalMessage{}
 	err := proto.Unmarshal(args[0].([]byte), pmsg)
 	if err != nil {
@@ -107,9 +105,9 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	_, ok := g.PlayerManager[pmsg.GetCharid()]
+	_, ok := g.GamePlayerManager[pmsg.GetCharid()]
 	if !ok {
-		log.Error("proxyHandleMSGSMatchResult g.PlayerManager Not Found %v", pmsg.GetCharid())
+		log.Error("proxyHandleMSGSMatchResult g.GamePlayerManager Not Found %v", pmsg.GetCharid())
 		return
 	}
 
@@ -167,7 +165,7 @@ func proxyHandleBSGSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
 	}
 
 	if msg.GetRetcode() == 0 {
-		agent, ok := g.PlayerManager[pmsg.GetCharid()]
+		agent, ok := g.GamePlayerManager[pmsg.GetCharid()]
 		if ok {
 			rsp := &clientmsg.Rlt_NotifyBattleAddress{
 				RoomID:     proto.Int32(msg.GetBattleroomid()),
@@ -202,13 +200,12 @@ func rpcNewAgent(args []interface{}) {
 func rpcCloseAgent(args []interface{}) {
 	a := args[0].(gate.Agent)
 
-	charid := a.UserData()
+	clientid := a.UserData()
 	log.Debug("Disconnected %v", a.RemoteAddr())
 	_ = a
 
-	if charid != nil {
-		g.LeaveRoom(charid.(string))
-		delete(g.PlayerManager, charid.(string))
-		log.Debug("PlayerManager Remove %v", charid)
+	if clientid != nil {
+		g.RemoveBattlePlayer(clientid.(string), a.RemoteAddr().String())
+		g.RemoveGamePlayer(clientid.(string), a.RemoteAddr().String())
 	}
 }
