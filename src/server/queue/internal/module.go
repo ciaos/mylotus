@@ -47,7 +47,6 @@ func (m *Module) update() {
 			log.Debug("SubScribe Queue %s: %d", v.Channel, v.Kind, v.Count)
 		case error:
 			log.Error("SubScribe Queue %s", v.Error())
-			return
 		}
 	}
 }
