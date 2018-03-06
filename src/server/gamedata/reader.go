@@ -14,6 +14,7 @@ func readRf(st interface{}) *recordfile.RecordFile {
 	if err != nil {
 		log.Fatal("%v", err)
 	}
+	rf.Comma = ','
 	fn := reflect.TypeOf(st).Name() + ".csv"
 	err = rf.Read("gamedata/csv/" + fn)
 	if err != nil {
@@ -23,4 +24,4 @@ func readRf(st interface{}) *recordfile.RecordFile {
 	return rf
 }
 
-var RfRecord = readRf(cfg.Record{})
+var CSVMatchMode = readRf(cfg.MatchMode{})

@@ -3,6 +3,8 @@ package g
 import (
 	"fmt"
 	"server/conf"
+	"server/gamedata"
+	"server/gamedata/cfg"
 	"server/msg/proxymsg"
 	"strings"
 	"time"
@@ -19,8 +21,7 @@ const (
 	MATCH_ALLOCROOM = 4
 	MATCH_EMPTY     = 5
 	MATCH_FINISH    = 6
-
-	MATCH_OK_COUNT = 2
+	MATCH_ERROR     = 7
 )
 
 type Seat struct {
@@ -48,13 +49,22 @@ func InitTableManager() {
 }
 
 func (table *Table) update(now *time.Time) int32 {
-	if (*now).Unix()-(*table).createtime > MATCH_TIMEOUT {
+	r := gamedata.CSVMatchMode.Index((*table).matchmode)
+	if r == nil {
+		log.Error("CSVMatchMode Not Found %v", (*table).matchmode)
+		return MATCH_ERROR
+	}
+	row := r.(*cfg.MatchMode)
+
+	if (*now).Unix()-(*table).createtime > int64(row.TimeOutSec) {
 		log.Debug("tableid %v timeout createtime %v now %v", (*table).tableid, (*table).createtime, (*now).Unix())
 		return MATCH_TIMEOUT
 	}
-	if len((*table).seats) >= MATCH_OK_COUNT {
+
+	if len((*table).seats) >= row.PlayerCnt {
 		return MATCH_OK
 	}
+
 	if len((*table).seats) <= 0 {
 		log.Debug("tableid %v empty", (*table).tableid)
 		return MATCH_EMPTY
@@ -90,14 +100,23 @@ func UpdateTableManager(now *time.Time) {
 		if (*table).status == MATCH_EMPTY {
 			delete(TableManager, i)
 		}
+		if (*table).status == MATCH_ERROR {
+			delete(TableManager, i)
+		}
 	}
 }
 
 func JoinTable(charid string, matchmode int32, serverid int32, servertype string) {
+	r := gamedata.CSVMatchMode.Index(matchmode)
+	if r == nil {
+		log.Error("JoinTable CSVMatchMode Not Found %v ", matchmode)
+		return
+	}
+	row := r.(*cfg.MatchMode)
 
 	var createnew = true
 	for i, table := range TableManager {
-		if len((*table).seats) < MATCH_OK_COUNT {
+		if len((*table).seats) < row.PlayerCnt {
 			seat := &Seat{
 				charid:     charid,
 				jointime:   time.Now().Unix(),

@@ -22,6 +22,7 @@ func init() {
 	handler(&clientmsg.Req_ServerTime{}, handleReqServerTime)
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
+	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -173,4 +174,19 @@ func handleReqMatch(args []interface{}) {
 	a.WriteMsg(&clientmsg.Rlt_Match{
 		RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
 	})
+}
+
+func handleReqConnectBS(args []interface{}) {
+	m := args[0].(*clientmsg.Req_ConnectBS)
+	a := args[1].(gate.Agent)
+
+	if g.ConnectRoom(m.GetCharID(), m.GetRoomID(), m.GetBattleKey()) {
+		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+			RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_NONE),
+		})
+	} else {
+		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+			RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_OTHER),
+		})
+	}
 }

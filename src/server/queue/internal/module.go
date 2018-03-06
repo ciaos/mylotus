@@ -36,6 +36,7 @@ func (m *Module) OnDestroy() {
 }
 
 func (m *Module) Run(closeSig chan bool) {
+	//return
 	m.psc.Subscribe(m.queueName)
 	for {
 		switch v := m.psc.Receive().(type) {

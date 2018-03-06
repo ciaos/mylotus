@@ -5,6 +5,8 @@ import (
 	"server/tool"
 	"strings"
 	"time"
+
+	"github.com/name5566/leaf/log"
 )
 
 const (
@@ -13,6 +15,9 @@ const (
 	ROOM_CONNECTING      = 3
 	ROOM_FIGHTING        = 4
 	ROOM_END             = 5
+
+	MEMBER_OFFLINE   = 1
+	MEMBER_CONNECTED = 2
 )
 
 type Member struct {
@@ -20,6 +25,7 @@ type Member struct {
 	charname string
 	chartype int32
 	teamtype int32
+	status   int32
 }
 
 type Room struct {
@@ -45,7 +51,6 @@ func (room *Room) update(now *time.Time) int32 {
 }
 
 func UpdateRoomManager(now *time.Time) {
-
 	for _, room := range RoomManager {
 		(*room).status = (*room).update(now)
 	}
@@ -57,7 +62,7 @@ func CreateRoom(matchmode int32) int32 {
 		roomid = 1
 	}
 
-	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf("room%d", roomid)), []byte(tool.CRYPT_KEY))
+	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, roomid)), []byte(tool.CRYPT_KEY))
 
 	room := &Room{
 		roomid:     roomid,
@@ -82,13 +87,44 @@ func JoinRoom(charid string, roomid int32, charname string, chartype int32) []by
 				teamtype: 0,
 				charname: charname,
 				chartype: chartype,
+				status:   MEMBER_OFFLINE,
 			}
 			room.members[charid] = member
 			return room.battlekey
 		}
+		(*room).status = ROOM_SYNC_PLAYERINFO
 	}
 
 	return nil
+}
+
+func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
+	room, ok := RoomManager[roomid]
+	if ok {
+		(room).status = ROOM_CONNECTING
+
+		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
+		if err != nil {
+			log.Error("battlekey decrypt err %v", err)
+			return false
+		}
+
+		if string(plaintext) != fmt.Sprintf(CRYPTO_PREFIX, roomid) {
+			log.Error("battlekey mismatch")
+			return false
+		}
+
+		member, ok := room.members[charid]
+		if ok {
+			(*member).status = MEMBER_CONNECTED
+			return true
+		} else {
+			log.Error("room member not exist %v %v", roomid, charid)
+		}
+	} else {
+		log.Error("room not exist %v", roomid)
+	}
+	return false
 }
 
 func FormatRoomInfo(roomid int32) string {
@@ -104,7 +140,7 @@ func FormatMemberInfo(roomid int32) string {
 	room, ok := RoomManager[roomid]
 	if ok {
 		for _, member := range (*room).members {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tCharType:%v\tTeamType:%v", (*member).charid, (*member).charname, (*member).chartype, (*member).teamtype)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tCharType:%v\tTeamType:%v\tStatus:%v", (*member).charid, (*member).charname, (*member).chartype, (*member).teamtype, (*member).status)}, "\r\n")
 		}
 	}
 	return output

@@ -9,6 +9,8 @@ import (
 const (
 	MAX_TABLE_COUNT = 10000
 	MAX_ROOM_COUNT  = 10000
+
+	CRYPTO_PREFIX = "room_%d"
 )
 
 type Character struct {
