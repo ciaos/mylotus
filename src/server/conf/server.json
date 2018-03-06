@@ -1,11 +1,11 @@
 {
 	"LogLevel": "debug",
-	"LogPath": "log",
+	"LogPath": "",
 	"TCPAddr": "127.0.0.1:8888",
 	"MaxConnNum": 20000,
 	"ConsolePort": 3333,
 	
-	"TickInterval" : 100000,
+	"TickInterval" : 33,
 	
 	"ServerID" : 1,
 	"ServerType": "gameserver",

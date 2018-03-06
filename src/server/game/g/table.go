@@ -1,8 +1,10 @@
 package g
 
 import (
+	"fmt"
 	"server/conf"
 	"server/msg/proxymsg"
+	"strings"
 	"time"
 
 	"github.com/name5566/leaf/log"
@@ -22,8 +24,10 @@ const (
 )
 
 type Seat struct {
-	charid   string
-	jointime int64
+	charid     string
+	jointime   int64
+	serverid   int32
+	servertype string
 }
 
 //for match server
@@ -70,12 +74,12 @@ func allocBattleRoom(tableid int32) {
 		battleServer := conf.Server.BattleServerList[0]
 		log.Debug("Alloc BattleRoom For Table %v", tableid)
 
-		SendMessageTo(int32(battleServer.ServerID), battleServer.ServerType, "", uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), &innerReq)
+		SendMessageTo(int32(battleServer.ServerID), battleServer.ServerType, "", uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
 	}
 }
 
 func UpdateTableManager(now *time.Time) {
-	log.Debug("UpdateTableManager %v", len(TableManager))
+
 	for i, table := range TableManager {
 		(*table).status = (*table).update(now)
 		if (*table).status == MATCH_OK || (*table).status == MATCH_TIMEOUT {
@@ -89,14 +93,16 @@ func UpdateTableManager(now *time.Time) {
 	}
 }
 
-func JoinTable(charid string, matchmode int32) {
+func JoinTable(charid string, matchmode int32, serverid int32, servertype string) {
 
 	var createnew = true
 	for i, table := range TableManager {
 		if len((*table).seats) < MATCH_OK_COUNT {
 			seat := &Seat{
-				charid:   charid,
-				jointime: time.Now().Unix(),
+				charid:     charid,
+				jointime:   time.Now().Unix(),
+				serverid:   serverid,
+				servertype: servertype,
 			}
 			TableManager[i].seats = append(TableManager[i].seats, seat)
 			PlayerTableIDMap[charid] = i
@@ -119,8 +125,10 @@ func JoinTable(charid string, matchmode int32) {
 			matchmode:  matchmode,
 			seats: []*Seat{
 				&Seat{
-					charid:   charid,
-					jointime: time.Now().Unix(),
+					charid:     charid,
+					jointime:   time.Now().Unix(),
+					serverid:   serverid,
+					servertype: servertype,
 				},
 			},
 			status: MATCH_CONTINUE,
@@ -135,15 +143,59 @@ func JoinTable(charid string, matchmode int32) {
 func LeaveTable(charid string, matchmode int32) {
 	tableid, ok := PlayerTableIDMap[charid]
 	if ok {
-		for i, seat := range TableManager[tableid].seats {
-			if (*seat).charid == charid {
-				ii := i + 1
-				TableManager[tableid].seats = append(TableManager[tableid].seats[0:i], TableManager[tableid].seats[ii:]...)
+		table, ok := TableManager[tableid]
+		if ok {
+			for i, seat := range table.seats {
+				if (*seat).charid == charid {
+					TableManager[tableid].seats = append(table.seats[0:i], table.seats[i+1:]...)
 
-				log.Debug("LeaveTable %v TableID %v Count %v", charid, tableid, len(TableManager[tableid].seats))
+					log.Debug("LeaveTable %v TableID %v Count %v", charid, tableid, len(table.seats))
+				}
 			}
 		}
 
 		delete(PlayerTableIDMap, charid)
 	}
+}
+
+func ClearTable(tableid int32, battleroomid int32, battleserverid int32, battleservername string) {
+	table, ok := TableManager[tableid]
+	if ok {
+		msg := &proxymsg.Proxy_MS_GS_MatchResult{
+			Retcode:          proto.Int32(0),
+			Battleroomid:     proto.Int32(battleroomid),
+			Battleserverid:   proto.Int32(battleserverid),
+			Battleservername: proto.String(battleservername),
+		}
+
+		for _, seat := range table.seats {
+			log.Debug("ClearTable Notify Connect BS %v", (*seat).charid)
+			SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCHRESULT), msg)
+		}
+
+		table.seats = append([]*Seat{}) //clear seats
+
+		delete(TableManager, tableid)
+	} else {
+		log.Error("ClearTable %v Not Found , TableCount %v", tableid, len(TableManager))
+	}
+}
+
+func FormatTableInfo(tableid int32) string {
+	table, ok := TableManager[tableid]
+	if ok {
+		return fmt.Sprintf("Tableid %v CTime %v Status %v SeatCnt %v", (*table).tableid, (*table).createtime, (*table).status, len((*table).seats))
+	}
+	return ""
+}
+
+func FormatSeatInfo(tableid int32) string {
+	output := fmt.Sprintf("TableID %v", tableid)
+	table, ok := TableManager[tableid]
+	if ok {
+		for _, seat := range (*table).seats {
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tJoinTime:%v\tServerID:%v\tServerType:%v", (*seat).charid, (*seat).jointime, (*seat).serverid, (*seat).servertype)}, "\r\n")
+		}
+	}
+	return output
 }

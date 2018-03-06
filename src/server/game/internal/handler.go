@@ -163,11 +163,12 @@ func handleReqMatch(args []interface{}) {
 
 		ret := g.SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
 		if ret {
-			a.WriteMsg(&clientmsg.Rlt_Match{
+			/*a.WriteMsg(&clientmsg.Rlt_Match{
 				RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE),
-			})
+			})*/
 			return
 		}
+
 	}
 	a.WriteMsg(&clientmsg.Rlt_Match{
 		RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),

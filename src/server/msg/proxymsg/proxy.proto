@@ -34,6 +34,7 @@ message Proxy_GS_BS_SyncPlayerInfo {
 	required int32 	 chartype = 2;
 	required string  charname = 3;
 	required int32 	 teamtype = 4;
+	required int32 	 battleroomid = 5;
 }
 
 message Proxy_GS_MS_Match {
@@ -53,11 +54,9 @@ message Proxy_MS_BS_AllocBattleRoom {
 
 message Proxy_MS_GS_MatchResult {
 	required int32   retcode = 1;
-	optional string  charid = 2;
-	optional int32 	 battleroomid = 3;
-	optional int32 	 battleserverid = 4;
-	optional bytes   battleroomkey = 5;
-	optional string  connectaddr = 6;
+	optional int32 	 battleroomid = 2;
+	optional int32 	 battleserverid = 3;
+	optional string  battleservername = 4;
 }
 
 ///////////////////////////////////////////////
@@ -69,10 +68,12 @@ message Proxy_BS_MS_AllocBattleRoom {
 	optional int32   matchroomid = 2;
 	optional int32 	 battleroomid = 3;
 	optional int32 	 battleserverid = 4;
-	optional bytes   battleroomkey = 5;
-	optional string  connectaddr = 6;
+	optional string  battleservername = 5;
 }
 
 message Proxy_BS_GS_SyncPlayerInfo {
 	required int32  retcode = 1;
+	optional int32 	battleroomid = 2;
+	optional bytes  battleroomkey = 3;
+	optional string connectaddr = 4;
 }
