@@ -207,6 +207,7 @@ func rpcCloseAgent(args []interface{}) {
 	_ = a
 
 	if charid != nil {
+		g.LeaveRoom(charid.(string))
 		delete(g.PlayerManager, charid.(string))
 		log.Debug("PlayerManager Remove %v", charid)
 	}

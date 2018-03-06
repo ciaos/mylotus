@@ -16,8 +16,9 @@ const (
 	ROOM_FIGHTING        = 4
 	ROOM_END             = 5
 
-	MEMBER_OFFLINE   = 1
-	MEMBER_CONNECTED = 2
+	MEMBER_UNCONNECTED = 0
+	MEMBER_CONNECTED   = 1
+	MEMBER_OFFLINE     = 2
 )
 
 type Member struct {
@@ -36,6 +37,9 @@ type Room struct {
 	battlekey  []byte
 
 	members map[string]*Member
+
+	messages       []interface{}
+	messagesbackup []interface{}
 }
 
 var PlayerRoomIDMap = make(map[string]int32)
@@ -46,13 +50,48 @@ func InitRoomManager() {
 	roomid = 0
 }
 
+func (room *Room) broadcast(msgdata interface{}) {
+	for _, member := range (*room).members {
+		agent, ok := PlayerManager[(*member).charid]
+		if ok {
+			(*agent).WriteMsg(msgdata)
+		}
+	}
+}
+
 func (room *Room) update(now *time.Time) int32 {
-	return ROOM_END
+	if (*room).status == ROOM_FIGHTING {
+		if len((*room).messages) > 0 {
+			for _, message := range (*room).messages {
+				(*room).broadcast(message)
+			}
+
+			(*room).messagesbackup = append((*room).messagesbackup, (*room).messages...)
+			(*room).messages = append([]interface{}{})
+		}
+	}
+
+	var allOffLine = true
+	for _, member := range (*room).members {
+		if member.status != MEMBER_OFFLINE {
+			allOffLine = false
+		}
+	}
+
+	if allOffLine {
+		return ROOM_END
+	}
+
+	return (*room).status
 }
 
 func UpdateRoomManager(now *time.Time) {
-	for _, room := range RoomManager {
+	for i, room := range RoomManager {
 		(*room).status = (*room).update(now)
+
+		if (*room).status == ROOM_END {
+			delete(RoomManager, i)
+		}
 	}
 }
 
@@ -65,12 +104,14 @@ func CreateRoom(matchmode int32) int32 {
 	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, roomid)), []byte(tool.CRYPT_KEY))
 
 	room := &Room{
-		roomid:     roomid,
-		createtime: time.Now().Unix(),
-		status:     ROOM_STATUS_NONE,
-		matchmode:  matchmode,
-		battlekey:  battlekey,
-		members:    make(map[string]*Member),
+		roomid:         roomid,
+		createtime:     time.Now().Unix(),
+		status:         ROOM_STATUS_NONE,
+		matchmode:      matchmode,
+		battlekey:      battlekey,
+		members:        make(map[string]*Member),
+		messages:       append([]interface{}{}),
+		messagesbackup: append([]interface{}{}),
 	}
 
 	RoomManager[roomid] = room
@@ -87,7 +128,7 @@ func JoinRoom(charid string, roomid int32, charname string, chartype int32) []by
 				teamtype: 0,
 				charname: charname,
 				chartype: chartype,
-				status:   MEMBER_OFFLINE,
+				status:   MEMBER_UNCONNECTED,
 			}
 			room.members[charid] = member
 			return room.battlekey
@@ -117,6 +158,8 @@ func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 		member, ok := room.members[charid]
 		if ok {
 			(*member).status = MEMBER_CONNECTED
+
+			PlayerRoomIDMap[charid] = roomid
 			return true
 		} else {
 			log.Error("room member not exist %v %v", roomid, charid)
@@ -125,6 +168,27 @@ func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 		log.Error("room not exist %v", roomid)
 	}
 	return false
+}
+
+func LeaveRoom(charid string) {
+	log.Debug("LeaveRoom %v", charid)
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			member, ok := room.members[charid]
+			if ok {
+				(*member).status = MEMBER_OFFLINE
+			}
+		}
+	}
+}
+
+func AddMessage(roomid int32, msgid int32, msgdata interface{}) {
+	room, ok := RoomManager[roomid]
+	if ok {
+		(*room).messages = append((*room).messages, msgdata)
+	}
 }
 
 func FormatRoomInfo(roomid int32) string {

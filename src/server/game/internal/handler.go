@@ -181,6 +181,7 @@ func handleReqConnectBS(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	if g.ConnectRoom(m.GetCharID(), m.GetRoomID(), m.GetBattleKey()) {
+		a.SetUserData(m.GetCharID())
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
 			RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_NONE),
 		})

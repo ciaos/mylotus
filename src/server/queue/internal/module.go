@@ -29,14 +29,15 @@ func (m *Module) OnInit() {
 	m.conn.Do("auth", conf.Server.RedisPassWord)
 	m.psc = redis.PubSubConn{m.conn}
 	m.queueName = fmt.Sprintf("queue_%v_%v", conf.Server.ServerType, conf.Server.ServerID)
+
+	go (*m).update()
 }
 
 func (m *Module) OnDestroy() {
 	m.conn.Close()
 }
 
-func (m *Module) Run(closeSig chan bool) {
-	//return
+func (m *Module) update() {
 	m.psc.Subscribe(m.queueName)
 	for {
 		switch v := m.psc.Receive().(type) {
@@ -46,6 +47,7 @@ func (m *Module) Run(closeSig chan bool) {
 			log.Debug("SubScribe Queue %s: %d", v.Channel, v.Kind, v.Count)
 		case error:
 			log.Error("SubScribe Queue %s", v.Error())
+			return
 		}
 	}
 }
