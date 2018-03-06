@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"server/game/internal/g"
+	"server/game/g"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"time"

@@ -2,7 +2,7 @@ package internal
 
 import (
 	"server/base"
-	"server/game/internal/g"
+	"server/game/g"
 
 	"github.com/name5566/leaf/module"
 )

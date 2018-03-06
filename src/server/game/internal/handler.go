@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"server/conf"
-	"server/game/internal/g"
+	"server/game/g"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"server/tool"
