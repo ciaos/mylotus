@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/name5566/leaf/db/mongodb"
 	"github.com/name5566/leaf/gate"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -22,13 +21,9 @@ type Account struct {
 	UpdateTime time.Time
 }
 
-var mongo *mongodb.DialContext
-
 func init() {
 	handler(&clientmsg.Req_Register{}, handleRegister)
 	handler(&clientmsg.Req_ServerList{}, handlerReqServerList)
-
-	mongo, _ = mongodb.Dial(conf.Server.MongoDBHost, 10)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -40,8 +35,8 @@ func handleRegister(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	// session
-	s := mongo.Ref()
-	defer mongo.UnRef(s)
+	s := Pmongo.Ref()
+	defer Pmongo.UnRef(s)
 
 	c := s.DB("login").C("account")
 

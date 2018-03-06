@@ -23,5 +23,5 @@
 	
 	"BattleServerList" : [
 		{"ServerID" : 1, "ServerType" : "gameserver", "ConnectAddr" : "127.0.0.1:8888"}
-	],
+	]
 }

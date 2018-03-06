@@ -20,6 +20,7 @@ func init() {
 	Processor.Register(&clientmsg.Req_Login{})
 	Processor.Register(&clientmsg.Rlt_Login{})
 	Processor.Register(&clientmsg.Req_Match{})
+	Processor.Register(&clientmsg.Rlt_Match{})
 	Processor.Register(&clientmsg.Rlt_NotifyBattleAddress{})
 	Processor.Register(&clientmsg.Req_ConnectBS{})
 	Processor.Register(&clientmsg.Rlt_ConnectBS{})

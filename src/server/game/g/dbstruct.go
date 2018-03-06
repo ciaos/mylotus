@@ -6,6 +6,11 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+const (
+	MAX_TABLE_COUNT = 10000
+	MAX_ROOM_COUNT  = 10000
+)
+
 type Character struct {
 	Id         bson.ObjectId `json:"id"        bson:"_id"`
 	UserId     string

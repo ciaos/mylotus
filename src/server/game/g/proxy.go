@@ -26,13 +26,13 @@ func UninitRedisConnection() {
 	Predis.conn.Close()
 }
 
-func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msgdata interface{}) {
+func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msgdata interface{}) bool {
 
 	//EncodeMsgData
 	msgbuff, err := proto.Marshal(msgdata.(proto.Message))
 	if err != nil {
-		log.Error("protobuf Marsha1 error")
-		return
+		log.Error("protobuf Marsha1 error %v", err)
+		return false
 	}
 
 	iMsg := &proxymsg.InternalMessage{
@@ -49,13 +49,15 @@ func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msg
 	queueName := fmt.Sprintf("queue_%v_%v", toserver, toid)
 	msgbuff, err = proto.Marshal(iMsg)
 	if err != nil {
-		log.Error("SendMessageTo Marshal Error %v", msgid)
-		return
+		log.Error("SendMessageTo Marshal Error %v %v", msgid, err)
+		return false
 	}
 
 	_, err = redis.DoWithTimeout(Predis.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
 	if err != nil {
-		log.Error("DoWithTimeout Error")
-		return
+		log.Error("DoWithTimeout Error %v", err)
+		return false
+	} else {
+		return true
 	}
 }

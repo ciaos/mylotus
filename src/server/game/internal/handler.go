@@ -143,6 +143,11 @@ func handleReqMatch(args []interface{}) {
 	charid := a.UserData()
 	if charid == nil {
 		log.Error("Player Match Not Login")
+
+		a.WriteMsg(&clientmsg.Rlt_Match{
+			RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
+		})
+
 		return
 	}
 
@@ -154,8 +159,17 @@ func handleReqMatch(args []interface{}) {
 
 	//todo 固定路由到指定的MatchServer
 	if len(conf.Server.MatchServerList) > 0 {
-		matchserver := conf.Server.MatchServerList[0]
+		matchserver := &conf.Server.MatchServerList[0]
 
-		g.SendMessageTo(int32(matchserver.ServerID), matchserver.ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), &innerReq)
+		ret := g.SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+		if ret {
+			a.WriteMsg(&clientmsg.Rlt_Match{
+				RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE),
+			})
+			return
+		}
 	}
+	a.WriteMsg(&clientmsg.Rlt_Match{
+		RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
+	})
 }

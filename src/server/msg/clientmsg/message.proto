@@ -17,10 +17,11 @@ enum MessageType
 	MT_REQ_LOGIN = 8;
 	MT_RLT_LOGIN = 9;
 	MT_REQ_MATCH = 10;
-	MT_RLT_NOTIFYBATTLEADDRESS = 11;
-	MT_REQ_CONNECTBS = 12;
-	MT_RLT_CONNECTBS = 13;
-	MT_RLT_STARTBATTLE = 14;
+	MT_RLT_MATCH = 11;
+	MT_RLT_NOTIFYBATTLEADDRESS = 12;
+	MT_REQ_CONNECTBS = 13;
+	MT_RLT_CONNECTBS = 14;
+	MT_RLT_STARTBATTLE = 15;
 }
 
 ///////////////////////////////////////////////
@@ -100,6 +101,8 @@ enum Type_GameRetCode
 {
 	GRC_NONE = 0;
 	
+	GRC_MATCH_CONTINUE = 10;
+	GRC_MATCH_ERROR = 11;
 	GRC_OTHER = 100;
 }
 
@@ -133,6 +136,11 @@ message Req_Match
 {
 	required  MatchActionType Action = 1;
 	required  MatchModeType Mode = 2;
+}
+
+message Rlt_Match
+{
+	required  Type_GameRetCode	RetCode			= 1;
 }
 
 message Rlt_NotifyBattleAddress
