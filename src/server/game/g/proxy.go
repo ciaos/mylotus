@@ -19,7 +19,11 @@ type RedisProxy struct {
 
 func InitRedisConnection() {
 	Predis = new(RedisProxy)
-	Predis.conn, _ = redis.Dial("tcp", conf.Server.RedisHost)
+	var err error
+	Predis.conn, err = redis.Dial("tcp", conf.Server.RedisHost)
+	if err != nil {
+		log.Fatal("InitRedisConnection Error %v", err)
+	}
 	Predis.conn.Do("auth", conf.Server.RedisPassWord)
 }
 func UninitRedisConnection() {

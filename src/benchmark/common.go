@@ -1,10 +1,43 @@
-package benchmark
+package main
+
+import (
+	"encoding/binary"
+	"errors"
+	"net"
+	"server/msg/clientmsg"
+
+	"github.com/golang/protobuf/proto"
+)
 
 const (
-	Status_None      = 1
-	Status_Register  = 2
-	Status_Login     = 3
-	Status_Match     = 4
-	Status_ConnectBS = 5
-	Status_InBattle  = 6
+	LoginServerAddr = "127.0.0.1:8888"
+	GameServerAddr  = "127.0.0.1:8888"
+
+	GameServerID = 1
 )
+
+func Send(conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) {
+	data, _ := proto.Marshal(msgdata.(proto.Message))
+	reqbuf := make([]byte, 4+len(data))
+	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
+	binary.BigEndian.PutUint16(reqbuf[2:], uint16(msgid))
+
+	copy(reqbuf[4:], data)
+	(*conn).Write(reqbuf)
+}
+
+func Recv(conn *net.Conn) (error, clientmsg.MessageType, []byte) {
+	headdata := make([]byte, 2)
+	(*conn).Read(headdata[0:])
+
+	msglen := binary.BigEndian.Uint16(headdata[0:])
+
+	bodydata := make([]byte, msglen)
+	bodylen, _ := (*conn).Read(bodydata[0:])
+	if msglen == 0 || bodylen == 0 {
+		return errors.New("Invalid msglen"), 0, nil
+	}
+	msgid := clientmsg.MessageType(binary.BigEndian.Uint16(bodydata[0:]))
+
+	return nil, msgid, bodydata[2:bodylen]
+}
