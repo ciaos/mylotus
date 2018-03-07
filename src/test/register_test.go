@@ -7,28 +7,59 @@ import (
 	"server/msg/clientmsg"
 	"testing"
 	"time"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestRegister(t *testing.T) {
-	conn, err := net.Dial("tcp", TestServerAddr)
-	if err != nil {
-		t.Fatal("Connect Server Error ", err)
+func TestRegister(t *testing.T) { TestingT(t) }
+
+type RegisterSuite struct {
+	conn     net.Conn
+	err      error
+	username string
+	password string
+	login    bool
+}
+
+var _ = Suite(&RegisterSuite{})
+
+func (s *RegisterSuite) SetUpSuite(c *C) {
+	s.conn, s.err = net.Dial("tcp", LoginServerAddr)
+	if s.err != nil {
+		c.Fatal("Connect Server Error ", s.err)
 	}
-	defer conn.Close()
 
 	rand.Seed(time.Now().UnixNano())
-	username := fmt.Sprintf("pengjing%d", rand.Intn(10000))
-	password := "123456"
+	s.username = fmt.Sprintf("pengjing%d", rand.Intn(10000))
+	s.password = "123456"
+}
 
-	t.Log("Register Username", username)
-	Register(t, &conn, username, password, true, clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST)
+func (s *RegisterSuite) TearDownSuite(c *C) {
+	s.conn.Close()
+}
 
-	userid, sessionkey, _ := Register(t, &conn, username, password, false, clientmsg.Type_LoginRetCode_LRC_NONE)
-	t.Log("Register UserID ", userid, " SessionKey", sessionkey)
-	Register(t, &conn, username, password, false, clientmsg.Type_LoginRetCode_LRC_ACCOUNT_EXIST)
+func (s *RegisterSuite) SetUpTest(c *C) {
 
-	userid, sessionkey, _ = Register(t, &conn, username, password, true, clientmsg.Type_LoginRetCode_LRC_NONE)
-	t.Log("Register UserID ", userid, " SessionKey", sessionkey)
-	password = "1234"
-	Register(t, &conn, username, password, true, clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR)
+}
+
+func (s *RegisterSuite) TearDownTest(c *C) {
+
+}
+
+func (s *RegisterSuite) TestRegister(c *C) {
+	retcode, _, _ := Register(c, &s.conn, s.username, s.password, true)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST)
+
+	retcode, _, _ = Register(c, &s.conn, s.username, s.password, false)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+
+	retcode, _, _ = Register(c, &s.conn, s.username, s.password, false)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_ACCOUNT_EXIST)
+
+	retcode, _, _ = Register(c, &s.conn, s.username, s.password, true)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+
+	s.password = "123"
+	retcode, _, _ = Register(c, &s.conn, s.username, s.password, true)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR)
 }

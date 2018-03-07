@@ -1,48 +1,53 @@
 package test
 
 import (
-	"encoding/binary"
+	"math/rand"
 	"net"
 	"server/msg/clientmsg"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
+	. "gopkg.in/check.v1"
 )
 
-func TestPing(t *testing.T) {
-	conn, err := net.Dial("tcp", TestServerAddr)
-	if err != nil {
-		t.Fatal("Connect Server Error ", err)
-	}
-	defer conn.Close()
+func TestPing(t *testing.T) { TestingT(t) }
 
+type PingSuite struct {
+	conn net.Conn
+	err  error
+}
+
+var _ = Suite(&PingSuite{})
+
+func (s *PingSuite) SetUpSuite(c *C) {
+}
+
+func (s *PingSuite) TearDownSuite(c *C) {
+}
+
+func (s *PingSuite) SetUpTest(c *C) {
+	s.conn, s.err = net.Dial("tcp", GameServerAddr)
+	if s.err != nil {
+		c.Fatal("Connect Server Error ", s.err)
+	}
+}
+
+func (s *PingSuite) TearDownTest(c *C) {
+	s.conn.Close()
+}
+
+func (s *PingSuite) TestPing(c *C) {
+
+	rand.Seed(time.Now().UnixNano())
 	reqMsg := &clientmsg.Ping{
-		ID: proto.Uint32(11),
+		ID: proto.Uint32(uint32(rand.Intn(10000))),
 	}
 
-	data, err := proto.Marshal(reqMsg)
-	if err != nil {
-		t.Fatal("Marsha1 failed")
-	}
-	reqbuf := make([]byte, 4+len(data))
-	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_PING))
+	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_PING, reqMsg)
 
-	copy(reqbuf[4:], data)
-
-	// 发送消息
-	conn.Write(reqbuf)
-	rspbuf := make([]byte, 2014)
-	len, _ := conn.Read(rspbuf[0:])
-
-	msgid := binary.BigEndian.Uint16(rspbuf[2:])
-
-	switch clientmsg.MessageType(msgid) {
-	case clientmsg.MessageType_MT_PONG:
-		msg := &clientmsg.Pong{}
-		proto.Unmarshal(rspbuf[4:len], msg)
-		t.Log("Pong ", msg.GetID())
-	default:
-		t.Error("Invalid msgid ", msgid)
-	}
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_PONG)
+	rspMsg := &clientmsg.Pong{}
+	proto.Unmarshal(msgdata, rspMsg)
+	c.Assert(rspMsg.GetID(), Equals, reqMsg.GetID())
 }

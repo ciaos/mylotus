@@ -2,22 +2,40 @@ package test
 
 import (
 	"encoding/binary"
-	"errors"
 	"net"
 	"server/msg/clientmsg"
-	"testing"
 
 	"github.com/golang/protobuf/proto"
+	. "gopkg.in/check.v1"
 )
 
 const (
-	TestServerAddr = "127.0.0.1:8888"
+	LoginServerAddr = "127.0.0.1:8888"
+	GameServerAddr  = "127.0.0.1:8888"
 
 	GameServerID = 1
 )
 
-func Register(t *testing.T, conn *net.Conn, username string, password string, islogin bool, checkCode clientmsg.Type_LoginRetCode) (string, []byte, error) {
+func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {
+	data, err := proto.Marshal(msgdata.(proto.Message))
+	if err != nil {
+		c.Fatal("proto.Marshal ", err)
+	}
+	reqbuf := make([]byte, 4+len(data))
+	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
+	binary.BigEndian.PutUint16(reqbuf[2:], uint16(msgid))
 
+	copy(reqbuf[4:], data)
+	(*conn).Write(reqbuf)
+	rspbuf := make([]byte, 2048)
+	len, _ := (*conn).Read(rspbuf[0:])
+
+	msgid = clientmsg.MessageType(binary.BigEndian.Uint16(rspbuf[2:]))
+
+	return msgid, rspbuf[4:len]
+}
+
+func Register(c *C, conn *net.Conn, username string, password string, islogin bool) (clientmsg.Type_LoginRetCode, string, []byte) {
 	reqMsg := &clientmsg.Req_Register{
 		UserName:      proto.String(username),
 		Password:      proto.String(password),
@@ -25,128 +43,50 @@ func Register(t *testing.T, conn *net.Conn, username string, password string, is
 		ClientVersion: proto.Int32(0),
 	}
 
-	data, err := proto.Marshal(reqMsg)
+	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_REGISTER, reqMsg)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_REGISTER)
+	rspMsg := &clientmsg.Rlt_Register{}
+	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
-		t.Fatal("Marsha1 failed")
+		c.Fatal("Rlt_Register Decode Error ", err)
 	}
-	reqbuf := make([]byte, 4+len(data))
-	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_REQ_REGISTER))
-
-	copy(reqbuf[4:], data)
-
-	// 发送消息
-	(*conn).Write(reqbuf)
-	rspbuf := make([]byte, 2014)
-	len, _ := (*conn).Read(rspbuf[0:])
-
-	msgid := binary.BigEndian.Uint16(rspbuf[2:])
-
-	switch clientmsg.MessageType(msgid) {
-	case clientmsg.MessageType_MT_RLT_REGISTER:
-		msg := &clientmsg.Rlt_Register{}
-		proto.Unmarshal(rspbuf[4:len], msg)
-		if msg.GetRetCode() != checkCode {
-			t.Error("RetCode MisMatch ", msg.GetRetCode())
-			t.Error("RetCode MisMatch ", checkCode)
-		} else {
-			return msg.GetUserID(), msg.GetSessionKey(), nil
-		}
-	default:
-		t.Error("Invalid msgid ", msgid)
-	}
-
-	return "", nil, errors.New("register error")
+	return rspMsg.GetRetCode(), rspMsg.GetUserID(), rspMsg.GetSessionKey()
 }
 
-func Login(t *testing.T, conn *net.Conn, userid string, sessionkey []byte, checkCode clientmsg.Type_GameRetCode) (string, error) {
+func Login(c *C, conn *net.Conn, userid string, sessionkey []byte) (clientmsg.Type_GameRetCode, string, bool) {
 	reqMsg := &clientmsg.Req_Login{
 		UserID:     proto.String(userid),
 		SessionKey: sessionkey,
 		ServerID:   proto.Int32(GameServerID),
 	}
 
-	data, err := proto.Marshal(reqMsg)
+	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_LOGIN, reqMsg)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_LOGIN)
+	rspMsg := &clientmsg.Rlt_Login{}
+	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
-		t.Fatal("Marsha1 failed ", err)
-	}
-	reqbuf := make([]byte, 4+len(data))
-	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_REQ_LOGIN))
-
-	copy(reqbuf[4:], data)
-
-	// 发送消息
-	(*conn).Write(reqbuf)
-	rspbuf := make([]byte, 2014)
-	len, _ := (*conn).Read(rspbuf[0:])
-
-	msgid := binary.BigEndian.Uint16(rspbuf[2:])
-
-	switch clientmsg.MessageType(msgid) {
-	case clientmsg.MessageType_MT_RLT_LOGIN:
-		msg := &clientmsg.Rlt_Login{}
-		proto.Unmarshal(rspbuf[4:len], msg)
-		if msg.GetRetCode() == checkCode {
-			return msg.GetCharID(), nil
-		}
-	default:
-		t.Error("Invalid msgid ", msgid)
+		c.Fatal("Rlt_Register Decode Error ", err)
 	}
 
-	return "", errors.New("login error")
+	return rspMsg.GetRetCode(), rspMsg.GetCharID(), rspMsg.GetIsNewCharacter()
 }
 
-func QuickLogin(t *testing.T, conn *net.Conn, username string, password string) string {
-	userid, sessionkey, err := Register(t, conn, username, password, false, clientmsg.Type_LoginRetCode_LRC_NONE)
-	if err != nil {
-		t.Fatal("Register Error", err)
-	}
+func QuickLogin(c *C, conn *net.Conn, username string, password string) string {
+	retcode, userid, sessionkey := Register(c, conn, username, password, false)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
 
-	t.Log("Login UserID", userid)
-	charid, err := Login(t, conn, userid, sessionkey, clientmsg.Type_GameRetCode_GRC_NONE)
-	if err != nil {
-		t.Fatal("Login Error", err)
-	}
-	t.Log("Login OK CharID", charid)
+	code, charid, _ := Login(c, conn, userid, sessionkey)
+	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_NONE)
 	return charid
 }
 
-func QuickMatch(t *testing.T, conn *net.Conn) (error, int32, string, []byte) {
+func QuickMatch(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
 	reqMsg := &clientmsg.Req_Match{
 		Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
 		Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
 	}
 
-	data, err := proto.Marshal(reqMsg)
-	if err != nil {
-		t.Fatal("Marsha1 failed")
-	}
-	reqbuf := make([]byte, 4+len(data))
-	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_REQ_MATCH))
-
-	copy(reqbuf[4:], data)
-
-	// 发送消息
-	(*conn).Write(reqbuf)
-	rspbuf := make([]byte, 2014)
-	len, _ := (*conn).Read(rspbuf[0:])
-
-	msgid := binary.BigEndian.Uint16(rspbuf[2:])
-
-	switch clientmsg.MessageType(msgid) {
-	case clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS:
-		msg := &clientmsg.Rlt_NotifyBattleAddress{}
-		proto.Unmarshal(rspbuf[4:len], msg)
-		t.Log("Match OK roomid ", msg.GetRoomID())
-		return nil, msg.GetRoomID(), msg.GetBattleAddr(), msg.GetBattleKey()
-	default:
-		t.Error("Invalid msgid ", msgid)
-	}
-	return errors.New("match error"), 0, "", nil
-}
-
-func CloseConnection(conn *net.Conn) {
-	(*conn).Close()
+	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	return msgid, msgdata
 }

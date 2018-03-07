@@ -1,7 +1,6 @@
 package test
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"net"
@@ -10,66 +9,67 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	. "gopkg.in/check.v1"
 )
 
-func TestConnectBS(t *testing.T) {
-	conn, err := net.Dial("tcp", TestServerAddr)
-	if err != nil {
-		t.Fatal("Connect Server Error ", err)
-	}
-	defer conn.Close()
+func TestConnectBS(t *testing.T) { TestingT(t) }
 
-	//Login First
+type ConnectBSSuite struct {
+	conn net.Conn
+	err  error
+
+	charid string
+}
+
+var _ = Suite(&ConnectBSSuite{})
+
+func (s *ConnectBSSuite) SetUpSuite(c *C) {
+}
+
+func (s *ConnectBSSuite) TearDownSuite(c *C) {
+}
+
+func (s *ConnectBSSuite) SetUpTest(c *C) {
+	s.conn, s.err = net.Dial("tcp", LoginServerAddr)
+	if s.err != nil {
+		c.Fatal("Connect Server Error ", s.err)
+	}
+
 	rand.Seed(time.Now().UnixNano())
-	username := fmt.Sprintf("pengjing%d", rand.Intn(100))
+	username := fmt.Sprintf("pengjing%d", rand.Intn(10000))
 	password := "123456"
-	t.Log("Username ", username)
-	charid := QuickLogin(t, &conn, username, password)
 
-	t.Log("CharID ", charid)
-	err, roomid, battleaddr, battlekey := QuickMatch(t, &conn)
-	if err != nil {
-		t.Fatal("Match Error", err)
-	}
+	s.charid = QuickLogin(c, &s.conn, username, password)
+}
 
-	t.Log("Match Result ", roomid, battleaddr, battlekey)
+func (s *ConnectBSSuite) TearDownTest(c *C) {
+	s.conn.Close()
+}
 
-	CloseConnection(&conn)
-	//connect bs
-	conn, err = net.Dial("tcp", battleaddr)
-	if err != nil {
-		t.Fatal("Connect Battle Error ", err)
+func (s *ConnectBSSuite) TestConnectBS(c *C) {
+	msgid, msgdata := QuickMatch(c, &s.conn)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	rspMsg := &clientmsg.Rlt_NotifyBattleAddress{}
+	err := proto.Unmarshal(msgdata, rspMsg)
+
+	s.conn.Close()
+	s.conn, s.err = net.Dial("tcp", rspMsg.GetBattleAddr())
+	if s.err != nil {
+		c.Fatal("Connect BattleServer Error ", s.err)
 	}
 
 	reqMsg := &clientmsg.Req_ConnectBS{
-		RoomID:    proto.Int32(roomid),
-		BattleKey: battlekey,
-		CharID:    proto.String(charid),
+		RoomID:    proto.Int32(rspMsg.GetRoomID()),
+		BattleKey: rspMsg.GetBattleKey(),
+		CharID:    proto.String(s.charid),
 	}
+	msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_CONNECTBS, reqMsg)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_CONNECTBS)
 
-	data, err := proto.Marshal(reqMsg)
+	rMsg := &clientmsg.Rlt_ConnectBS{}
+	err = proto.Unmarshal(msgdata, rMsg)
 	if err != nil {
-		t.Fatal("Marsha1 failed")
+		c.Fatal("Rlt_ConnectBS Decode Error ", err)
 	}
-	reqbuf := make([]byte, 4+len(data))
-	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
-	binary.BigEndian.PutUint16(reqbuf[2:], uint16(clientmsg.MessageType_MT_REQ_CONNECTBS))
-
-	copy(reqbuf[4:], data)
-
-	// 发送消息
-	conn.Write(reqbuf)
-	rspbuf := make([]byte, 2014)
-	len, _ := conn.Read(rspbuf[0:])
-
-	msgid := binary.BigEndian.Uint16(rspbuf[2:])
-
-	switch clientmsg.MessageType(msgid) {
-	case clientmsg.MessageType_MT_RLT_CONNECTBS:
-		msg := &clientmsg.Rlt_ConnectBS{}
-		proto.Unmarshal(rspbuf[4:len], msg)
-		t.Log("Rlt_ConnectBS ", msg.GetRetCode())
-	default:
-		t.Error("Invalid msgid ", msgid)
-	}
+	c.Assert(rMsg.GetRetCode(), Equals, clientmsg.Type_BattleRetCode_BRC_NONE)
 }

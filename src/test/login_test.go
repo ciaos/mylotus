@@ -7,31 +7,47 @@ import (
 	"server/msg/clientmsg"
 	"testing"
 	"time"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestLogin(t *testing.T) {
-	conn, err := net.Dial("tcp", TestServerAddr)
-	if err != nil {
-		t.Fatal("Connect Server Error ", err)
-	}
-	defer conn.Close()
+func TestLogin(t *testing.T) { TestingT(t) }
 
-	//Register First
+type LoginSuite struct {
+	conn net.Conn
+	err  error
+}
+
+var _ = Suite(&LoginSuite{})
+
+func (s *LoginSuite) SetUpSuite(c *C) {
+	s.conn, s.err = net.Dial("tcp", GameServerAddr)
+	if s.err != nil {
+		c.Fatal("Connect Server Error ", s.err)
+	}
+}
+
+func (s *LoginSuite) TearDownSuite(c *C) {
+	s.conn.Close()
+}
+
+func (s *LoginSuite) SetUpTest(c *C) {
+
+}
+
+func (s *LoginSuite) TearDownTest(c *C) {
+
+}
+
+func (s *LoginSuite) TestLogin(c *C) {
 	rand.Seed(time.Now().UnixNano())
-	username := fmt.Sprintf("pengjing%d", rand.Intn(100))
+	username := fmt.Sprintf("pengjing%d", rand.Intn(10000))
 	password := "123456"
-	islogin := false
 
-	t.Log("Register Username", username)
-	userid, sessionkey, err := Register(t, &conn, username, password, islogin, clientmsg.Type_LoginRetCode_LRC_NONE)
-	if err != nil {
-		t.Fatal("Register Error", err)
-	}
+	retcode, userid, sessionkey := Register(c, &s.conn, username, password, false)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
 
-	t.Log("Login UserID", userid)
-	charid, err := Login(t, &conn, userid, sessionkey, clientmsg.Type_GameRetCode_GRC_NONE)
-	if err != nil {
-		t.Fatal("Login Error", err)
-	}
-	t.Log("Login OK CharID", charid)
+	code, _, isnew := Login(c, &s.conn, userid, sessionkey)
+	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_NONE)
+	c.Assert(isnew, Equals, true)
 }
