@@ -154,18 +154,14 @@ func handleReqMatch(args []interface{}) {
 	if len(conf.Server.MatchServerList) > 0 {
 		matchserver := &conf.Server.MatchServerList[0]
 
-		ret := g.SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
-		if ret {
-			/*a.WriteMsg(&clientmsg.Rlt_Match{
-				RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE),
-			})*/
-			return
-		}
-
+		skeleton.Go(func() {
+			g.SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+		}, func() {})
+	} else {
+		a.WriteMsg(&clientmsg.Rlt_Match{
+			RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
+		})
 	}
-	a.WriteMsg(&clientmsg.Rlt_Match{
-		RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
-	})
 }
 
 func handleReqConnectBS(args []interface{}) {

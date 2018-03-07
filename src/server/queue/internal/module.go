@@ -44,9 +44,9 @@ func (m *Module) update() {
 		case redis.Message:
 			game.ChanRPC.Go("QueueMessage", v.Data)
 		case redis.Subscription:
-			log.Debug("SubScribe Queue %s: %d", v.Channel, v.Kind, v.Count)
+			log.Debug("SubScribe Queue:%s Channel:%s Kind:%s Count:%d", m.queueName, v.Channel, v.Kind, v.Count)
 		case error:
-			log.Error("SubScribe Queue %s", v.Error())
+			log.Error("SubScribe Queue Error:%s", v.Error())
 		}
 	}
 }

@@ -53,14 +53,14 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Proxy_GS_MS_Match Decode Error %v", err)
 		return
 	}
-	log.Debug("proxyHandleGSMSMatch %v", msg.GetCharid(), msg.GetAction())
+	log.Debug("proxyHandleGSMSMatch CharID %v Action %v", msg.GetCharid(), msg.GetAction())
 
 	if msg.GetAction() == int32(clientmsg.MatchActionType_MAT_JOIN) {
 		g.JoinTable(msg.GetCharid(), msg.GetMatchmode(), *pmsg.Fromid, *pmsg.Fromtype)
 	} else if msg.GetAction() == int32(clientmsg.MatchActionType_MAT_CANCEL) {
 		g.LeaveTable(msg.GetCharid(), msg.GetMatchmode())
 	} else {
-		log.Error("proxyHandleGSMSMatch invalid action %v", msg.GetAction())
+		log.Error("proxyHandleGSMSMatch Invalid Action %v", msg.GetAction())
 	}
 }
 
@@ -71,7 +71,6 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Proxy_MS_BS_AllocBattleRoom Decode Error %v", err)
 		return
 	}
-	log.Debug("proxyHandleMSBSAllocBattleRoom %v", msg.GetMatchroomid())
 
 	roomid := g.CreateRoom(msg.GetMatchmode())
 
@@ -83,7 +82,11 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 		Battleservername: proto.String(conf.Server.ServerType),
 	}
 
-	g.SendMessageTo(pmsg.GetFromid(), pmsg.GetFromtype(), "", uint32(proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM), rsp)
+	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.GetMatchroomid(), roomid)
+
+	skeleton.Go(func() {
+		g.SendMessageTo(pmsg.GetFromid(), pmsg.GetFromtype(), "", uint32(proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM), rsp)
+	}, func() {})
 }
 
 func proxyHandleBSMSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
@@ -93,6 +96,8 @@ func proxyHandleBSMSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Proxy_BS_MS_AllocBattleRoom Decode Error %v", err)
 		return
 	}
+
+	log.Debug("proxyHandleBSMSAllocBattleRoom RetCode %v TableID %v RoomID %v BattleServerID %v", msg.GetRetcode(), msg.GetMatchroomid(), msg.GetBattleroomid(), msg.GetBattleserverid())
 
 	g.ClearTable(msg.GetMatchroomid(), msg.GetBattleroomid(), msg.GetBattleserverid(), msg.GetBattleservername())
 }
@@ -130,7 +135,12 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 		Teamtype:     proto.Int32(0),
 		Battleroomid: proto.Int32(msg.GetBattleroomid()),
 	}
-	g.SendMessageTo(msg.GetBattleserverid(), msg.GetBattleservername(), "", uint32(proxymsg.ProxyMessageType_PMT_GS_BS_SYNCPLAYERINFO), req)
+
+	log.Debug("proxyHandleMSGSMatchResult SyncPlayerInfo CharID %v RoomID %v", pmsg.GetCharid(), msg.GetBattleroomid())
+
+	skeleton.Go(func() {
+		g.SendMessageTo(msg.GetBattleserverid(), msg.GetBattleservername(), "", uint32(proxymsg.ProxyMessageType_PMT_GS_BS_SYNCPLAYERINFO), req)
+	}, func() {})
 }
 
 func proxyHandleGSBSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
@@ -141,7 +151,9 @@ func proxyHandleGSBSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	battlekey := g.JoinRoom(msg.GetCharid(), msg.GetBattleroomid(), msg.GetCharname(), msg.GetChartype())
+	log.Debug("proxyHandleGSBSSyncPlayerInfo SyncPlayerInfo CharID %v RoomID %v GameServerID %v", msg.GetCharid(), msg.GetBattleroomid(), pmsg.GetFromid())
+
+	battlekey := g.JoinRoom(msg.GetCharid(), msg.GetBattleroomid(), msg.GetCharname(), msg.GetChartype(), pmsg.GetFromid())
 	if battlekey != nil {
 		rsp := &proxymsg.Proxy_BS_GS_SyncPlayerInfo{
 			Retcode:       proto.Int32(0),
@@ -150,7 +162,9 @@ func proxyHandleGSBSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
 			Connectaddr:   proto.String(conf.Server.TCPAddr),
 		}
 
-		g.SendMessageTo((*pmsg).GetFromid(), (*pmsg).GetFromtype(), msg.GetCharid(), uint32(proxymsg.ProxyMessageType_PMT_BS_GS_SYNCPLAYERINFO), rsp)
+		skeleton.Go(func() {
+			g.SendMessageTo((*pmsg).GetFromid(), (*pmsg).GetFromtype(), msg.GetCharid(), uint32(proxymsg.ProxyMessageType_PMT_BS_GS_SYNCPLAYERINFO), rsp)
+		}, func() {})
 	} else {
 		log.Error("proxyHandleGSBSSyncPlayerInfo JoinRoom Error")
 	}
@@ -163,6 +177,8 @@ func proxyHandleBSGSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Proxy_MS_GS_MatchResult Decode Error %v", err)
 		return
 	}
+
+	log.Debug("proxyHandleBSGSSyncPlayerInfo Notify CharID %v RoomID %v", pmsg.GetCharid(), msg.GetBattleroomid())
 
 	if msg.GetRetcode() == 0 {
 		agent, ok := g.GamePlayerManager[pmsg.GetCharid()]

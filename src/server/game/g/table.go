@@ -51,13 +51,13 @@ func InitTableManager() {
 func (table *Table) update(now *time.Time) int32 {
 	r := gamedata.CSVMatchMode.Index((*table).matchmode)
 	if r == nil {
-		log.Error("CSVMatchMode Not Found %v", (*table).matchmode)
+		log.Error("CSVMatchMode ModeID %v Not Found", (*table).matchmode)
 		return MATCH_ERROR
 	}
 	row := r.(*cfg.MatchMode)
 
 	if (*now).Unix()-(*table).createtime > int64(row.TimeOutSec) {
-		log.Debug("tableid %v timeout createtime %v now %v", (*table).tableid, (*table).createtime, (*now).Unix())
+		log.Debug("Tableid %v Timeout Createtime %v Now %v", (*table).tableid, (*table).createtime, (*now).Unix())
 		return MATCH_TIMEOUT
 	}
 
@@ -84,7 +84,7 @@ func allocBattleRoom(tableid int32) {
 		battleServer := conf.Server.BattleServerList[0]
 		log.Debug("Alloc BattleRoom For Table %v", tableid)
 
-		SendMessageTo(int32(battleServer.ServerID), battleServer.ServerType, "", uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
+		go SendMessageTo(int32(battleServer.ServerID), battleServer.ServerType, "", uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
 	}
 }
 
@@ -98,12 +98,20 @@ func UpdateTableManager(now *time.Time) {
 			allocBattleRoom(i)
 		}
 		if (*table).status == MATCH_EMPTY {
-			delete(TableManager, i)
+			DeleteTable(i)
 		}
 		if (*table).status == MATCH_ERROR {
-			delete(TableManager, i)
+
+			//notify all member error
+
+			DeleteTable(i)
 		}
 	}
+}
+
+func DeleteTable(tableid int32) {
+	log.Debug("DeleteTable TableID %v", tableid)
+	delete(TableManager, tableid)
 }
 
 func JoinTable(charid string, matchmode int32, serverid int32, servertype string) {
@@ -126,7 +134,7 @@ func JoinTable(charid string, matchmode int32, serverid int32, servertype string
 			TableManager[i].seats = append(TableManager[i].seats, seat)
 			PlayerTableIDMap[charid] = i
 
-			log.Debug("JoinTable %v %v", i, charid)
+			log.Debug("JoinTable TableID %v CharID %v", i, charid)
 
 			createnew = false
 			break
@@ -155,7 +163,7 @@ func JoinTable(charid string, matchmode int32, serverid int32, servertype string
 		TableManager[tableid] = table
 		PlayerTableIDMap[charid] = tableid
 
-		log.Debug("CreateNewTable %v %v", tableid, charid)
+		log.Debug("JoinTable CreateTableID %v CharID %v", tableid, charid)
 	}
 }
 
@@ -168,12 +176,16 @@ func LeaveTable(charid string, matchmode int32) {
 				if (*seat).charid == charid {
 					TableManager[tableid].seats = append(table.seats[0:i], table.seats[i+1:]...)
 
-					log.Debug("LeaveTable %v TableID %v Count %v", charid, tableid, len(table.seats))
+					log.Debug("LeaveTable TableID %v CharID %v RestCount %v", tableid, charid, len(table.seats))
 				}
 			}
+		} else {
+			log.Error("LeaveTable TableID %v Not Exist CharID %v", tableid, charid)
 		}
 
 		delete(PlayerTableIDMap, charid)
+	} else {
+		log.Error("LeaveTable CharID %v Not Exist", charid)
 	}
 }
 
@@ -188,28 +200,29 @@ func ClearTable(tableid int32, battleroomid int32, battleserverid int32, battles
 		}
 
 		for _, seat := range table.seats {
-			log.Debug("ClearTable Notify Connect BS %v", (*seat).charid)
-			SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCHRESULT), msg)
+			log.Debug("NotifyConnectBS CharID %v BSID %v RoomID %v", (*seat).charid, battleserverid, battleroomid)
+
+			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCHRESULT), msg)
 		}
 
 		table.seats = append([]*Seat{}) //clear seats
 
 		delete(TableManager, tableid)
 	} else {
-		log.Error("ClearTable %v Not Found , TableCount %v", tableid, len(TableManager))
+		log.Error("ClearTable TableID %v Not Found , TableCount %v", tableid, len(TableManager))
 	}
 }
 
 func FormatTableInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
-		return fmt.Sprintf("Tableid %v CTime %v Status %v SeatCnt %v", (*table).tableid, (*table).createtime, (*table).status, len((*table).seats))
+		return fmt.Sprintf("TableID:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).createtime, (*table).status, len((*table).seats))
 	}
 	return ""
 }
 
 func FormatSeatInfo(tableid int32) string {
-	output := fmt.Sprintf("TableID %v", tableid)
+	output := fmt.Sprintf("TableID:%v", tableid)
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {

@@ -22,11 +22,12 @@ const (
 )
 
 type Member struct {
-	charid   string
-	charname string
-	chartype int32
-	teamtype int32
-	status   int32
+	charid       string
+	charname     string
+	chartype     int32
+	teamtype     int32
+	status       int32
+	gameserverid int32
 }
 
 type Room struct {
@@ -90,9 +91,14 @@ func UpdateRoomManager(now *time.Time) {
 		(*room).status = (*room).update(now)
 
 		if (*room).status == ROOM_END {
-			delete(RoomManager, i)
+			DeleteRoom(i)
 		}
 	}
+}
+
+func DeleteRoom(roomid int32) {
+	log.Debug("DeleteRoom RoomID %v", roomid)
+	delete(RoomManager, roomid)
 }
 
 func CreateRoom(matchmode int32) int32 {
@@ -115,25 +121,35 @@ func CreateRoom(matchmode int32) int32 {
 	}
 
 	RoomManager[roomid] = room
+
+	log.Debug("Create RoomID %v", roomid)
 	return roomid
 }
 
-func JoinRoom(charid string, roomid int32, charname string, chartype int32) []byte {
+func JoinRoom(charid string, roomid int32, charname string, chartype int32, gameserverid int32) []byte {
 	room, ok := RoomManager[roomid]
 	if ok {
 		member, ok := room.members[charid]
 		if !ok {
 			member = &Member{
-				charid:   charid,
-				teamtype: 0,
-				charname: charname,
-				chartype: chartype,
-				status:   MEMBER_UNCONNECTED,
+				charid:       charid,
+				teamtype:     0,
+				charname:     charname,
+				chartype:     chartype,
+				status:       MEMBER_UNCONNECTED,
+				gameserverid: gameserverid,
 			}
 			room.members[charid] = member
+
+			log.Debug("JoinRoom RoomID %v CharID %v", roomid, charid)
 			return room.battlekey
+		} else {
+			log.Error("JoinRoom RoomID %v CharID %v Already Exist", roomid, charid)
 		}
+
 		(*room).status = ROOM_SYNC_PLAYERINFO
+	} else {
+		log.Error("JoinRoom RoomID %v Not Exist CharID %v", roomid, charid)
 	}
 
 	return nil
@@ -146,32 +162,32 @@ func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 
 		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 		if err != nil {
-			log.Error("battlekey decrypt err %v", err)
+			log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
 			return false
 		}
 
-		if string(plaintext) != fmt.Sprintf(CRYPTO_PREFIX, roomid) {
-			log.Error("battlekey mismatch")
+		if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, roomid)) != 0 {
+			log.Error("ConnectRoom Battlekey Mismatch")
 			return false
 		}
 
 		member, ok := room.members[charid]
 		if ok {
 			(*member).status = MEMBER_CONNECTED
-
 			PlayerRoomIDMap[charid] = roomid
+
+			log.Debug("ConnectRoom RoomID %v CharID %v", roomid, charid)
 			return true
 		} else {
-			log.Error("room member not exist %v %v", roomid, charid)
+			log.Error("ConnectRoom RoomID %v Member Not Exist %v", roomid, charid)
 		}
 	} else {
-		log.Error("room not exist %v", roomid)
+		log.Error("ConnectRoom RoomID %v Not Exist", roomid)
 	}
 	return false
 }
 
 func LeaveRoom(charid string) {
-	log.Debug("LeaveRoom %v", charid)
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
@@ -179,6 +195,8 @@ func LeaveRoom(charid string) {
 			member, ok := room.members[charid]
 			if ok {
 				(*member).status = MEMBER_OFFLINE
+
+				log.Debug("LeaveRoom RoomID %v CharID %v", roomid, charid)
 			}
 		}
 	}
@@ -194,13 +212,13 @@ func AddMessage(roomid int32, msgid int32, msgdata interface{}) {
 func FormatRoomInfo(roomid int32) string {
 	room, ok := RoomManager[roomid]
 	if ok {
-		return fmt.Sprintf("Roomid:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v", (*room).roomid, (*room).createtime, (*room).status, len((*room).members))
+		return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v", (*room).roomid, (*room).createtime, (*room).status, len((*room).members))
 	}
 	return ""
 }
 
 func FormatMemberInfo(roomid int32) string {
-	output := fmt.Sprintf("RoomID %v", roomid)
+	output := fmt.Sprintf("RoomID:%v", roomid)
 	room, ok := RoomManager[roomid]
 	if ok {
 		for _, member := range (*room).members {

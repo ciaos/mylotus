@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"server/conf"
 	"server/msg/proxymsg"
+	"sync"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -12,6 +13,7 @@ import (
 )
 
 var Predis *RedisProxy
+var m *sync.Mutex
 
 type RedisProxy struct {
 	conn redis.Conn
@@ -25,6 +27,8 @@ func InitRedisConnection() {
 		log.Fatal("InitRedisConnection Error %v", err)
 	}
 	Predis.conn.Do("auth", conf.Server.RedisPassWord)
+
+	m = new(sync.Mutex)
 }
 func UninitRedisConnection() {
 	Predis.conn.Close()
@@ -57,6 +61,8 @@ func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msg
 		return false
 	}
 
+	m.Lock()
+	defer m.Unlock()
 	_, err = redis.DoWithTimeout(Predis.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
 	if err != nil {
 		log.Error("DoWithTimeout Error %v", err)

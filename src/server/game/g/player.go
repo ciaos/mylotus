@@ -1,6 +1,8 @@
 package g
 
 import (
+	"strings"
+
 	"github.com/name5566/leaf/gate"
 
 	"github.com/name5566/leaf/log"
@@ -30,7 +32,7 @@ func AddGamePlayer(clientid string, agent *gate.Agent) {
 func RemoveGamePlayer(clientid string, remoteaddr string) {
 	agent, ok := GamePlayerManager[clientid]
 	if ok {
-		if (*agent).RemoteAddr().String() == remoteaddr {
+		if strings.Compare((*agent).RemoteAddr().String(), remoteaddr) == 0 {
 			delete(GamePlayerManager, clientid)
 			log.Debug("RemoveGamePlayer %v", clientid)
 		}
@@ -52,7 +54,7 @@ func AddBattlePlayer(clientid string, agent *gate.Agent) {
 func RemoveBattlePlayer(clientid string, remoteaddr string) {
 	agent, ok := BattlePlayerManager[clientid]
 	if ok {
-		if (*agent).RemoteAddr().String() == remoteaddr {
+		if strings.Compare((*agent).RemoteAddr().String(), remoteaddr) == 0 {
 			delete(BattlePlayerManager, clientid)
 			LeaveRoom(clientid)
 			log.Debug("RemoveBattlePlayer %v", clientid)

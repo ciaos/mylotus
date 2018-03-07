@@ -13,8 +13,8 @@ func init() {
 	skeleton.RegisterCommand("ltable", "list table info", commandTable)
 	skeleton.RegisterCommand("lseat", "list seat of specified table", commandSeat)
 	skeleton.RegisterCommand("lmember", "list member of specified room", commandMember)
-	skeleton.RegisterCommand("lgplayercount", "list gameserver online member count", commandGPlayerCount)
-	skeleton.RegisterCommand("lbplayercount", "list battleserver online member count", commandBPlayerCount)
+	skeleton.RegisterCommand("lgcount", "list gameserver online member count", commandGPlayerCount)
+	skeleton.RegisterCommand("lbcount", "list battleserver online member count", commandBPlayerCount)
 }
 
 func commandEcho(args []interface{}) interface{} {
@@ -22,7 +22,7 @@ func commandEcho(args []interface{}) interface{} {
 }
 
 func commandRoom(args []interface{}) interface{} {
-	output := fmt.Sprintf("RoomCnt %v", len(g.RoomManager))
+	output := fmt.Sprintf("RoomCnt:%v", len(g.RoomManager))
 
 	for i, _ := range g.RoomManager {
 		output = strings.Join([]string{output, g.FormatRoomInfo(i)}, "\r\n")
@@ -32,7 +32,7 @@ func commandRoom(args []interface{}) interface{} {
 }
 
 func commandTable(args []interface{}) interface{} {
-	output := fmt.Sprintf("TableCnt %v", len(g.TableManager))
+	output := fmt.Sprintf("TableCnt:%v", len(g.TableManager))
 
 	for i, _ := range g.TableManager {
 		output = strings.Join([]string{output, g.FormatTableInfo(i)}, "\r\n")
@@ -58,9 +58,9 @@ func commandMember(args []interface{}) interface{} {
 }
 
 func commandGPlayerCount(args []interface{}) interface{} {
-	return fmt.Sprintf("Player Count : %d", len(g.GamePlayerManager))
+	return fmt.Sprintf("GamePlayerCnt:%d", len(g.GamePlayerManager))
 }
 
 func commandBPlayerCount(args []interface{}) interface{} {
-	return fmt.Sprintf("Player Count : %d", len(g.BattlePlayerManager))
+	return fmt.Sprintf("BattlePlayerCnt:%d", len(g.BattlePlayerManager))
 }
