@@ -86,7 +86,7 @@ func handle_Rlt_Register(c *Client, msgdata []byte) {
 			IsLogin:       proto.Bool(false),
 			ClientVersion: proto.Int32(0),
 		}
-		Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
+		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
 	} else if rsp.GetRetCode() == clientmsg.Type_LoginRetCode_LRC_NONE {
 		c.userid = rsp.GetUserID()
 		c.sessionkey = rsp.GetSessionKey()
@@ -107,7 +107,7 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 			Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
 			Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
 		}
-		Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
 	} else {
 		c.nextlogintime = time.Now().Unix() + 5
 		c.ChangeStatus(STATUS_NONE)
@@ -148,7 +148,7 @@ func (c *Client) updateLogin() {
 			IsLogin:       proto.Bool(true),
 			ClientVersion: proto.Int32(0),
 		}
-		Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
+		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
 		c.ChangeStatus(STATUS_LOGIN_LOOP)
 	} else if c.status == STATUS_LOGIN_CLOSE {
 		c.lconn.Close()
@@ -185,14 +185,14 @@ func (c *Client) updateGame() {
 			ServerID:   proto.Int32(GameServerID),
 		}
 
-		Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
+		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
 		c.ChangeStatus(STATUS_GAME_LOOP)
 	} else if c.status == STATUS_GAME_MATCH {
 		msg := &clientmsg.Req_Match{
 			Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
 			Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
 		}
-		Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
 	} else if c.status == STATUS_GAME_CLOSE {
 		c.gconn.Close()
 		c.ChangeStatus(STATUS_GAME_CONNECT)
@@ -205,7 +205,7 @@ func (c *Client) updateGame() {
 			msg := &clientmsg.Ping{
 				ID: proto.Uint32(uint32(rand.Intn(10000))),
 			}
-			Send(&c.gconn, clientmsg.MessageType_MT_PING, msg)
+			go Send(&c.gconn, clientmsg.MessageType_MT_PING, msg)
 		}
 	}
 }
@@ -238,7 +238,7 @@ func (c *Client) updateBattle() {
 			BattleKey: c.battlekey,
 			CharID:    proto.String(c.charid),
 		}
-		Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
+		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
 		c.ChangeStatus(STATUS_BATTLE_LOOP)
 	} else if c.status == STATUS_BATTLE_CLOSE {
 		c.bconn.Close()
@@ -252,7 +252,7 @@ func (c *Client) updateBattle() {
 			msg := &clientmsg.Ping{
 				ID: proto.Uint32(uint32(rand.Intn(10000))),
 			}
-			Send(&c.bconn, clientmsg.MessageType_MT_PING, msg)
+			go Send(&c.bconn, clientmsg.MessageType_MT_PING, msg)
 		}
 	}
 }

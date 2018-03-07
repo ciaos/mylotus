@@ -17,6 +17,8 @@ const (
 )
 
 func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {
+
+	//Send
 	data, err := proto.Marshal(msgdata.(proto.Message))
 	if err != nil {
 		c.Fatal("proto.Marshal ", err)
@@ -27,12 +29,20 @@ func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata inte
 
 	copy(reqbuf[4:], data)
 	(*conn).Write(reqbuf)
-	rspbuf := make([]byte, 2048)
-	len, _ := (*conn).Read(rspbuf[0:])
 
-	msgid = clientmsg.MessageType(binary.BigEndian.Uint16(rspbuf[2:]))
+	//Recv
+	headdata := make([]byte, 2)
+	(*conn).Read(headdata[0:])
+	msglen := binary.BigEndian.Uint16(headdata[0:])
 
-	return msgid, rspbuf[4:len]
+	bodydata := make([]byte, msglen)
+	bodylen, _ := (*conn).Read(bodydata[0:])
+	if msglen == 0 || bodylen == 0 {
+		c.Fatal("empty buffer")
+	}
+	msgid = clientmsg.MessageType(binary.BigEndian.Uint16(bodydata[0:]))
+
+	return msgid, bodydata[2:bodylen]
 }
 
 func Register(c *C, conn *net.Conn, username string, password string, islogin bool) (clientmsg.Type_LoginRetCode, string, []byte) {
