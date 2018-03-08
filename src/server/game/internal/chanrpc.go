@@ -72,7 +72,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	roomid := g.CreateRoom(msg.GetMatchmode())
+	roomid := g.CreateRoom(msg.GetMatchmode(), msg.GetMembercnt())
 
 	rsp := &proxymsg.Proxy_BS_MS_AllocBattleRoom{
 		Retcode:          proto.Int32(0),

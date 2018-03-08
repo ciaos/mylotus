@@ -25,4 +25,7 @@ func init() {
 	Processor.Register(&clientmsg.Req_ConnectBS{})
 	Processor.Register(&clientmsg.Rlt_ConnectBS{})
 	Processor.Register(&clientmsg.Rlt_StartBattle{})
+	Processor.Register(&clientmsg.Req_EndBattle{})
+	Processor.Register(&clientmsg.Rlt_EndBattle{})
+	Processor.Register(&clientmsg.Transfer_Command{})
 }

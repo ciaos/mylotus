@@ -19,6 +19,7 @@ const (
 	MEMBER_UNCONNECTED = 0
 	MEMBER_CONNECTED   = 1
 	MEMBER_OFFLINE     = 2
+	MEMBER_END         = 3
 )
 
 type Member struct {
@@ -37,6 +38,9 @@ type Room struct {
 	matchmode  int32
 	battlekey  []byte
 
+	membercnt int32
+	memberok  int32
+
 	members map[string]*Member
 
 	messages       []interface{}
@@ -52,6 +56,7 @@ func InitRoomManager() {
 }
 
 func (room *Room) broadcast(msgdata interface{}) {
+	log.Debug("broadcast")
 	for _, member := range (*room).members {
 		agent, ok := BattlePlayerManager[(*member).charid]
 		if ok {
@@ -74,7 +79,7 @@ func (room *Room) update(now *time.Time) int32 {
 
 	var allOffLine = true
 	for _, member := range (*room).members {
-		if member.status != MEMBER_OFFLINE {
+		if member.status != MEMBER_OFFLINE && member.status != MEMBER_END {
 			allOffLine = false
 		}
 	}
@@ -84,6 +89,16 @@ func (room *Room) update(now *time.Time) int32 {
 	}
 
 	return (*room).status
+}
+
+func changeRoomStatus(room *Room, status int32) {
+	(*room).status = status
+	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
+}
+
+func changeMemberStatus(member *Member, status int32) {
+	(*member).status = status
+	log.Debug("changeMemberStatus Member %v Status %v", (*member).charid, (*member).status)
 }
 
 func UpdateRoomManager(now *time.Time) {
@@ -101,7 +116,7 @@ func DeleteRoom(roomid int32) {
 	delete(RoomManager, roomid)
 }
 
-func CreateRoom(matchmode int32) int32 {
+func CreateRoom(matchmode int32, membercnt int32) int32 {
 	roomid += 1
 	if roomid > MAX_ROOM_COUNT {
 		roomid = 1
@@ -118,6 +133,8 @@ func CreateRoom(matchmode int32) int32 {
 		members:        make(map[string]*Member),
 		messages:       append([]interface{}{}),
 		messagesbackup: append([]interface{}{}),
+		membercnt:      membercnt,
+		memberok:       0,
 	}
 
 	RoomManager[roomid] = room
@@ -142,12 +159,12 @@ func JoinRoom(charid string, roomid int32, charname string, chartype int32, game
 			room.members[charid] = member
 
 			log.Debug("JoinRoom RoomID %v CharID %v", roomid, charid)
+
+			changeRoomStatus(room, ROOM_SYNC_PLAYERINFO)
 			return room.battlekey
 		} else {
 			log.Error("JoinRoom RoomID %v CharID %v Already Exist", roomid, charid)
 		}
-
-		(*room).status = ROOM_SYNC_PLAYERINFO
 	} else {
 		log.Error("JoinRoom RoomID %v Not Exist CharID %v", roomid, charid)
 	}
@@ -158,8 +175,6 @@ func JoinRoom(charid string, roomid int32, charname string, chartype int32, game
 func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 	room, ok := RoomManager[roomid]
 	if ok {
-		(room).status = ROOM_CONNECTING
-
 		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 		if err != nil {
 			log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
@@ -173,8 +188,13 @@ func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 
 		member, ok := room.members[charid]
 		if ok {
-			(*member).status = MEMBER_CONNECTED
+			changeMemberStatus(member, MEMBER_CONNECTED)
 			PlayerRoomIDMap[charid] = roomid
+			room.memberok += 1
+
+			if room.memberok == room.membercnt {
+				changeRoomStatus(room, ROOM_FIGHTING)
+			}
 
 			log.Debug("ConnectRoom RoomID %v CharID %v", roomid, charid)
 			return true
@@ -188,24 +208,39 @@ func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 }
 
 func LeaveRoom(charid string) {
+	setRoomMemberStatus(charid, MEMBER_OFFLINE)
+}
+
+func EndBattle(charid string) {
+	setRoomMemberStatus(charid, MEMBER_END)
+}
+
+func setRoomMemberStatus(charid string, status int32) {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
 		if ok {
 			member, ok := room.members[charid]
 			if ok {
-				(*member).status = MEMBER_OFFLINE
+				changeMemberStatus(member, status)
 
-				log.Debug("LeaveRoom RoomID %v CharID %v", roomid, charid)
+				log.Debug("SetRoomMemberStatus RoomID %v CharID %v Status %v", roomid, charid, status)
 			}
 		}
 	}
 }
 
-func AddMessage(roomid int32, msgid int32, msgdata interface{}) {
-	room, ok := RoomManager[roomid]
+func AddMessage(charid string, msgdata interface{}) {
+	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
-		(*room).messages = append((*room).messages, msgdata)
+		room, ok := RoomManager[roomid]
+		if ok {
+			(*room).messages = append((*room).messages, msgdata)
+		} else {
+			log.Error("AddMessage RoomID %v Not Exist", roomid)
+		}
+	} else {
+		log.Error("AddMessage CharID %v Not Exist", charid)
 	}
 }
 

@@ -23,6 +23,9 @@ func init() {
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
+	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
+
+	handler(&clientmsg.Transfer_Command{}, handleTransferMessage)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -177,5 +180,25 @@ func handleReqConnectBS(args []interface{}) {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
 			RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_OTHER),
 		})
+	}
+}
+
+func handleReqEndBattle(args []interface{}) {
+	m := args[0].(*clientmsg.Req_EndBattle)
+	a := args[1].(gate.Agent)
+
+	g.EndBattle(m.GetCharID())
+
+	a.WriteMsg(&clientmsg.Rlt_EndBattle{
+		RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_NONE),
+		CharID:  proto.String(m.GetCharID()),
+	})
+}
+
+func handleTransferMessage(args []interface{}) {
+	a := args[1].(gate.Agent)
+	if a.UserData() != nil {
+		charid := a.UserData().(string)
+		g.AddMessage(charid, args[0])
 	}
 }

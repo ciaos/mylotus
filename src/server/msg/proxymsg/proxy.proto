@@ -50,6 +50,7 @@ message Proxy_GS_MS_Match {
 message Proxy_MS_BS_AllocBattleRoom {
 	required int32 	matchmode = 1;
 	required int32  matchroomid = 2;
+	required int32 	membercnt = 3;
 }
 
 message Proxy_MS_GS_MatchResult {

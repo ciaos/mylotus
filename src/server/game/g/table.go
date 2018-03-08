@@ -33,11 +33,12 @@ type Seat struct {
 
 //for match server
 type Table struct {
-	seats      []*Seat
-	createtime int64
-	matchmode  int32
-	status     int32
-	tableid    int32
+	seats         []*Seat
+	createtime    int64
+	matchmode     int32
+	status        int32
+	tableid       int32
+	modeplayercnt int32
 }
 
 var TableManager = make(map[int32]*Table)
@@ -77,6 +78,7 @@ func allocBattleRoom(tableid int32) {
 	innerReq := &proxymsg.Proxy_MS_BS_AllocBattleRoom{
 		Matchroomid: proto.Int32(tableid),
 		Matchmode:   proto.Int32(TableManager[tableid].matchmode),
+		Membercnt:   proto.Int32(TableManager[tableid].modeplayercnt),
 	}
 
 	//todo 固定路由到指定的BattleServer
@@ -115,16 +117,10 @@ func DeleteTable(tableid int32) {
 }
 
 func JoinTable(charid string, matchmode int32, serverid int32, servertype string) {
-	r := gamedata.CSVMatchMode.Index(matchmode)
-	if r == nil {
-		log.Error("JoinTable CSVMatchMode Not Found %v ", matchmode)
-		return
-	}
-	row := r.(*cfg.MatchMode)
 
 	var createnew = true
 	for i, table := range TableManager {
-		if len((*table).seats) < row.PlayerCnt {
+		if len((*table).seats) < int((*table).modeplayercnt) {
 			seat := &Seat{
 				charid:     charid,
 				jointime:   time.Now().Unix(),
@@ -146,6 +142,13 @@ func JoinTable(charid string, matchmode int32, serverid int32, servertype string
 			tableid = 0
 		}
 
+		r := gamedata.CSVMatchMode.Index(matchmode)
+		if r == nil {
+			log.Error("JoinTable CSVMatchMode Not Found %v ", matchmode)
+			return
+		}
+		row := r.(*cfg.MatchMode)
+
 		table := &Table{
 			tableid:    tableid,
 			createtime: time.Now().Unix(),
@@ -158,7 +161,8 @@ func JoinTable(charid string, matchmode int32, serverid int32, servertype string
 					servertype: servertype,
 				},
 			},
-			status: MATCH_CONTINUE,
+			status:        MATCH_CONTINUE,
+			modeplayercnt: int32(row.PlayerCnt),
 		}
 		TableManager[tableid] = table
 		PlayerTableIDMap[charid] = tableid

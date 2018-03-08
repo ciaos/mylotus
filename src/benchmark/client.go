@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	CLIENT_NUM = 10
+	CLIENT_NUM = 2
 
 	STATUS_NONE = "STATUS_NONE"
 
@@ -61,6 +61,9 @@ type Client struct {
 
 	nextpinggstime int64
 	nextpingbstime int64
+
+	startbattletime int64
+	maxbattletime   int64
 
 	routes map[interface{}]interface{}
 }
@@ -130,6 +133,20 @@ func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
 	if rsp.GetRetCode() != clientmsg.Type_BattleRetCode_BRC_NONE {
 		c.ChangeStatus(STATUS_BATTLE_CLOSE)
 	}
+}
+
+func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
+	rsp := &clientmsg.Rlt_EndBattle{}
+	proto.Unmarshal(msgdata, rsp)
+
+	c.ChangeStatus(STATUS_BATTLE_CLOSE)
+}
+
+func handle_Transfer_Command(c *Client, msgdata []byte) {
+	rsp := &clientmsg.Transfer_Command{}
+	proto.Unmarshal(msgdata, rsp)
+
+	fmt.Printf("client %d CharID %s recv transfer command from %s\n", c.id, c.charid, rsp.GetCharID())
 }
 
 func (c *Client) updateLogin() {
@@ -240,19 +257,37 @@ func (c *Client) updateBattle() {
 		}
 		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
 		c.ChangeStatus(STATUS_BATTLE_LOOP)
+		c.startbattletime = time.Now().Unix()
 	} else if c.status == STATUS_BATTLE_CLOSE {
 		c.bconn.Close()
 		c.ChangeStatus(STATUS_GAME_MATCH)
 	}
 
 	if c.status == STATUS_BATTLE_LOOP {
-		if c.nextpingbstime < time.Now().Unix() {
+		//after battle begin
+		if c.startbattletime != 0 && c.nextpingbstime < time.Now().Unix() {
 			c.nextpingbstime = time.Now().Unix() + 3
 
 			msg := &clientmsg.Ping{
 				ID: proto.Uint32(uint32(rand.Intn(10000))),
 			}
 			go Send(&c.bconn, clientmsg.MessageType_MT_PING, msg)
+
+			msg2 := &clientmsg.Transfer_Command{
+				CharID:    proto.String(c.charid),
+				ToCharID:  proto.String("all"),
+				CommandID: proto.Int32(0),
+			}
+			go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg2)
+		}
+
+		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {
+			c.startbattletime = 0
+			msg := &clientmsg.Req_EndBattle{
+				TypeID: clientmsg.Type_BattleEndTypeID.Enum(clientmsg.Type_BattleEndTypeID_BEC_FINISH),
+				CharID: proto.String(c.charid),
+			}
+			go Send(&c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 		}
 	}
 }
@@ -317,6 +352,8 @@ func (c *Client) Init(id int32) {
 	c.nextlogintime = time.Now().Unix()
 	c.nextpingbstime = time.Now().Unix() + 3
 	c.nextpinggstime = time.Now().Unix() + 3
+	c.startbattletime = 0
+	c.maxbattletime = 10
 
 	c.routes = make(map[interface{}]interface{})
 	c.book(clientmsg.MessageType_MT_RLT_REGISTER, handle_Rlt_Register)
@@ -324,6 +361,7 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS, handle_Rlt_NotifyBattleAddress)
 	c.book(clientmsg.MessageType_MT_RLT_CONNECTBS, handle_Rlt_ConnectBS)
 	c.book(clientmsg.MessageType_MT_PONG, handle_Pong)
+	c.book(clientmsg.MessageType_MT_TRANSFER_COMMAND, handle_Transfer_Command)
 }
 
 func (c *Client) Loop(id int32) {

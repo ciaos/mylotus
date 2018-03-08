@@ -22,6 +22,9 @@ enum MessageType
 	MT_REQ_CONNECTBS = 13;
 	MT_RLT_CONNECTBS = 14;
 	MT_RLT_STARTBATTLE = 15;
+	MT_REQ_ENDBATTLE = 16;
+	MT_RLT_ENDBATTLE = 17;
+	MT_TRANSFER_COMMAND = 18;
 }
 
 ///////////////////////////////////////////////
@@ -164,6 +167,12 @@ enum Type_BattleRetCode
 	BRC_OTHER = 100;
 }
 
+enum Type_BattleEndTypeID
+{
+	BEC_FINISH = 0;
+	BEC_ABORT = 1;
+}
+
 message Req_ConnectBS
 {
 	required 	int32 	RoomID 	= 1;
@@ -189,4 +198,24 @@ message Rlt_StartBattle
 	required 	int32 	RandSeed = 1; //随机战斗种子
 	
 	repeated 	MemberInfo Member = 2;
+}
+
+message Transfer_Command
+{
+	required 	string 	CharID = 1;
+	required 	string 	ToCharID = 2;
+	required 	int32 	CommandID = 3;
+	optional 	string 	CommandMessage = 4;
+}
+
+message Req_EndBattle
+{
+	required 	Type_BattleEndTypeID 	TypeID = 1;
+	required 	string 				CharID = 2;
+}
+
+message Rlt_EndBattle
+{
+	required 	Type_BattleRetCode  RetCode = 1;
+	required 	string 				CharID = 2;
 }
