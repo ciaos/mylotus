@@ -82,14 +82,21 @@ func (room *Room) update(now *time.Time) int32 {
 	if (*room).status == ROOM_FIGHTING {
 		msgCnt := len((*room).messages)
 		if msgCnt > 0 {
-			log.Debug("RoomID %v BroadCast Message Count %v", (*room).roomid, msgCnt)
+			//log.Debug("RoomID %v BroadCast Message Count %v", (*room).roomid, msgCnt)
 
 			for _, message := range (*room).messages {
 				(*room).broadcast(message)
 			}
 
-			(*room).messagesbackup = append((*room).messagesbackup, (*room).messages...)
+			//(*room).messagesbackup = append((*room).messagesbackup, (*room).messages...)
 			(*room).messages = append([]interface{}{})
+		}
+	}
+
+	if (*room).status == ROOM_STATUS_NONE {
+		if time.Now().Unix()-(*room).createtime > 10 {
+			log.Error("ROOM_STATUS_NONE TimeOut %v", (*room).roomid)
+			return ROOM_END
 		}
 	}
 
@@ -131,6 +138,15 @@ func UpdateRoomManager(now *time.Time) {
 func DeleteRoom(roomid int32) {
 	log.Debug("DeleteRoom RoomID %v", roomid)
 	delete(RoomManager, roomid)
+}
+
+func deleteRoomMemberInfo(roomid int32) {
+	room, ok := RoomManager[roomid]
+	if ok {
+		for charid, _ := range room.members {
+			delete(PlayerRoomIDMap, charid)
+		}
+	}
 }
 
 func CreateRoom(matchmode int32, membercnt int32) int32 {
@@ -241,6 +257,7 @@ func setRoomMemberStatus(charid string, status int32) {
 				log.Debug("SetRoomMemberStatus RoomID %v CharID %v Status %v", roomid, charid, status)
 			}
 		}
+		delete(PlayerRoomIDMap, charid)
 	}
 }
 

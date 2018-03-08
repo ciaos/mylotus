@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	CLIENT_NUM        = 3000
-	BATTLE_BASIC_TIME = 120
+	CLIENT_NUM        = 200
+	BATTLE_BASIC_TIME = 10
 
 	STATUS_NONE = "STATUS_NONE"
 
@@ -128,7 +128,7 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.battleroomid = rsp.GetRoomID()
 	c.ChangeStatus(STATUS_BATTLE_CONNECT)
 
-	c.maxbattletime = BATTLE_BASIC_TIME + randInt(60, 120)
+	c.maxbattletime = BATTLE_BASIC_TIME + randInt(1, 2)
 	fmt.Printf("client %d match end\n", c.id)
 }
 
