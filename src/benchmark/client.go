@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	CLIENT_NUM = 2
+	CLIENT_NUM        = 3000
+	BATTLE_BASIC_TIME = 120
 
 	STATUS_NONE = "STATUS_NONE"
 
@@ -57,7 +58,9 @@ type Client struct {
 
 	err error
 
-	nextlogintime int64
+	nextlogintime    int64
+	nextregistertime int64
+	nextmatchtime    int64
 
 	nextpinggstime int64
 	nextpingbstime int64
@@ -106,14 +109,10 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 	proto.Unmarshal(msgdata, rsp)
 	if rsp.GetRetCode() == clientmsg.Type_GameRetCode_GRC_NONE {
 		c.charid = rsp.GetCharID()
-		msg := &clientmsg.Req_Match{
-			Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
-			Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
-		}
-		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
+		c.ChangeStatus(STATUS_GAME_MATCH)
 
 		fmt.Printf("client %d login end\n", c.id)
-		fmt.Printf("client %d match start\n", c.id)
 	} else {
 		c.nextlogintime = time.Now().Unix() + 5
 		c.ChangeStatus(STATUS_NONE)
@@ -129,6 +128,7 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.battleroomid = rsp.GetRoomID()
 	c.ChangeStatus(STATUS_BATTLE_CONNECT)
 
+	c.maxbattletime = BATTLE_BASIC_TIME + randInt(60, 120)
 	fmt.Printf("client %d match end\n", c.id)
 }
 
@@ -158,12 +158,14 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 
 func (c *Client) updateLogin() {
 	if c.status == STATUS_LOGIN_CONNECT {
-		c.lconn, c.err = net.Dial("tcp", LoginServerAddr)
-		if c.err != nil {
-			c.nextlogintime = time.Now().Unix() + 5
-			c.ChangeStatus(STATUS_NONE)
-		} else {
-			c.ChangeStatus(STATUS_LOGIN)
+		if c.nextregistertime < time.Now().Unix() {
+			c.nextregistertime = 0
+			c.lconn, c.err = net.Dial("tcp", LoginServerAddr)
+			if c.err != nil {
+				c.ChangeStatus(STATUS_NONE)
+			} else {
+				c.ChangeStatus(STATUS_LOGIN)
+			}
 		}
 	} else if c.status == STATUS_LOGIN {
 		msg := &clientmsg.Req_Register{
@@ -176,6 +178,7 @@ func (c *Client) updateLogin() {
 		c.ChangeStatus(STATUS_LOGIN_LOOP)
 	} else if c.status == STATUS_LOGIN_CLOSE {
 		c.lconn.Close()
+		c.nextlogintime = time.Now().Unix() + randInt(1, 3)
 		c.ChangeStatus(STATUS_GAME_CONNECT)
 	}
 }
@@ -196,11 +199,14 @@ func (c *Client) recvLogin() {
 
 func (c *Client) updateGame() {
 	if c.status == STATUS_GAME_CONNECT {
-		c.gconn, c.err = net.Dial("tcp", GameServerAddr)
-		if c.err != nil {
-			c.ChangeStatus(STATUS_NONE)
-		} else {
-			c.ChangeStatus(STATUS_GAME_LOGIN)
+		if c.nextlogintime < time.Now().Unix() {
+			c.nextlogintime = 0
+			c.gconn, c.err = net.Dial("tcp", GameServerAddr)
+			if c.err != nil {
+				c.ChangeStatus(STATUS_NONE)
+			} else {
+				c.ChangeStatus(STATUS_GAME_LOGIN)
+			}
 		}
 	} else if c.status == STATUS_GAME_LOGIN {
 		msg := &clientmsg.Req_Login{
@@ -214,14 +220,17 @@ func (c *Client) updateGame() {
 
 		fmt.Printf("client %d login start\n", c.id)
 	} else if c.status == STATUS_GAME_MATCH {
-		msg := &clientmsg.Req_Match{
-			Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
-			Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
-		}
-		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
-		c.ChangeStatus(STATUS_GAME_LOOP)
+		if c.nextmatchtime < time.Now().Unix() {
+			c.nextmatchtime = 0
+			msg := &clientmsg.Req_Match{
+				Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
+				Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
+			}
+			go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+			c.ChangeStatus(STATUS_GAME_LOOP)
 
-		fmt.Printf("client %d match restart\n", c.id)
+			fmt.Printf("client %d match start\n", c.id)
+		}
 	} else if c.status == STATUS_GAME_CLOSE {
 		c.gconn.Close()
 		c.ChangeStatus(STATUS_GAME_CONNECT)
@@ -244,6 +253,7 @@ func (c *Client) recvGame() {
 		if c.status == STATUS_GAME_LOOP || c.status == STATUS_BATTLE_LOOP {
 			err, msgid, msgbuf := Recv(&c.gconn)
 			if err != nil {
+				c.ChangeStatus(STATUS_GAME_CLOSE)
 				continue
 			}
 			c.dispatch(msgid, msgbuf)
@@ -275,6 +285,7 @@ func (c *Client) updateBattle() {
 
 	} else if c.status == STATUS_BATTLE_CLOSE {
 		c.bconn.Close()
+		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
 		c.ChangeStatus(STATUS_GAME_MATCH)
 	}
 
@@ -288,12 +299,20 @@ func (c *Client) updateBattle() {
 			}
 			go Send(&c.bconn, clientmsg.MessageType_MT_PING, msg)
 
-			msg2 := &clientmsg.Transfer_Command{
-				CharID:    proto.String(c.charid),
-				ToCharID:  proto.String("all"),
-				CommandID: proto.Int32(0),
+		}
+
+		{
+			i := 1
+			for i < 10 {
+				msg := &clientmsg.Transfer_Command{
+					CharID:    proto.String(c.charid),
+					ToCharID:  proto.String("all"),
+					CommandID: proto.Int32(0),
+				}
+				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+
+				i += 1
 			}
-			go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg2)
 		}
 
 		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {
@@ -312,6 +331,7 @@ func (c *Client) recvBattle() {
 		if c.status == STATUS_BATTLE_LOOP {
 			err, msgid, msgbuf := Recv(&c.bconn)
 			if err != nil {
+				c.ChangeStatus(STATUS_BATTLE_CLOSE)
 				continue
 			}
 			c.dispatch(msgid, msgbuf)
@@ -321,19 +341,10 @@ func (c *Client) recvBattle() {
 	}
 }
 
-func (c *Client) updateSleep() {
-	if c.status == STATUS_NONE {
-		if c.nextlogintime < time.Now().Unix() {
-			c.status = STATUS_LOGIN_CONNECT
-		}
-	}
-}
-
 func (c *Client) Update() {
 	c.updateLogin()
 	c.updateGame()
 	c.updateBattle()
-	c.updateSleep()
 }
 
 func (c *Client) Recv() {
@@ -359,7 +370,8 @@ func (c *Client) dispatch(msgid interface{}, msgdata []byte) {
 
 func (c *Client) Init(id int32) {
 	c.id = id
-	c.status = STATUS_NONE
+	c.nextregistertime = time.Now().Unix() + randInt(1, 5)
+	c.status = STATUS_LOGIN_CONNECT
 
 	c.username = fmt.Sprintf("robot_%d", id)
 	c.password = "123456"
@@ -390,6 +402,12 @@ func (c *Client) Loop(id int32) {
 			c.Update()
 		}
 	}
+}
+
+func randInt(min, max int) int64 {
+	rand.Seed(time.Now().Unix())
+	randNum := rand.Intn(max-min) + min
+	return int64(randNum)
 }
 
 func main() {

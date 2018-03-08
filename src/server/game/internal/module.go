@@ -21,6 +21,7 @@ func (m *Module) OnInit() {
 
 	g.InitMongoConnection()
 	g.InitTableManager()
+	g.InitRoomManager()
 	g.InitRedisConnection()
 
 }

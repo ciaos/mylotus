@@ -7,6 +7,7 @@ import (
 	"server/gamedata/cfg"
 	"server/msg/proxymsg"
 	"strings"
+	//	"sync"
 	"time"
 
 	"github.com/name5566/leaf/log"
@@ -45,8 +46,21 @@ var TableManager = make(map[int32]*Table)
 var PlayerTableIDMap = make(map[string]int32)
 var tableid int32
 
+//var mTableID *sync.Mutex
+
 func InitTableManager() {
 	tableid = 0
+
+	//	mTableID = new(sync.Mutex)
+}
+
+func allocTableID() {
+	//mTableID.Lock()
+	//defer mTableID.Unlock()
+	tableid += 1
+	if tableid > MAX_TABLE_COUNT {
+		tableid = 1
+	}
 }
 
 func (table *Table) update(now *time.Time) int32 {
@@ -84,7 +98,7 @@ func allocBattleRoom(tableid int32) {
 	//todo 固定路由到指定的BattleServer
 	if len(conf.Server.BattleServerList) > 0 {
 		battleServer := conf.Server.BattleServerList[0]
-		log.Debug("Alloc BattleRoom For Table %v", tableid)
+		log.Debug("Alloc BattleRoom For TableID %v", tableid)
 
 		go SendMessageTo(int32(battleServer.ServerID), battleServer.ServerType, "", uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
 	}
@@ -93,7 +107,10 @@ func allocBattleRoom(tableid int32) {
 func UpdateTableManager(now *time.Time) {
 
 	for i, table := range TableManager {
-		(*table).status = (*table).update(now)
+		if (*table).status != MATCH_ALLOCROOM {
+			(*table).status = (*table).update(now)
+		}
+
 		if (*table).status == MATCH_OK || (*table).status == MATCH_TIMEOUT {
 
 			(*table).status = MATCH_ALLOCROOM
@@ -105,7 +122,7 @@ func UpdateTableManager(now *time.Time) {
 		if (*table).status == MATCH_ERROR {
 
 			//notify all member error
-
+			deleteTableSeatInfo(i)
 			DeleteTable(i)
 		}
 	}
@@ -114,6 +131,15 @@ func UpdateTableManager(now *time.Time) {
 func DeleteTable(tableid int32) {
 	log.Debug("DeleteTable TableID %v", tableid)
 	delete(TableManager, tableid)
+}
+
+func deleteTableSeatInfo(tableid int32) {
+	table, ok := TableManager[tableid]
+	if ok {
+		for _, seat := range table.seats {
+			delete(PlayerTableIDMap, seat.charid)
+		}
+	}
 }
 
 func JoinTable(charid string, matchmode int32, serverid int32, servertype string) {
@@ -137,10 +163,7 @@ func JoinTable(charid string, matchmode int32, serverid int32, servertype string
 		}
 	}
 	if createnew {
-		tableid += 1
-		if tableid > MAX_TABLE_COUNT {
-			tableid = 0
-		}
+		allocTableID()
 
 		r := gamedata.CSVMatchMode.Index(matchmode)
 		if r == nil {
@@ -209,9 +232,9 @@ func ClearTable(tableid int32, battleroomid int32, battleserverid int32, battles
 			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCHRESULT), msg)
 		}
 
+		deleteTableSeatInfo(tableid)
 		table.seats = append([]*Seat{}) //clear seats
-
-		delete(TableManager, tableid)
+		DeleteTable(tableid)
 	} else {
 		log.Error("ClearTable TableID %v Not Found , TableCount %v", tableid, len(TableManager))
 	}

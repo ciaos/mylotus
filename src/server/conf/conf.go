@@ -10,7 +10,7 @@ var (
 	LogFlag = log.LstdFlags
 
 	// gate conf
-	PendingWriteNum        = 2000
+	PendingWriteNum        = 10000
 	MaxMsgLen       uint32 = 4096
 	HTTPTimeout            = 10 * time.Second
 	LenMsgLen              = 2

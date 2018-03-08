@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"server/tool"
 	"strings"
+	//	"sync"
 	"time"
 
 	"github.com/name5566/leaf/log"
@@ -51,8 +52,21 @@ var PlayerRoomIDMap = make(map[string]int32)
 var RoomManager = make(map[int32]*Room)
 var roomid int32
 
+//var mRoomID *sync.Mutex
+
 func InitRoomManager() {
 	roomid = 0
+
+	//mRoomID = new(sync.Mutex)
+}
+
+func allocRoomID() {
+	//mRoomID.Lock()
+	//defer mRoomID.Unlock()
+	roomid += 1
+	if roomid > MAX_ROOM_COUNT {
+		roomid = 1
+	}
 }
 
 func (room *Room) broadcast(msgdata interface{}) {
@@ -66,7 +80,10 @@ func (room *Room) broadcast(msgdata interface{}) {
 
 func (room *Room) update(now *time.Time) int32 {
 	if (*room).status == ROOM_FIGHTING {
-		if len((*room).messages) > 0 {
+		msgCnt := len((*room).messages)
+		if msgCnt > 0 {
+			log.Debug("RoomID %v BroadCast Message Count %v", (*room).roomid, msgCnt)
+
 			for _, message := range (*room).messages {
 				(*room).broadcast(message)
 			}
@@ -83,7 +100,8 @@ func (room *Room) update(now *time.Time) int32 {
 		}
 	}
 
-	if allOffLine {
+	if allOffLine && len((*room).members) > 0 {
+		log.Debug("AllMemberOffline %v", (*room).roomid)
 		return ROOM_END
 	}
 
@@ -116,10 +134,7 @@ func DeleteRoom(roomid int32) {
 }
 
 func CreateRoom(matchmode int32, membercnt int32) int32 {
-	roomid += 1
-	if roomid > MAX_ROOM_COUNT {
-		roomid = 1
-	}
+	allocRoomID()
 
 	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, roomid)), []byte(tool.CRYPT_KEY))
 
