@@ -56,7 +56,6 @@ func InitRoomManager() {
 }
 
 func (room *Room) broadcast(msgdata interface{}) {
-	log.Debug("broadcast")
 	for _, member := range (*room).members {
 		agent, ok := BattlePlayerManager[(*member).charid]
 		if ok {

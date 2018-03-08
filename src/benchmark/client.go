@@ -76,7 +76,7 @@ func (c *Client) ChangeStatus(status string) {
 func handle_Pong(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Pong{}
 	proto.Unmarshal(msgdata, rsp)
-	fmt.Printf("client %d recv pong %d\n", c.id, rsp.GetID())
+	//fmt.Printf("client %d recv pong %d\n", c.id, rsp.GetID())
 }
 
 func handle_Rlt_Register(c *Client, msgdata []byte) {
@@ -111,6 +111,9 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 			Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
 		}
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+
+		fmt.Printf("client %d login end\n", c.id)
+		fmt.Printf("client %d match start\n", c.id)
 	} else {
 		c.nextlogintime = time.Now().Unix() + 5
 		c.ChangeStatus(STATUS_NONE)
@@ -125,6 +128,8 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.battleaddr = rsp.GetBattleAddr()
 	c.battleroomid = rsp.GetRoomID()
 	c.ChangeStatus(STATUS_BATTLE_CONNECT)
+
+	fmt.Printf("client %d match end\n", c.id)
 }
 
 func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
@@ -140,13 +145,15 @@ func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
 	proto.Unmarshal(msgdata, rsp)
 
 	c.ChangeStatus(STATUS_BATTLE_CLOSE)
+
+	fmt.Printf("client %d battle end\n", c.id)
 }
 
 func handle_Transfer_Command(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Transfer_Command{}
 	proto.Unmarshal(msgdata, rsp)
 
-	fmt.Printf("client %d CharID %s recv transfer command from %s\n", c.id, c.charid, rsp.GetCharID())
+	//	fmt.Printf("client %d CharID %s recv transfer command from %s\n", c.id, c.charid, rsp.GetCharID())
 }
 
 func (c *Client) updateLogin() {
@@ -204,12 +211,17 @@ func (c *Client) updateGame() {
 
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
 		c.ChangeStatus(STATUS_GAME_LOOP)
+
+		fmt.Printf("client %d login start\n", c.id)
 	} else if c.status == STATUS_GAME_MATCH {
 		msg := &clientmsg.Req_Match{
 			Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
 			Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
 		}
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+		c.ChangeStatus(STATUS_GAME_LOOP)
+
+		fmt.Printf("client %d match restart\n", c.id)
 	} else if c.status == STATUS_GAME_CLOSE {
 		c.gconn.Close()
 		c.ChangeStatus(STATUS_GAME_CONNECT)
@@ -258,6 +270,9 @@ func (c *Client) updateBattle() {
 		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
 		c.ChangeStatus(STATUS_BATTLE_LOOP)
 		c.startbattletime = time.Now().Unix()
+
+		fmt.Printf("client %d battle start\n", c.id)
+
 	} else if c.status == STATUS_BATTLE_CLOSE {
 		c.bconn.Close()
 		c.ChangeStatus(STATUS_GAME_MATCH)
@@ -361,6 +376,7 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS, handle_Rlt_NotifyBattleAddress)
 	c.book(clientmsg.MessageType_MT_RLT_CONNECTBS, handle_Rlt_ConnectBS)
 	c.book(clientmsg.MessageType_MT_PONG, handle_Pong)
+	c.book(clientmsg.MessageType_MT_RLT_ENDBATTLE, handle_Rlt_EndBattle)
 	c.book(clientmsg.MessageType_MT_TRANSFER_COMMAND, handle_Transfer_Command)
 }
 
