@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	CLIENT_NUM        = 200
+	CLIENT_NUM        = 2
 	BATTLE_BASIC_TIME = 10
 
 	STATUS_NONE = "STATUS_NONE"
@@ -31,6 +31,7 @@ const (
 
 	STATUS_BATTLE_CONNECT = "STATUS_BATTLE_CONNECT"
 	STATUS_BATTLE         = "STATUS_BATTLE"
+	STATUS_BATTLE_WAITEND = "STATUS_BATTLE_WAITEND"
 	STATUS_BATTLE_LOOP    = "STATUS_BATTLE_LOOP"
 	STATUS_BATTLE_CLOSE   = "STATUS_BATTLE_CLOSE"
 )
@@ -73,7 +74,7 @@ type Client struct {
 
 func (c *Client) ChangeStatus(status string) {
 	c.status = status
-	fmt.Printf("client %d change to status %s\n", c.id, c.status)
+	fmt.Printf("[%v] client %d change to status %s\n", time.Now().Format("2006-01-02 15:04:05"), c.id, c.status)
 }
 
 func handle_Pong(c *Client, msgdata []byte) {
@@ -111,8 +112,6 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 		c.charid = rsp.GetCharID()
 		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
 		c.ChangeStatus(STATUS_GAME_MATCH)
-
-		fmt.Printf("client %d login end\n", c.id)
 	} else {
 		c.nextlogintime = time.Now().Unix() + 5
 		c.ChangeStatus(STATUS_NONE)
@@ -129,7 +128,6 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.ChangeStatus(STATUS_BATTLE_CONNECT)
 
 	c.maxbattletime = BATTLE_BASIC_TIME + randInt(1, 2)
-	fmt.Printf("client %d match end\n", c.id)
 }
 
 func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
@@ -145,8 +143,6 @@ func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
 	proto.Unmarshal(msgdata, rsp)
 
 	c.ChangeStatus(STATUS_BATTLE_CLOSE)
-
-	fmt.Printf("client %d battle end\n", c.id)
 }
 
 func handle_Transfer_Command(c *Client, msgdata []byte) {
@@ -217,8 +213,6 @@ func (c *Client) updateGame() {
 
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
 		c.ChangeStatus(STATUS_GAME_LOOP)
-
-		fmt.Printf("client %d login start\n", c.id)
 	} else if c.status == STATUS_GAME_MATCH {
 		if c.nextmatchtime < time.Now().Unix() {
 			c.nextmatchtime = 0
@@ -228,8 +222,6 @@ func (c *Client) updateGame() {
 			}
 			go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
 			c.ChangeStatus(STATUS_GAME_LOOP)
-
-			fmt.Printf("client %d match start\n", c.id)
 		}
 	} else if c.status == STATUS_GAME_CLOSE {
 		c.gconn.Close()
@@ -280,9 +272,6 @@ func (c *Client) updateBattle() {
 		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
 		c.ChangeStatus(STATUS_BATTLE_LOOP)
 		c.startbattletime = time.Now().Unix()
-
-		fmt.Printf("client %d battle start\n", c.id)
-
 	} else if c.status == STATUS_BATTLE_CLOSE {
 		c.bconn.Close()
 		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
@@ -321,6 +310,7 @@ func (c *Client) updateBattle() {
 				TypeID: clientmsg.Type_BattleEndTypeID.Enum(clientmsg.Type_BattleEndTypeID_BEC_FINISH),
 				CharID: proto.String(c.charid),
 			}
+			c.ChangeStatus(STATUS_BATTLE_WAITEND)
 			go Send(&c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 		}
 	}
@@ -328,7 +318,7 @@ func (c *Client) updateBattle() {
 
 func (c *Client) recvBattle() {
 	for {
-		if c.status == STATUS_BATTLE_LOOP {
+		if c.status == STATUS_BATTLE_LOOP || c.status == STATUS_BATTLE_WAITEND {
 			err, msgid, msgbuf := Recv(&c.bconn)
 			if err != nil {
 				c.ChangeStatus(STATUS_BATTLE_CLOSE)

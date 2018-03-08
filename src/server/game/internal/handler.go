@@ -199,6 +199,9 @@ func handleTransferMessage(args []interface{}) {
 	a := args[1].(gate.Agent)
 	if a.UserData() != nil {
 		charid := a.UserData().(string)
-		g.AddMessage(charid, args[0])
+		ret := g.AddMessage(charid, args[0])
+		if ret == false {
+			a.Close()
+		}
 	}
 }
