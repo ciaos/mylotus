@@ -4,36 +4,44 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"sync"
 	"time"
 
 	"server/msg/clientmsg"
 
 	"github.com/golang/protobuf/proto"
+
+	"github.com/op/go-logging"
+)
+
+var tlog = logging.MustGetLogger("example")
+var format = logging.MustStringFormatter(
+	`%{color}%{time:15:04:05.000} %{shortfunc} > %{level:.4s} %{color:reset} %{message}`,
 )
 
 const (
-	CLIENT_NUM        = 2
+	CLIENT_NUM        = 100
 	BATTLE_BASIC_TIME = 10
 
 	STATUS_NONE = "STATUS_NONE"
 
-	STATUS_LOGIN_CONNECT = "STATUS_LOGIN_CONNECT"
-	STATUS_LOGIN         = "STATUS_LOGIN"
-	STATUS_LOGIN_LOOP    = "STATUS_LOGIN_LOOP"
-	STATUS_LOGIN_CLOSE   = "STATUS_LOGIN_CLOSE"
+	STATUS_LOGIN_CONNECT = "connect_login_server"
+	STATUS_LOGIN         = "start_register"
+	STATUS_LOGIN_LOOP    = "loop_login"
+	STATUS_LOGIN_CLOSE   = "disconnect_login_server"
 
-	STATUS_GAME_CONNECT = "STATUS_GAME_CONNECT"
-	STATUS_GAME_LOGIN   = "STATUS_GAME_LOGIN"
-	STATUS_GAME_MATCH   = "STATUS_GAME_MATCH"
-	STATUS_GAME_LOOP    = "STATUS_GAME_LOOP"
-	STATUS_GAME_CLOSE   = "STATUS_GAME_CLOSE"
+	STATUS_GAME_CONNECT = "connect_game_server"
+	STATUS_GAME_LOGIN   = "start_signin"
+	STATUS_GAME_MATCH   = "start_match"
+	STATUS_GAME_LOOP    = "loop_game"
+	STATUS_GAME_CLOSE   = "disconnect_login_server"
 
-	STATUS_BATTLE_CONNECT = "STATUS_BATTLE_CONNECT"
-	STATUS_BATTLE         = "STATUS_BATTLE"
-	STATUS_BATTLE_WAITEND = "STATUS_BATTLE_WAITEND"
-	STATUS_BATTLE_LOOP    = "STATUS_BATTLE_LOOP"
-	STATUS_BATTLE_CLOSE   = "STATUS_BATTLE_CLOSE"
+	STATUS_BATTLE_CONNECT = "connect_battle_server"
+	STATUS_BATTLE         = "join_battle_room"
+	STATUS_BATTLE_WAITEND = "wait_battle_end_rsp"
+	STATUS_BATTLE_LOOP    = "loop_battle"
+	STATUS_BATTLE_CLOSE   = "disconnect_battle_server"
 )
 
 var w sync.WaitGroup
@@ -74,7 +82,7 @@ type Client struct {
 
 func (c *Client) ChangeStatus(status string) {
 	c.status = status
-	fmt.Printf("[%v] client %d change to status %s\n", time.Now().Format("2006-01-02 15:04:05"), c.id, c.status)
+	tlog.Debugf("client %d %s\n", c.id, c.status)
 }
 
 func handle_Pong(c *Client, msgdata []byte) {
@@ -401,6 +409,10 @@ func randInt(min, max int) int64 {
 }
 
 func main() {
+	backend := logging.NewLogBackend(os.Stderr, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, format)
+	logging.SetBackend(backendFormatter)
+
 	m = new(sync.Mutex)
 
 	w.Add(CLIENT_NUM)
