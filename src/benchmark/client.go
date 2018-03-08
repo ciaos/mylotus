@@ -197,7 +197,7 @@ func (c *Client) recvLogin() {
 			c.dispatch(msgid, msgbuf)
 		}
 
-		time.Sleep(time.Duration(10) * time.Millisecond)
+		time.Sleep(time.Duration(1) * time.Microsecond)
 	}
 }
 
@@ -259,7 +259,7 @@ func (c *Client) recvGame() {
 			c.dispatch(msgid, msgbuf)
 		}
 
-		time.Sleep(time.Duration(10) * time.Millisecond)
+		time.Sleep(time.Duration(1) * time.Microsecond)
 	}
 }
 
@@ -335,7 +335,7 @@ func (c *Client) recvBattle() {
 			c.dispatch(msgid, msgbuf)
 		}
 
-		time.Sleep(time.Duration(10) * time.Millisecond)
+		time.Sleep(time.Duration(1) * time.Microsecond)
 	}
 }
 
@@ -362,6 +362,9 @@ func (c *Client) dispatch(msgid interface{}, msgdata []byte) {
 	defer m.Unlock()
 	handler, ok := c.routes[msgid]
 	if ok {
+		//if msgid != clientmsg.MessageType_MT_PONG && msgid != clientmsg.MessageType_MT_TRANSFER_COMMAND {
+		//	tlog.Debugf("clientid %d msgid %d", c.id, msgid)
+		//}
 		handler.(func(c *Client, msgdata []byte))(c, msgdata)
 	}
 }

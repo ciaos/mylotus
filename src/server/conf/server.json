@@ -9,8 +9,8 @@
 	
 	"ServerID" : 1,
 	"ServerType": "gameserver",
-	"RedisHost": "192.168.37.99:6379",
-	"RedisPassWord" : "123456",
+	"RedisHost": "127.0.0.1:6379",
+	"RedisPassWord" : "",
 	"MongoDBHost": "localhost:27017",
 	
 	"GameServerList" : [
