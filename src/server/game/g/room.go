@@ -7,7 +7,7 @@ import (
 	//	"sync"
 	"time"
 
-	"github.com/name5566/leaf/log"
+	"github.com/ciaos/leaf/log"
 )
 
 const (
@@ -33,11 +33,12 @@ type Member struct {
 }
 
 type Room struct {
-	createtime int64
-	status     int32
-	roomid     int32
-	matchmode  int32
-	battlekey  []byte
+	createtime    int64
+	nextchecktime int64
+	status        int32
+	roomid        int32
+	matchmode     int32
+	battlekey     []byte
 
 	membercnt int32
 	memberok  int32
@@ -93,23 +94,25 @@ func (room *Room) update(now *time.Time) int32 {
 		}
 	}
 
-	if (*room).status == ROOM_STATUS_NONE {
-		if time.Now().Unix()-(*room).createtime > 10 {
+	if (*room).nextchecktime < (*now).Unix() {
+		(*room).nextchecktime = (*now).Unix() + 5
+
+		if (*room).status == ROOM_STATUS_NONE {
 			log.Error("ROOM_STATUS_NONE TimeOut %v", (*room).roomid)
 			return ROOM_END
 		}
-	}
 
-	var allOffLine = true
-	for _, member := range (*room).members {
-		if member.status != MEMBER_OFFLINE && member.status != MEMBER_END {
-			allOffLine = false
+		var allOffLine = true
+		for _, member := range (*room).members {
+			if member.status == MEMBER_CONNECTED {
+				allOffLine = false
+				break
+			}
 		}
-	}
-
-	if allOffLine && len((*room).members) > 0 {
-		log.Debug("AllMemberOffline %v", (*room).roomid)
-		return ROOM_END
+		if allOffLine {
+			log.Debug("AllMemberOffline %v", (*room).roomid)
+			return ROOM_END
+		}
 	}
 
 	return (*room).status
@@ -157,6 +160,7 @@ func CreateRoom(matchmode int32, membercnt int32) int32 {
 	room := &Room{
 		roomid:         roomid,
 		createtime:     time.Now().Unix(),
+		nextchecktime:  time.Now().Unix() + 5,
 		status:         ROOM_STATUS_NONE,
 		matchmode:      matchmode,
 		battlekey:      battlekey,

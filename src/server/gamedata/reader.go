@@ -5,8 +5,8 @@ import (
 
 	"server/gamedata/cfg"
 
-	"github.com/name5566/leaf/log"
-	"github.com/name5566/leaf/recordfile"
+	"github.com/ciaos/leaf/log"
+	"github.com/ciaos/leaf/recordfile"
 )
 
 func readRf(st interface{}) *recordfile.RecordFile {

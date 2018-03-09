@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ciaos/leaf/log"
 	"github.com/garyburd/redigo/redis"
 	"github.com/golang/protobuf/proto"
-	"github.com/name5566/leaf/log"
 )
 
 var Predis *RedisProxy

@@ -4,8 +4,8 @@ import (
 	"server/base"
 	"server/conf"
 
-	"github.com/name5566/leaf/db/mongodb"
-	"github.com/name5566/leaf/module"
+	"github.com/ciaos/leaf/db/mongodb"
+	"github.com/ciaos/leaf/module"
 )
 
 var (

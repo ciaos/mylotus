@@ -9,8 +9,8 @@ import (
 	"server/queue"
 	"server/tick"
 
-	"github.com/name5566/leaf"
-	lconf "github.com/name5566/leaf/conf"
+	"github.com/ciaos/leaf"
+	lconf "github.com/ciaos/leaf/conf"
 )
 
 func main() {

@@ -6,9 +6,9 @@ import (
 	"server/conf"
 	"server/game"
 
+	"github.com/ciaos/leaf/log"
+	"github.com/ciaos/leaf/module"
 	"github.com/garyburd/redigo/redis"
-	"github.com/name5566/leaf/log"
-	"github.com/name5566/leaf/module"
 )
 
 var (

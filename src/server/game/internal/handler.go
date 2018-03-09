@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ciaos/leaf/gate"
+	"github.com/ciaos/leaf/log"
 	"github.com/golang/protobuf/proto"
-	"github.com/name5566/leaf/gate"
-	"github.com/name5566/leaf/log"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -36,7 +36,7 @@ func handlePing(args []interface{}) {
 	m := args[0].(*clientmsg.Ping)
 	a := args[1].(gate.Agent)
 
-	//log.Debug("RecvPing %v %v", a.RemoteAddr())
+	log.Debug("RecvPing %v From %v ", m.GetID(), a.RemoteAddr())
 	a.WriteMsg(&clientmsg.Pong{ID: proto.Uint32(m.GetID())})
 
 	//SendMessageTo(int32(conf.Server.ServerID), conf.Server.ServerType, uint64(1), uint32(0), m)

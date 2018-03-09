@@ -3,9 +3,9 @@ package g
 import (
 	"strings"
 
-	"github.com/name5566/leaf/gate"
+	"github.com/ciaos/leaf/gate"
 
-	"github.com/name5566/leaf/log"
+	"github.com/ciaos/leaf/log"
 )
 
 const (

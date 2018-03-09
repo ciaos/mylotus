@@ -1,10 +1,11 @@
 package internal
 
 import (
-	"github.com/name5566/leaf/gate"
 	"server/conf"
 	"server/game"
 	"server/msg"
+
+	"github.com/ciaos/leaf/gate"
 )
 
 type Module struct {
@@ -21,6 +22,7 @@ func (m *Module) OnInit() {
 		CertFile:        conf.Server.CertFile,
 		KeyFile:         conf.Server.KeyFile,
 		TCPAddr:         conf.Server.TCPAddr,
+		UDPAddr:         conf.Server.UDPAddr,
 		LenMsgLen:       conf.LenMsgLen,
 		LittleEndian:    conf.LittleEndian,
 		Processor:       msg.Processor,

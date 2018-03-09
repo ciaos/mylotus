@@ -21,8 +21,8 @@ var format = logging.MustStringFormatter(
 )
 
 const (
-	CLIENT_NUM        = 100
-	BATTLE_BASIC_TIME = 10
+	CLIENT_NUM        = 1000
+	BATTLE_BASIC_TIME = 120
 
 	STATUS_NONE = "STATUS_NONE"
 
@@ -213,6 +213,7 @@ func (c *Client) updateGame() {
 			}
 		}
 	} else if c.status == STATUS_GAME_LOGIN {
+		time.Sleep(time.Duration(1) * time.Second)
 		msg := &clientmsg.Req_Login{
 			UserID:     proto.String(c.userid),
 			SessionKey: c.sessionkey,
@@ -232,7 +233,9 @@ func (c *Client) updateGame() {
 			c.ChangeStatus(STATUS_GAME_LOOP)
 		}
 	} else if c.status == STATUS_GAME_CLOSE {
-		c.gconn.Close()
+		if c.gconn != nil {
+			c.gconn.Close()
+		}
 		c.ChangeStatus(STATUS_GAME_CONNECT)
 	}
 
@@ -300,7 +303,7 @@ func (c *Client) updateBattle() {
 
 		{
 			i := 1
-			for i < 10 {
+			for i < 3 {
 				msg := &clientmsg.Transfer_Command{
 					CharID:    proto.String(c.charid),
 					ToCharID:  proto.String("all"),

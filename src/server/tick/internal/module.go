@@ -6,7 +6,7 @@ import (
 	"server/game"
 	"time"
 
-	"github.com/name5566/leaf/module"
+	"github.com/ciaos/leaf/module"
 )
 
 var (

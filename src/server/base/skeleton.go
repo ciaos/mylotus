@@ -1,9 +1,10 @@
 package base
 
 import (
-	"github.com/name5566/leaf/chanrpc"
-	"github.com/name5566/leaf/module"
 	"server/conf"
+
+	"github.com/ciaos/leaf/chanrpc"
+	"github.com/ciaos/leaf/module"
 )
 
 func NewSkeleton() *module.Skeleton {

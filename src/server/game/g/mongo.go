@@ -3,8 +3,8 @@ package g
 import (
 	"server/conf"
 
-	"github.com/name5566/leaf/db/mongodb"
-	"github.com/name5566/leaf/log"
+	"github.com/ciaos/leaf/db/mongodb"
+	"github.com/ciaos/leaf/log"
 )
 
 var Mongo *mongodb.DialContext

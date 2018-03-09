@@ -8,9 +8,9 @@ import (
 	"server/msg/proxymsg"
 	"time"
 
+	"github.com/ciaos/leaf/gate"
+	"github.com/ciaos/leaf/log"
 	"github.com/golang/protobuf/proto"
-	"github.com/name5566/leaf/gate"
-	"github.com/name5566/leaf/log"
 	"gopkg.in/mgo.v2/bson"
 )
 

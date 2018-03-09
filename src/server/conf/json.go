@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
-	"github.com/name5566/leaf/log"
+	"github.com/ciaos/leaf/log"
 )
 
 var Server struct {
@@ -14,6 +14,7 @@ var Server struct {
 	CertFile    string
 	KeyFile     string
 	TCPAddr     string
+	UDPAddr     string
 	MaxConnNum  int
 	ConsolePort int
 	ProfilePath string
