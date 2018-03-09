@@ -155,11 +155,12 @@ func proxyHandleGSBSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
 
 	battlekey := g.JoinRoom(msg.GetCharid(), msg.GetBattleroomid(), msg.GetCharname(), msg.GetChartype(), pmsg.GetFromid())
 	if battlekey != nil {
+
 		rsp := &proxymsg.Proxy_BS_GS_SyncPlayerInfo{
 			Retcode:       proto.Int32(0),
 			Battleroomid:  proto.Int32(msg.GetBattleroomid()),
 			Battleroomkey: battlekey,
-			Connectaddr:   proto.String(conf.Server.TCPAddr),
+			Connectaddr:   proto.String(conf.Server.ConnectAddr),
 		}
 
 		skeleton.Go(func() {
@@ -178,7 +179,7 @@ func proxyHandleBSGSSyncPlayerInfo(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	log.Debug("proxyHandleBSGSSyncPlayerInfo Notify CharID %v RoomID %v", pmsg.GetCharid(), msg.GetBattleroomid())
+	log.Debug("proxyHandleBSGSSyncPlayerInfo Notify CharID %v RoomID %v RoomAddr %v", pmsg.GetCharid(), msg.GetBattleroomid(), msg.GetConnectaddr())
 
 	if msg.GetRetcode() == 0 {
 		agent, ok := g.GamePlayerManager[pmsg.GetCharid()]

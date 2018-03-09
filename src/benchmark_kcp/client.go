@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"sync"
 	"time"
 
 	"server/msg/clientmsg"
 
+	"github.com/ciaos/leaf/kcp"
 	"github.com/golang/protobuf/proto"
 	"github.com/op/go-logging"
 )
@@ -60,9 +60,9 @@ type Client struct {
 	charid string
 	status string
 
-	lconn net.Conn
-	gconn net.Conn
-	bconn net.Conn
+	lconn *kcp.UDPSession
+	gconn *kcp.UDPSession
+	bconn *kcp.UDPSession
 
 	err error
 
@@ -100,7 +100,7 @@ func handle_Rlt_Register(c *Client, msgdata []byte) {
 			IsLogin:       proto.Bool(false),
 			ClientVersion: proto.Int32(0),
 		}
-		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
+		go Send(c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
 	} else if rsp.GetRetCode() == clientmsg.Type_LoginRetCode_LRC_NONE {
 		c.userid = rsp.GetUserID()
 		c.sessionkey = rsp.GetSessionKey()
@@ -163,12 +163,14 @@ func (c *Client) updateLogin() {
 	if c.status == STATUS_LOGIN_CONNECT {
 		if c.nextregistertime < time.Now().Unix() {
 			c.nextregistertime = 0
-			c.lconn, c.err = net.Dial("tcp", LoginServerAddr)
+			c.lconn, c.err = kcp.Dial(kcp.MODE_NORMAL, LoginServerAddr)
 			if c.err != nil {
 				c.ChangeStatus(STATUS_NONE)
 			} else {
 				c.ChangeStatus(STATUS_LOGIN)
 			}
+
+			//tlog.Debugf("client %d lconn %s %s Addr %s status %s\n", c.id, c.lconn.LocalAddr().String(), c.lconn.RemoteAddr().String(), LoginServerAddr, c.status)
 		}
 	} else if c.status == STATUS_LOGIN {
 		msg := &clientmsg.Req_Register{
@@ -177,7 +179,7 @@ func (c *Client) updateLogin() {
 			IsLogin:       proto.Bool(true),
 			ClientVersion: proto.Int32(0),
 		}
-		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
+		go Send(c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
 		c.ChangeStatus(STATUS_LOGIN_LOOP)
 	} else if c.status == STATUS_LOGIN_CLOSE {
 		c.lconn.Close()
@@ -189,7 +191,7 @@ func (c *Client) updateLogin() {
 func (c *Client) recvLogin() {
 	for {
 		if c.status == STATUS_LOGIN_LOOP {
-			err, msgid, msgbuf := Recv(&c.lconn)
+			err, msgid, msgbuf := Recv(c.lconn)
 			if err != nil {
 				continue
 			}
@@ -204,12 +206,13 @@ func (c *Client) updateGame() {
 	if c.status == STATUS_GAME_CONNECT {
 		if c.nextlogintime < time.Now().Unix() {
 			c.nextlogintime = 0
-			c.gconn, c.err = net.Dial("tcp", GameServerAddr)
+			c.gconn, c.err = kcp.Dial(kcp.MODE_NORMAL, GameServerAddr)
 			if c.err != nil {
 				c.ChangeStatus(STATUS_NONE)
 			} else {
 				c.ChangeStatus(STATUS_GAME_LOGIN)
 			}
+			//tlog.Debugf("client %d gconn %s %s Addr %s status %s\n", c.id, c.gconn.LocalAddr().String(), c.gconn.RemoteAddr().String(), GameServerAddr, c.status)
 		}
 	} else if c.status == STATUS_GAME_LOGIN {
 		time.Sleep(time.Duration(1) * time.Second)
@@ -219,7 +222,7 @@ func (c *Client) updateGame() {
 			ServerID:   proto.Int32(GameServerID),
 		}
 
-		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
+		go Send(c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
 		c.ChangeStatus(STATUS_GAME_LOOP)
 	} else if c.status == STATUS_GAME_MATCH {
 		if c.nextmatchtime < time.Now().Unix() {
@@ -228,7 +231,7 @@ func (c *Client) updateGame() {
 				Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
 				Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
 			}
-			go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+			go Send(c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
 			c.ChangeStatus(STATUS_GAME_LOOP)
 		}
 	} else if c.status == STATUS_GAME_CLOSE {
@@ -245,7 +248,7 @@ func (c *Client) updateGame() {
 			msg := &clientmsg.Ping{
 				ID: proto.Uint32(uint32(rand.Intn(10000))),
 			}
-			go Send(&c.gconn, clientmsg.MessageType_MT_PING, msg)
+			go Send(c.gconn, clientmsg.MessageType_MT_PING, msg)
 		}
 	}
 }
@@ -253,7 +256,7 @@ func (c *Client) updateGame() {
 func (c *Client) recvGame() {
 	for {
 		if c.status == STATUS_GAME_LOOP || c.status == STATUS_BATTLE_LOOP {
-			err, msgid, msgbuf := Recv(&c.gconn)
+			err, msgid, msgbuf := Recv(c.gconn)
 			if err != nil {
 				c.ChangeStatus(STATUS_GAME_CLOSE)
 				continue
@@ -267,19 +270,22 @@ func (c *Client) recvGame() {
 
 func (c *Client) updateBattle() {
 	if c.status == STATUS_BATTLE_CONNECT {
-		c.bconn, c.err = net.Dial("tcp", c.battleaddr)
+		c.bconn, c.err = kcp.Dial(kcp.MODE_NORMAL, c.battleaddr)
 		if c.err != nil {
 			c.ChangeStatus(STATUS_NONE)
 		} else {
 			c.ChangeStatus(STATUS_BATTLE)
 		}
+
+		//tlog.Debugf("client %d bconn %s %s Addr %s status %s\n", c.id, c.bconn.LocalAddr().String(), c.bconn.RemoteAddr().String(), c.battleaddr, c.status)
 	} else if c.status == STATUS_BATTLE {
 		msg := &clientmsg.Req_ConnectBS{
 			RoomID:    proto.Int32(c.battleroomid),
 			BattleKey: c.battlekey,
 			CharID:    proto.String(c.charid),
 		}
-		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
+		go Send(c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
+
 		c.ChangeStatus(STATUS_BATTLE_LOOP)
 		c.startbattletime = time.Now().Unix()
 	} else if c.status == STATUS_BATTLE_CLOSE {
@@ -296,7 +302,7 @@ func (c *Client) updateBattle() {
 			msg := &clientmsg.Ping{
 				ID: proto.Uint32(uint32(rand.Intn(10000))),
 			}
-			go Send(&c.bconn, clientmsg.MessageType_MT_PING, msg)
+			go Send(c.bconn, clientmsg.MessageType_MT_PING, msg)
 
 		}
 
@@ -308,7 +314,7 @@ func (c *Client) updateBattle() {
 					ToCharID:  proto.String("all"),
 					CommandID: proto.Int32(0),
 				}
-				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+				go Send(c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
 
 				i += 1
 			}
@@ -321,7 +327,7 @@ func (c *Client) updateBattle() {
 				CharID: proto.String(c.charid),
 			}
 			c.ChangeStatus(STATUS_BATTLE_WAITEND)
-			go Send(&c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
+			go Send(c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 		}
 	}
 }
@@ -329,7 +335,7 @@ func (c *Client) updateBattle() {
 func (c *Client) recvBattle() {
 	for {
 		if c.status == STATUS_BATTLE_LOOP || c.status == STATUS_BATTLE_WAITEND {
-			err, msgid, msgbuf := Recv(&c.bconn)
+			err, msgid, msgbuf := Recv(c.bconn)
 			if err != nil {
 				c.ChangeStatus(STATUS_BATTLE_CLOSE)
 				continue

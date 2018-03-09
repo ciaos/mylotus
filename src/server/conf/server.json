@@ -1,7 +1,7 @@
 {
 	"LogLevel": "debug",
-	"LogPath": "",
-	"TCPAddr": "127.0.0.1:8888",
+	"LogPath": "log",
+	"TCPAddr": "0.0.0.0:8888",
 	"MaxConnNum": 20000,
 	"ConsolePort": 3333,
 	
@@ -12,6 +12,7 @@
 	"RedisHost": "192.168.37.99:6379",
 	"RedisPassWord" : "123456",
 	"MongoDBHost": "localhost:27017",
+	"ConnectAddr" : "127.0.0.1:8888",
 	
 	"GameServerList" : [
 		{"ServerID" : 1, "ServerType" : "gameserver", "ServerName" : "王者荣耀", "Tag" : 1, "ConnectAddr" : "127.0.0.1:8888"}

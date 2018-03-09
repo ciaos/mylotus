@@ -26,6 +26,7 @@ var Server struct {
 	RedisHost     string
 	RedisPassWord string
 	MongoDBHost   string
+	ConnectAddr   string
 
 	GameServerList   []GameServerCfg
 	BattleServerList []BattleServerCfg
