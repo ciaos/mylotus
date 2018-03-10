@@ -21,6 +21,7 @@ type Module struct {
 	conn      redis.Conn
 	queueName string
 	psc       redis.PubSubConn
+	running   bool
 }
 
 func (m *Module) OnInit() {
@@ -29,11 +30,13 @@ func (m *Module) OnInit() {
 	m.conn.Do("auth", conf.Server.RedisPassWord)
 	m.psc = redis.PubSubConn{m.conn}
 	m.queueName = fmt.Sprintf("queue_%v_%v", conf.Server.ServerType, conf.Server.ServerID)
+	m.running = true
 
 	go (*m).update()
 }
 
 func (m *Module) OnDestroy() {
+	m.running = false
 	m.conn.Close()
 }
 
@@ -47,6 +50,10 @@ func (m *Module) update() {
 			log.Debug("SubScribe Queue:%s Channel:%s Kind:%s Count:%d", m.queueName, v.Channel, v.Kind, v.Count)
 		case error:
 			log.Error("SubScribe Queue Error:%s", v.Error())
+
+			if m.running == false {
+				return
+			}
 		}
 	}
 }

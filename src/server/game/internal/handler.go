@@ -189,6 +189,8 @@ func handleReqEndBattle(args []interface{}) {
 
 	g.EndBattle(m.GetCharID())
 
+	log.Debug("handleReqEndBattle %v", m.GetCharID())
+
 	a.WriteMsg(&clientmsg.Rlt_EndBattle{
 		RetCode: clientmsg.Type_BattleRetCode.Enum(clientmsg.Type_BattleRetCode_BRC_NONE),
 		CharID:  proto.String(m.GetCharID()),
@@ -199,9 +201,6 @@ func handleTransferMessage(args []interface{}) {
 	a := args[1].(gate.Agent)
 	if a.UserData() != nil {
 		charid := a.UserData().(string)
-		ret := g.AddMessage(charid, args[0])
-		if ret == false {
-			a.Close()
-		}
+		g.AddMessage(charid, args[0])
 	}
 }

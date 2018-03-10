@@ -42,9 +42,8 @@ type GameServerCfg struct {
 }
 
 type BattleServerCfg struct {
-	ServerID    int
-	ServerType  string
-	ConnectAddr string
+	ServerID   int
+	ServerType string
 }
 
 type MatchServerCfg struct {

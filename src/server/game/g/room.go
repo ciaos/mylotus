@@ -265,20 +265,17 @@ func setRoomMemberStatus(charid string, status int32) {
 	}
 }
 
-func AddMessage(charid string, msgdata interface{}) bool {
+func AddMessage(charid string, msgdata interface{}) {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
 		if ok {
 			(*room).messages = append((*room).messages, msgdata)
-			return true
 		} else {
 			log.Error("AddMessage RoomID %v Not Exist", roomid)
-			return false
 		}
 	} else {
 		log.Error("AddMessage CharID %v Not Exist", charid)
-		return false
 	}
 }
 

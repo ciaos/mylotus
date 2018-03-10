@@ -20,7 +20,7 @@ var format = logging.MustStringFormatter(
 )
 
 const (
-	CLIENT_NUM        = 1000
+	CLIENT_NUM        = 2
 	BATTLE_BASIC_TIME = 10
 
 	STATUS_NONE = "STATUS_NONE"
@@ -370,9 +370,9 @@ func (c *Client) dispatch(msgid interface{}, msgdata []byte) {
 	defer m.Unlock()
 	handler, ok := c.routes[msgid]
 	if ok {
-		//if msgid != clientmsg.MessageType_MT_PONG && msgid != clientmsg.MessageType_MT_TRANSFER_COMMAND {
-		//	tlog.Debugf("clientid %d msgid %d", c.id, msgid)
-		//}
+		if msgid != clientmsg.MessageType_MT_PONG && msgid != clientmsg.MessageType_MT_TRANSFER_COMMAND {
+			tlog.Debugf("clientid %d msgid %d", c.id, msgid)
+		}
 		handler.(func(c *Client, msgdata []byte))(c, msgdata)
 	}
 }
