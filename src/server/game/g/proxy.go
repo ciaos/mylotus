@@ -2,6 +2,7 @@ package g
 
 import (
 	"fmt"
+	"hash/crc32"
 	"server/conf"
 	"server/msg/proxymsg"
 	"sync"
@@ -32,6 +33,32 @@ func InitRedisConnection() {
 }
 func UninitRedisConnection() {
 	Predis.conn.Close()
+}
+
+func RandSendMessageTo(toserver string, charid string, msgid uint32, msgdata interface{}) bool {
+
+	crc32ID := crc32.ChecksumIEEE([]byte(charid))
+
+	switch toserver {
+	case "matchserver":
+		if len(conf.Server.MatchServerList) > 0 {
+			idx := int(crc32ID) % len(conf.Server.MatchServerList)
+			matchserver := &conf.Server.MatchServerList[idx]
+			return SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid, msgid, msgdata)
+		} else {
+			return false
+		}
+	case "battleserver":
+		if len(conf.Server.BattleServerList) > 0 {
+			idx := int(crc32ID) % len(conf.Server.BattleServerList)
+			battleserver := &conf.Server.BattleServerList[idx]
+			return SendMessageTo(int32((*battleserver).ServerID), (*battleserver).ServerType, charid, msgid, msgdata)
+		} else {
+			return false
+		}
+	}
+
+	return false
 }
 
 func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msgdata interface{}) bool {
@@ -65,7 +92,7 @@ func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msg
 	defer m.Unlock()
 	_, err = redis.DoWithTimeout(Predis.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
 	if err != nil {
-		log.Error("DoWithTimeout Error %v", err)
+		log.Error("DoWithTimeout queueName %v Error %v", queueName, err)
 		return false
 	} else {
 		return true

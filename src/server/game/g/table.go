@@ -2,10 +2,10 @@ package g
 
 import (
 	"fmt"
-	"server/conf"
 	"server/gamedata"
 	"server/gamedata/cfg"
 	"server/msg/proxymsg"
+	"strconv"
 	"strings"
 	//	"sync"
 	"time"
@@ -96,12 +96,7 @@ func allocBattleRoom(tableid int32) {
 	}
 
 	//todo 固定路由到指定的BattleServer
-	if len(conf.Server.BattleServerList) > 0 {
-		battleServer := conf.Server.BattleServerList[0]
-		log.Debug("Alloc BattleRoom For TableID %v", tableid)
-
-		go SendMessageTo(int32(battleServer.ServerID), battleServer.ServerType, "", uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
-	}
+	go RandSendMessageTo("battleserver", strconv.Itoa(int(tableid)), uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
 }
 
 func UpdateTableManager(now *time.Time) {

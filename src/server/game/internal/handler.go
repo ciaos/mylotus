@@ -153,18 +153,16 @@ func handleReqMatch(args []interface{}) {
 		Action:    proto.Int32(int32(m.GetAction())),
 	}
 
-	//todo 固定路由到指定的MatchServer
-	if len(conf.Server.MatchServerList) > 0 {
-		matchserver := &conf.Server.MatchServerList[0]
-
-		skeleton.Go(func() {
-			g.SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
-		}, func() {})
-	} else {
-		a.WriteMsg(&clientmsg.Rlt_Match{
-			RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
-		})
-	}
+	var res bool
+	skeleton.Go(func() {
+		res = g.RandSendMessageTo("matchserver", charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+	}, func() {
+		if res == false {
+			a.WriteMsg(&clientmsg.Rlt_Match{
+				RetCode: clientmsg.Type_GameRetCode.Enum(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR),
+			})
+		}
+	})
 }
 
 func handleReqConnectBS(args []interface{}) {
