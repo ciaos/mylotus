@@ -202,10 +202,14 @@ message Rlt_StartBattle
 
 message Transfer_Command
 {
+	message Message
+	{
+		optional uint32 msgid = 6;
+		optional bytes 	msgdata = 7;
+	}
+
 	required 	string 	CharID = 1;
-	required 	string 	ToCharID = 2;
-	required 	int32 	CommandID = 3;
-	optional 	string 	CommandMessage = 4;
+	repeated 	Message Messages = 2;
 }
 
 message Req_EndBattle

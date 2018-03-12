@@ -304,9 +304,7 @@ func (c *Client) updateBattle() {
 			i := 1
 			for i < 3 {
 				msg := &clientmsg.Transfer_Command{
-					CharID:    proto.String(c.charid),
-					ToCharID:  proto.String("all"),
-					CommandID: proto.Int32(0),
+					CharID: proto.String(c.charid),
 				}
 				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
 
