@@ -163,7 +163,7 @@ func (c *Client) updateLogin() {
 	if c.status == STATUS_LOGIN_CONNECT {
 		if c.nextregistertime < time.Now().Unix() {
 			c.nextregistertime = 0
-			c.lconn, c.err = kcp.Dial(kcp.MODE_NORMAL, LoginServerAddr)
+			c.lconn, c.err = kcp.Dial(kcp.MODE_FAST, LoginServerAddr)
 			if c.err != nil {
 				c.ChangeStatus(STATUS_NONE)
 			} else {
@@ -206,7 +206,7 @@ func (c *Client) updateGame() {
 	if c.status == STATUS_GAME_CONNECT {
 		if c.nextlogintime < time.Now().Unix() {
 			c.nextlogintime = 0
-			c.gconn, c.err = kcp.Dial(kcp.MODE_NORMAL, GameServerAddr)
+			c.gconn, c.err = kcp.Dial(kcp.MODE_FAST, GameServerAddr)
 			if c.err != nil {
 				c.ChangeStatus(STATUS_NONE)
 			} else {
@@ -270,7 +270,7 @@ func (c *Client) recvGame() {
 
 func (c *Client) updateBattle() {
 	if c.status == STATUS_BATTLE_CONNECT {
-		c.bconn, c.err = kcp.Dial(kcp.MODE_NORMAL, c.battleaddr)
+		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
 		if c.err != nil {
 			c.ChangeStatus(STATUS_NONE)
 		} else {
