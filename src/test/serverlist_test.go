@@ -38,7 +38,7 @@ func (s *ServerListSuite) TearDownTest(c *C) {
 func (s *ServerListSuite) TestServerList(c *C) {
 
 	reqMsg := &clientmsg.Req_ServerList{
-		Channel: proto.Int32(0),
+		Channel: 0,
 	}
 
 	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_SERVERLIST, reqMsg)
@@ -46,6 +46,6 @@ func (s *ServerListSuite) TestServerList(c *C) {
 	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_SERVERLIST)
 	rspMsg := &clientmsg.Rlt_ServerList{}
 	proto.Unmarshal(msgdata, rspMsg)
-	c.Assert(rspMsg.GetServerCount(), Not(Equals), 0)
+	c.Assert(rspMsg.ServerCount, Not(Equals), 0)
 	c.Assert(len(rspMsg.GetServerList()), Not(Equals), 0)
 }

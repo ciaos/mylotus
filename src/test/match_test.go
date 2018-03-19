@@ -67,8 +67,8 @@ func (s *MatchSuite) TearDownTest(c *C) {
 
 func (s *MatchSuite) TestMatch(c *C) {
 	reqMsg := &clientmsg.Req_Match{
-		Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
-		Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
+		Action: clientmsg.MatchActionType_MAT_JOIN,
+		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
 	}
 
 	msgid, _ := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)

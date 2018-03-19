@@ -41,7 +41,7 @@ func (s *PingSuite) TestPing(c *C) {
 
 	rand.Seed(time.Now().UnixNano())
 	reqMsg := &clientmsg.Ping{
-		ID: proto.Uint32(uint32(rand.Intn(10000))),
+		ID: uint32(rand.Intn(10000)),
 	}
 
 	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_PING, reqMsg)
@@ -49,5 +49,5 @@ func (s *PingSuite) TestPing(c *C) {
 	c.Assert(msgid, Equals, clientmsg.MessageType_MT_PONG)
 	rspMsg := &clientmsg.Pong{}
 	proto.Unmarshal(msgdata, rspMsg)
-	c.Assert(rspMsg.GetID(), Equals, reqMsg.GetID())
+	c.Assert(rspMsg.ID, Equals, reqMsg.ID)
 }

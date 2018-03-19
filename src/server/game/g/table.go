@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/ciaos/leaf/log"
-
-	"github.com/golang/protobuf/proto"
 )
 
 const (
@@ -90,9 +88,9 @@ func (table *Table) update(now *time.Time) int32 {
 func allocBattleRoom(tableid int32) {
 
 	innerReq := &proxymsg.Proxy_MS_BS_AllocBattleRoom{
-		Matchroomid: proto.Int32(tableid),
-		Matchmode:   proto.Int32(TableManager[tableid].matchmode),
-		Membercnt:   proto.Int32(TableManager[tableid].modeplayercnt),
+		Matchroomid: tableid,
+		Matchmode:   TableManager[tableid].matchmode,
+		Membercnt:   TableManager[tableid].modeplayercnt,
 	}
 
 	//todo 固定路由到指定的BattleServer
@@ -215,10 +213,10 @@ func ClearTable(tableid int32, battleroomid int32, battleserverid int32, battles
 	table, ok := TableManager[tableid]
 	if ok {
 		msg := &proxymsg.Proxy_MS_GS_MatchResult{
-			Retcode:          proto.Int32(0),
-			Battleroomid:     proto.Int32(battleroomid),
-			Battleserverid:   proto.Int32(battleserverid),
-			Battleservername: proto.String(battleservername),
+			Retcode:          0,
+			Battleroomid:     battleroomid,
+			Battleserverid:   battleserverid,
+			Battleservername: battleservername,
 		}
 
 		for _, seat := range table.seats {

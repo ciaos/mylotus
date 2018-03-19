@@ -39,12 +39,12 @@ func (s *ServerTimeSuite) TearDownTest(c *C) {
 func (s *ServerTimeSuite) TestServerTime(c *C) {
 
 	reqMsg := &clientmsg.Req_ServerTime{
-		Time: proto.Uint32(uint32(time.Now().Unix())),
+		Time: uint32(time.Now().Unix()),
 	}
 	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_SERVERTIME, reqMsg)
 
 	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_SERVERTIME)
 	rspMsg := &clientmsg.Rlt_ServerTime{}
 	proto.Unmarshal(msgdata, rspMsg)
-	c.Assert(rspMsg.GetTime(), Not(Equals), 0)
+	c.Assert(rspMsg.Time, Not(Equals), 0)
 }

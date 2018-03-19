@@ -53,15 +53,15 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	err := proto.Unmarshal(msgdata, rspMsg)
 
 	s.conn.Close()
-	s.conn, s.err = net.Dial("tcp", rspMsg.GetBattleAddr())
+	s.conn, s.err = net.Dial("tcp", rspMsg.BattleAddr)
 	if s.err != nil {
 		c.Fatal("Connect BattleServer Error ", s.err)
 	}
 
 	reqMsg := &clientmsg.Req_ConnectBS{
-		RoomID:    proto.Int32(rspMsg.GetRoomID()),
-		BattleKey: rspMsg.GetBattleKey(),
-		CharID:    proto.String(s.charid),
+		RoomID:    rspMsg.RoomID,
+		BattleKey: rspMsg.BattleKey,
+		CharID:    s.charid,
 	}
 	msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_CONNECTBS, reqMsg)
 	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_CONNECTBS)
@@ -71,5 +71,5 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	if err != nil {
 		c.Fatal("Rlt_ConnectBS Decode Error ", err)
 	}
-	c.Assert(rMsg.GetRetCode(), Equals, clientmsg.Type_BattleRetCode_BRC_NONE)
+	c.Assert(rMsg.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_NONE)
 }

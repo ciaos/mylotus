@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ciaos/leaf/gate"
-	"github.com/golang/protobuf/proto"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -41,48 +40,48 @@ func handleRegister(args []interface{}) {
 	c := s.DB("login").C("account")
 
 	result := Account{}
-	err := c.Find(bson.M{"username": m.GetUserName()}).One(&result)
+	err := c.Find(bson.M{"username": m.UserName}).One(&result)
 	if err != nil {
 		//Account Not Exist
-		if m.GetIsLogin() {
-			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST)})
+		if m.IsLogin {
+			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST})
 		} else {
 			userid := bson.NewObjectId()
 			err = c.Insert(&Account{
 				Id:         userid,
-				UserName:   m.GetUserName(),
-				PassWord:   m.GetPassword(),
+				UserName:   m.UserName,
+				PassWord:   m.Password,
 				Status:     0,
 				CreateTime: time.Now(),
 				UpdateTime: time.Now(),
 			})
 			if err != nil {
-				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
+				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 			} else {
 				sessionkey, err := tool.DesEncrypt([]byte(userid.String()), []byte(tool.CRYPT_KEY))
 				if err != nil {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				} else {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(userid.String()), SessionKey: sessionkey})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_NONE, UserID: userid.String(), SessionKey: sessionkey})
 				}
 			}
 		}
 	} else {
 		//Account Exist
-		if !m.GetIsLogin() {
-			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_ACCOUNT_EXIST)})
+		if !m.IsLogin {
+			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_ACCOUNT_EXIST})
 			return
 		} else {
-			if result.PassWord == m.GetPassword() {
-				c.Update(bson.M{"username": m.GetUserName()}, bson.M{"$set": bson.M{"updatetime": time.Now()}})
+			if result.PassWord == m.Password {
+				c.Update(bson.M{"username": m.UserName}, bson.M{"$set": bson.M{"updatetime": time.Now()}})
 				sessionkey, err := tool.DesEncrypt([]byte(result.Id.String()), []byte(tool.CRYPT_KEY))
 				if err != nil {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_OTHER)})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				} else {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_NONE), UserID: proto.String(result.Id.String()), SessionKey: sessionkey})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_NONE, UserID: result.Id.String(), SessionKey: sessionkey})
 				}
 			} else {
-				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode.Enum(clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR)})
+				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR})
 			}
 		}
 	}
@@ -93,15 +92,15 @@ func handlerReqServerList(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	resMsg := &clientmsg.Rlt_ServerList{}
-	resMsg.ServerCount = proto.Int32(int32(len(conf.Server.GameServerList)))
+	resMsg.ServerCount = int32(len(conf.Server.GameServerList))
 
 	for _, serverInfo := range conf.Server.GameServerList {
 
 		si := &clientmsg.Rlt_ServerList_ServerInfo{}
-		si.ServerID = proto.Int32(int32(serverInfo.ServerID))
-		si.ServerName = proto.String(serverInfo.ServerName)
-		si.Status = proto.Int32(int32(serverInfo.Tag))
-		si.ConnectAddr = proto.String(serverInfo.ConnectAddr)
+		si.ServerID = int32(serverInfo.ServerID)
+		si.ServerName = serverInfo.ServerName
+		si.Status = int32(serverInfo.Tag)
+		si.ConnectAddr = serverInfo.ConnectAddr
 
 		resMsg.ServerList = append(resMsg.ServerList, si)
 	}

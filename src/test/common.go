@@ -47,10 +47,10 @@ func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata inte
 
 func Register(c *C, conn *net.Conn, username string, password string, islogin bool) (clientmsg.Type_LoginRetCode, string, []byte) {
 	reqMsg := &clientmsg.Req_Register{
-		UserName:      proto.String(username),
-		Password:      proto.String(password),
-		IsLogin:       proto.Bool(islogin),
-		ClientVersion: proto.Int32(0),
+		UserName:      username,
+		Password:      password,
+		IsLogin:       islogin,
+		ClientVersion: 0,
 	}
 
 	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_REGISTER, reqMsg)
@@ -60,14 +60,14 @@ func Register(c *C, conn *net.Conn, username string, password string, islogin bo
 	if err != nil {
 		c.Fatal("Rlt_Register Decode Error ", err)
 	}
-	return rspMsg.GetRetCode(), rspMsg.GetUserID(), rspMsg.GetSessionKey()
+	return rspMsg.RetCode, rspMsg.UserID, rspMsg.SessionKey
 }
 
 func Login(c *C, conn *net.Conn, userid string, sessionkey []byte) (clientmsg.Type_GameRetCode, string, bool) {
 	reqMsg := &clientmsg.Req_Login{
-		UserID:     proto.String(userid),
+		UserID:     userid,
 		SessionKey: sessionkey,
-		ServerID:   proto.Int32(GameServerID),
+		ServerID:   GameServerID,
 	}
 
 	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_LOGIN, reqMsg)
@@ -78,7 +78,7 @@ func Login(c *C, conn *net.Conn, userid string, sessionkey []byte) (clientmsg.Ty
 		c.Fatal("Rlt_Register Decode Error ", err)
 	}
 
-	return rspMsg.GetRetCode(), rspMsg.GetCharID(), rspMsg.GetIsNewCharacter()
+	return rspMsg.RetCode, rspMsg.CharID, rspMsg.IsNewCharacter
 }
 
 func QuickLogin(c *C, conn *net.Conn, username string, password string) string {
@@ -92,8 +92,8 @@ func QuickLogin(c *C, conn *net.Conn, username string, password string) string {
 
 func QuickMatch(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
 	reqMsg := &clientmsg.Req_Match{
-		Action: clientmsg.MatchActionType.Enum(clientmsg.MatchActionType_MAT_JOIN),
-		Mode:   clientmsg.MatchModeType.Enum(clientmsg.MatchModeType_MMT_NORMAL),
+		Action: clientmsg.MatchActionType_MAT_JOIN,
+		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
 	}
 
 	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)

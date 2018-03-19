@@ -71,12 +71,12 @@ func SendMessageTo(toid int32, toserver string, charid string, msgid uint32, msg
 	}
 
 	iMsg := &proxymsg.InternalMessage{
-		Fromid:   proto.Int32(int32(conf.Server.ServerID)),
-		Fromtype: proto.String(conf.Server.ServerType),
-		Toid:     proto.Int32(toid),
-		Totype:   proto.String(toserver),
-		Charid:   proto.String(charid),
-		Msgid:    proto.Uint32(msgid),
+		Fromid:   int32(conf.Server.ServerID),
+		Fromtype: conf.Server.ServerType,
+		Toid:     toid,
+		Totype:   toserver,
+		Charid:   charid,
+		Msgid:    msgid,
 		Msgdata:  msgbuff,
 	}
 
