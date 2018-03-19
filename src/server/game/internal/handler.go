@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"server/conf"
@@ -8,11 +9,11 @@ import (
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"server/tool"
-	"strings"
 	"time"
 
 	"github.com/ciaos/leaf/gate"
 	"github.com/ciaos/leaf/log"
+	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -29,6 +30,28 @@ func init() {
 
 func handler(m interface{}, h interface{}) {
 	skeleton.RegisterChanRPC(reflect.TypeOf(m), h)
+}
+
+func getNextSeq() uint32 {
+	s := g.Mongo.Ref()
+	defer g.Mongo.UnRef(s)
+
+	c := s.DB("game").C("counter")
+
+	doc := struct{ Seq uint32 }{}
+	cid := "counterid"
+
+	change := mgo.Change{
+		Update:    bson.M{"$inc": bson.M{"seq": 1}},
+		Upsert:    true,
+		ReturnNew: true,
+	}
+	if _, err := c.Find(bson.M{"_id": cid}).Apply(change, &doc); err != nil {
+		log.Error("getNextSeq counter failed:", err.Error())
+		return 0
+	}
+
+	return doc.Seq
 }
 
 func handlePing(args []interface{}) {
@@ -59,16 +82,18 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
-	userid, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
+	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
+		log.Error("handleReqLogin DesDecrypt Error", err)
 		return
 	}
 
-	if strings.Compare(string(userid), m.UserID) != 0 {
-		log.Error("strings.Compare(string(userid), m.GetUserID()) != 0")
+	userid := binary.BigEndian.Uint32(useridBuf)
+	if userid != m.UserID {
+		log.Error("userid != m.UserID ", userid, " ", m.UserID, useridBuf, m.SessionKey)
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
@@ -80,18 +105,28 @@ func handleReqLogin(args []interface{}) {
 
 	c := s.DB("game").C("character")
 
-	var pcharid string
+	var pcharid uint32
 	result := g.Character{}
 	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&result)
 	if err != nil {
 		//create new character
-		charid := bson.NewObjectId()
+		charid := getNextSeq()
+		if charid == 0 {
+			a.WriteMsg(&clientmsg.Rlt_Login{
+				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+			})
+			log.Error("handleReqLogin getNextSeq Failed")
+			return
+		}
+
 		err = c.Insert(&g.Character{
-			Id:         charid,
+			Id:         bson.NewObjectId(),
+			CharId:     charid,
 			UserId:     m.UserID,
 			GsId:       m.ServerID,
 			Status:     g.PLAYER_STATUS_ONLINE,
 			CreateTime: time.Now(),
+			UpdateTime: time.Now(),
 		})
 		if err != nil {
 			log.Error("create new character error %v", err)
@@ -103,7 +138,7 @@ func handleReqLogin(args []interface{}) {
 
 		c = s.DB("game").C(fmt.Sprintf("userinfo_%d", m.ServerID))
 		err = c.Insert(&g.UserInfo{
-			CharId:   charid.String(),
+			CharId:   charid,
 			CharName: "",
 			Level:    1,
 		})
@@ -117,22 +152,22 @@ func handleReqLogin(args []interface{}) {
 
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode:        clientmsg.Type_GameRetCode_GRC_NONE,
-			CharID:         charid.String(),
+			CharID:         charid,
 			IsNewCharacter: true,
 		})
 
-		pcharid = charid.String()
+		pcharid = charid
 
 	} else {
 		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
 
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode:        clientmsg.Type_GameRetCode_GRC_NONE,
-			CharID:         result.Id.String(),
+			CharID:         result.CharId,
 			IsNewCharacter: false,
 		})
 
-		pcharid = result.Id.String()
+		pcharid = result.CharId
 	}
 
 	g.AddGamePlayer(pcharid, &a)
@@ -154,14 +189,14 @@ func handleReqMatch(args []interface{}) {
 	}
 
 	innerReq := &proxymsg.Proxy_GS_MS_Match{
-		Charid:    charid.(string),
+		Charid:    charid.(uint32),
 		Matchmode: int32(m.Mode),
 		Action:    int32(m.Action),
 	}
 
 	var res bool
 	skeleton.Go(func() {
-		res = g.RandSendMessageTo("matchserver", charid.(string), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+		res = g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
 	}, func() {
 		if res == false {
 			a.WriteMsg(&clientmsg.Rlt_Match{
@@ -204,7 +239,7 @@ func handleReqEndBattle(args []interface{}) {
 func handleTransferMessage(args []interface{}) {
 	a := args[1].(gate.Agent)
 	if a.UserData() != nil {
-		charid := a.UserData().(string)
+		charid := a.UserData().(uint32)
 		g.AddMessage(charid, args[0])
 	}
 }

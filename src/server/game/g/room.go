@@ -24,7 +24,7 @@ const (
 )
 
 type Member struct {
-	charid       string
+	charid       uint32
 	charname     string
 	chartype     int32
 	teamtype     int32
@@ -43,13 +43,13 @@ type Room struct {
 	membercnt int32
 	memberok  int32
 
-	members map[string]*Member
+	members map[uint32]*Member
 
 	messages       []interface{}
 	messagesbackup []interface{}
 }
 
-var PlayerRoomIDMap = make(map[string]int32)
+var PlayerRoomIDMap = make(map[uint32]int32)
 var RoomManager = make(map[int32]*Room)
 var roomid int32
 
@@ -164,7 +164,7 @@ func CreateRoom(matchmode int32, membercnt int32) int32 {
 		status:         ROOM_STATUS_NONE,
 		matchmode:      matchmode,
 		battlekey:      battlekey,
-		members:        make(map[string]*Member),
+		members:        make(map[uint32]*Member),
 		messages:       append([]interface{}{}),
 		messagesbackup: append([]interface{}{}),
 		membercnt:      membercnt,
@@ -177,7 +177,7 @@ func CreateRoom(matchmode int32, membercnt int32) int32 {
 	return roomid
 }
 
-func JoinRoom(charid string, roomid int32, charname string, chartype int32, gameserverid int32) []byte {
+func JoinRoom(charid uint32, roomid int32, charname string, chartype int32, gameserverid int32) []byte {
 	room, ok := RoomManager[roomid]
 	if ok {
 		member, ok := room.members[charid]
@@ -206,7 +206,7 @@ func JoinRoom(charid string, roomid int32, charname string, chartype int32, game
 	return nil
 }
 
-func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
+func ConnectRoom(charid uint32, roomid int32, battlekey []byte) bool {
 	room, ok := RoomManager[roomid]
 	if ok {
 		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
@@ -241,15 +241,15 @@ func ConnectRoom(charid string, roomid int32, battlekey []byte) bool {
 	return false
 }
 
-func LeaveRoom(charid string) {
+func LeaveRoom(charid uint32) {
 	setRoomMemberStatus(charid, MEMBER_OFFLINE)
 }
 
-func EndBattle(charid string) {
+func EndBattle(charid uint32) {
 	setRoomMemberStatus(charid, MEMBER_END)
 }
 
-func setRoomMemberStatus(charid string, status int32) {
+func setRoomMemberStatus(charid uint32, status int32) {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
@@ -265,7 +265,7 @@ func setRoomMemberStatus(charid string, status int32) {
 	}
 }
 
-func AddMessage(charid string, msgdata interface{}) {
+func AddMessage(charid uint32, msgdata interface{}) {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]

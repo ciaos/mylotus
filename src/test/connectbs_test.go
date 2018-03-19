@@ -18,7 +18,7 @@ type ConnectBSSuite struct {
 	conn net.Conn
 	err  error
 
-	charid string
+	charid uint32
 }
 
 var _ = Suite(&ConnectBSSuite{})

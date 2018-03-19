@@ -45,7 +45,7 @@ func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata inte
 	return msgid, bodydata[2:bodylen]
 }
 
-func Register(c *C, conn *net.Conn, username string, password string, islogin bool) (clientmsg.Type_LoginRetCode, string, []byte) {
+func Register(c *C, conn *net.Conn, username string, password string, islogin bool) (clientmsg.Type_LoginRetCode, uint32, []byte) {
 	reqMsg := &clientmsg.Req_Register{
 		UserName:      username,
 		Password:      password,
@@ -63,7 +63,7 @@ func Register(c *C, conn *net.Conn, username string, password string, islogin bo
 	return rspMsg.RetCode, rspMsg.UserID, rspMsg.SessionKey
 }
 
-func Login(c *C, conn *net.Conn, userid string, sessionkey []byte) (clientmsg.Type_GameRetCode, string, bool) {
+func Login(c *C, conn *net.Conn, userid uint32, sessionkey []byte) (clientmsg.Type_GameRetCode, uint32, bool) {
 	reqMsg := &clientmsg.Req_Login{
 		UserID:     userid,
 		SessionKey: sessionkey,
@@ -81,7 +81,7 @@ func Login(c *C, conn *net.Conn, userid string, sessionkey []byte) (clientmsg.Ty
 	return rspMsg.RetCode, rspMsg.CharID, rspMsg.IsNewCharacter
 }
 
-func QuickLogin(c *C, conn *net.Conn, username string, password string) string {
+func QuickLogin(c *C, conn *net.Conn, username string, password string) uint32 {
 	retcode, userid, sessionkey := Register(c, conn, username, password, false)
 	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
 

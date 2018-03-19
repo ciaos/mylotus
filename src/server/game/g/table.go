@@ -5,7 +5,6 @@ import (
 	"server/gamedata"
 	"server/gamedata/cfg"
 	"server/msg/proxymsg"
-	"strconv"
 	"strings"
 	//	"sync"
 	"time"
@@ -24,7 +23,7 @@ const (
 )
 
 type Seat struct {
-	charid     string
+	charid     uint32
 	jointime   int64
 	serverid   int32
 	servertype string
@@ -41,7 +40,7 @@ type Table struct {
 }
 
 var TableManager = make(map[int32]*Table)
-var PlayerTableIDMap = make(map[string]int32)
+var PlayerTableIDMap = make(map[uint32]int32)
 var tableid int32
 
 //var mTableID *sync.Mutex
@@ -94,7 +93,7 @@ func allocBattleRoom(tableid int32) {
 	}
 
 	//todo 固定路由到指定的BattleServer
-	go RandSendMessageTo("battleserver", strconv.Itoa(int(tableid)), uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
+	go RandSendMessageTo("battleserver", uint32(tableid), uint32(proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM), innerReq)
 }
 
 func UpdateTableManager(now *time.Time) {
@@ -135,7 +134,7 @@ func deleteTableSeatInfo(tableid int32) {
 	}
 }
 
-func JoinTable(charid string, matchmode int32, serverid int32, servertype string) {
+func JoinTable(charid uint32, matchmode int32, serverid int32, servertype string) {
 
 	var createnew = true
 	for i, table := range TableManager {
@@ -187,7 +186,7 @@ func JoinTable(charid string, matchmode int32, serverid int32, servertype string
 	}
 }
 
-func LeaveTable(charid string, matchmode int32) {
+func LeaveTable(charid uint32, matchmode int32) {
 	tableid, ok := PlayerTableIDMap[charid]
 	if ok {
 		table, ok := TableManager[tableid]

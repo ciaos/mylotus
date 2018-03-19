@@ -85,7 +85,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.Matchroomid, roomid)
 
 	skeleton.Go(func() {
-		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, "", uint32(proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM), rsp)
+		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, uint32(proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM), rsp)
 	}, func() {})
 }
 
@@ -139,7 +139,7 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 	log.Debug("proxyHandleMSGSMatchResult SyncPlayerInfo CharID %v RoomID %v", pmsg.Charid, msg.Battleroomid)
 
 	skeleton.Go(func() {
-		g.SendMessageTo(msg.Battleserverid, msg.Battleservername, "", uint32(proxymsg.ProxyMessageType_PMT_GS_BS_SYNCPLAYERINFO), req)
+		g.SendMessageTo(msg.Battleserverid, msg.Battleservername, 0, uint32(proxymsg.ProxyMessageType_PMT_GS_BS_SYNCPLAYERINFO), req)
 	}, func() {})
 }
 
@@ -222,7 +222,7 @@ func rpcCloseAgent(args []interface{}) {
 	_ = a
 
 	if clientid != nil {
-		g.RemoveBattlePlayer(clientid.(string), a.RemoteAddr().String())
-		g.RemoveGamePlayer(clientid.(string), a.RemoteAddr().String())
+		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String())
+		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String())
 	}
 }

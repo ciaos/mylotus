@@ -15,7 +15,8 @@ const (
 
 type Character struct {
 	Id         bson.ObjectId `json:"id"        bson:"_id"`
-	UserId     string
+	CharId     uint32
+	UserId     uint32
 	GsId       int32
 	Status     int32
 	CreateTime time.Time
@@ -23,7 +24,7 @@ type Character struct {
 }
 
 type UserInfo struct {
-	CharId   string
+	CharId   uint32
 	CharName string
 	Level    int32
 }

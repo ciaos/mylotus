@@ -57,8 +57,8 @@ type Client struct {
 	battleaddr   string
 	battleroomid int32
 
-	userid string
-	charid string
+	userid uint32
+	charid uint32
 	status string
 
 	lconn net.Conn
