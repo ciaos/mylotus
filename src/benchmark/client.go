@@ -31,17 +31,19 @@ const (
 	STATUS_LOGIN_LOOP    = "loop_login"
 	STATUS_LOGIN_CLOSE   = "disconnect_login_server"
 
-	STATUS_GAME_CONNECT = "connect_game_server"
-	STATUS_GAME_LOGIN   = "start_signin"
-	STATUS_GAME_MATCH   = "start_match"
-	STATUS_GAME_LOOP    = "loop_game"
-	STATUS_GAME_CLOSE   = "disconnect_login_server"
+	STATUS_GAME_CONNECT      = "connect_game_server"
+	STATUS_GAME_LOGIN        = "start_signin"
+	STATUS_GAME_MATCH        = "start_match"
+	STATUS_GAME_TEAM_OPERATE = "team_operate"
+	STATUS_GAME_LOOP         = "loop_game"
+	STATUS_GAME_CLOSE        = "disconnect_game_server"
 
-	STATUS_BATTLE_CONNECT = "connect_battle_server"
-	STATUS_BATTLE         = "join_battle_room"
-	STATUS_BATTLE_WAITEND = "wait_battle_end_rsp"
-	STATUS_BATTLE_LOOP    = "loop_battle"
-	STATUS_BATTLE_CLOSE   = "disconnect_battle_server"
+	STATUS_BATTLE_CONNECT  = "connect_battle_server"
+	STATUS_BATTLE_PROGRESS = "loading_progress"
+	STATUS_BATTLE          = "join_battle_room"
+	STATUS_BATTLE_WAITEND  = "wait_battle_end_rsp"
+	STATUS_BATTLE_LOOP     = "loop_battle"
+	STATUS_BATTLE_CLOSE    = "disconnect_battle_server"
 )
 
 var w sync.WaitGroup
@@ -76,6 +78,8 @@ type Client struct {
 
 	startbattletime int64
 	maxbattletime   int64
+
+	startbattle bool
 
 	routes map[interface{}]interface{}
 }
@@ -127,6 +131,25 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 	}
 }
 
+func handle_Rlt_Match(c *Client, msgdata []byte) {
+	rsp := &clientmsg.Rlt_Match{}
+	proto.Unmarshal(msgdata, rsp)
+
+	c.ChangeStatus(STATUS_GAME_TEAM_OPERATE)
+	msg := &clientmsg.Transfer_Team_Operate{
+		Action:   clientmsg.TeamOperateActionType_TOA_CHOOSE,
+		CharID:   c.charid,
+		CharType: 1001,
+	}
+	go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
+	msg = &clientmsg.Transfer_Team_Operate{
+		Action: clientmsg.TeamOperateActionType_TOA_SETTLE,
+		CharID: c.charid,
+	}
+	go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
+	c.ChangeStatus(STATUS_GAME_LOOP)
+}
+
 func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_NotifyBattleAddress{}
 	proto.Unmarshal(msgdata, rsp)
@@ -144,6 +167,22 @@ func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
 	if rsp.RetCode != clientmsg.Type_BattleRetCode_BRC_NONE {
 		c.ChangeStatus(STATUS_BATTLE_CLOSE)
 	}
+
+	c.ChangeStatus(STATUS_BATTLE_PROGRESS)
+	msg := &clientmsg.Transfer_Loading_Progress{
+		CharID:   c.charid,
+		Progress: 100,
+	}
+	go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_LOADING_PROGRESS, msg)
+	c.ChangeStatus(STATUS_BATTLE_LOOP)
+}
+
+func handle_Rlt_StartBattle(c *Client, msgdata []byte) {
+	rsp := &clientmsg.Rlt_StartBattle{}
+	proto.Unmarshal(msgdata, rsp)
+	c.startbattle = true
+
+	tlog.Debugf("startbattle %d\n", c.charid)
 }
 
 func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
@@ -274,6 +313,7 @@ func (c *Client) updateBattle() {
 		} else {
 			c.ChangeStatus(STATUS_BATTLE)
 		}
+		c.startbattle = false
 	} else if c.status == STATUS_BATTLE {
 		msg := &clientmsg.Req_ConnectBS{
 			RoomID:    c.battleroomid,
@@ -281,6 +321,7 @@ func (c *Client) updateBattle() {
 			CharID:    c.charid,
 		}
 		go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
+
 		c.ChangeStatus(STATUS_BATTLE_LOOP)
 		c.startbattletime = time.Now().Unix()
 	} else if c.status == STATUS_BATTLE_CLOSE {
@@ -301,7 +342,7 @@ func (c *Client) updateBattle() {
 
 		}
 
-		{
+		if c.startbattle {
 			i := 1
 			for i < 3 {
 				msg := &clientmsg.Transfer_Command{
@@ -383,6 +424,7 @@ func (c *Client) Init(id int32) {
 	c.nextpinggstime = time.Now().Unix() + 3
 	c.startbattletime = 0
 	c.maxbattletime = 10
+	c.startbattle = false
 
 	c.routes = make(map[interface{}]interface{})
 	c.book(clientmsg.MessageType_MT_RLT_REGISTER, handle_Rlt_Register)
@@ -392,6 +434,8 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_PONG, handle_Pong)
 	c.book(clientmsg.MessageType_MT_RLT_ENDBATTLE, handle_Rlt_EndBattle)
 	c.book(clientmsg.MessageType_MT_TRANSFER_COMMAND, handle_Transfer_Command)
+	c.book(clientmsg.MessageType_MT_RLT_MATCH, handle_Rlt_Match)
+	c.book(clientmsg.MessageType_MT_RLT_STARTBATTLE, handle_Rlt_StartBattle)
 }
 
 func (c *Client) Loop(id int32) {

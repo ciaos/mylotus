@@ -48,19 +48,35 @@ func (s *ConnectBSSuite) TearDownTest(c *C) {
 
 func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	msgid, msgdata := QuickMatch(c, &s.conn)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
-	rspMsg := &clientmsg.Rlt_NotifyBattleAddress{}
-	err := proto.Unmarshal(msgdata, rspMsg)
+	rspMatch := &clientmsg.Rlt_Match{}
+	err := proto.Unmarshal(msgdata, rspMatch)
+	if err != nil {
+		c.Fatal("Rlt_Match Decode Error")
+	}
+	c.Assert(rspMatch.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+
+	operateMsg := &clientmsg.Transfer_Team_Operate{
+		Action: clientmsg.TeamOperateActionType_TOA_SETTLE,
+		CharID: s.charid,
+	}
+	msgid2, msgdata2 := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, operateMsg)
+
+	c.Assert(msgid2, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	rspAddress := &clientmsg.Rlt_NotifyBattleAddress{}
+	err = proto.Unmarshal(msgdata2, rspAddress)
+	if err != nil {
+		c.Fatal("Rlt_NotifyBattleAddress Decode Error")
+	}
 
 	s.conn.Close()
-	s.conn, s.err = net.Dial("tcp", rspMsg.BattleAddr)
+	s.conn, s.err = net.Dial("tcp", rspAddress.BattleAddr)
 	if s.err != nil {
 		c.Fatal("Connect BattleServer Error ", s.err)
 	}
 
 	reqMsg := &clientmsg.Req_ConnectBS{
-		RoomID:    rspMsg.RoomID,
-		BattleKey: rspMsg.BattleKey,
+		RoomID:    rspAddress.RoomID,
+		BattleKey: rspAddress.BattleKey,
 		CharID:    s.charid,
 	}
 	msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_CONNECTBS, reqMsg)

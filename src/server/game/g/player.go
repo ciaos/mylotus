@@ -1,6 +1,7 @@
 package g
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/ciaos/leaf/gate"
@@ -14,29 +15,64 @@ const (
 	PLAYER_STATUS_BATTLE  = 2
 )
 
-var GamePlayerManager = make(map[uint32]*gate.Agent)
+type Player struct {
+	CharID   uint32
+	Charname string
+	Level    uint32
+}
+
+type PlayerInfo struct {
+	agent  *gate.Agent
+	player *Player
+}
+
+var GamePlayerManager = make(map[uint32]*PlayerInfo)
 var BattlePlayerManager = make(map[uint32]*gate.Agent)
 
-func AddGamePlayer(clientid uint32, agent *gate.Agent) {
-	exist, ok := GamePlayerManager[clientid]
+func AddGamePlayer(player *Player, agent *gate.Agent) {
+	exist, ok := GamePlayerManager[player.CharID]
 	if ok {
-		(*exist).Close()
-		delete(GamePlayerManager, clientid)
+		(*exist.agent).Close()
+		delete(GamePlayerManager, player.CharID)
 	}
-	(*agent).SetUserData(clientid)
-	GamePlayerManager[clientid] = agent
+	(*agent).SetUserData(player.CharID)
 
-	log.Debug("AddGamePlayer %v", clientid)
+	playerinfo := &PlayerInfo{
+		agent:  agent,
+		player: player,
+	}
+	GamePlayerManager[player.CharID] = playerinfo
+
+	log.Debug("AddGamePlayer %v", player.CharID)
 }
 
 func RemoveGamePlayer(clientid uint32, remoteaddr string) {
-	agent, ok := GamePlayerManager[clientid]
+	player, ok := GamePlayerManager[clientid]
 	if ok {
-		if strings.Compare((*agent).RemoteAddr().String(), remoteaddr) == 0 {
+		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
 			delete(GamePlayerManager, clientid)
 			log.Debug("RemoveGamePlayer %v", clientid)
 		}
 	}
+}
+
+func GetPlayer(clientid uint32) (*Player, error) {
+	exist, ok := GamePlayerManager[clientid]
+	if ok {
+		return exist.player, nil
+	}
+	log.Error("Player Not Found %v", clientid)
+	return nil, errors.New("GetPlayer Error")
+}
+
+func SendMsgToPlayer(clientid uint32, msgdata interface{}) {
+	player, ok := GamePlayerManager[clientid]
+	if !ok {
+		log.Error("SendMsgToPlayer GamePlayerManager Not Found %v", clientid)
+		return
+	}
+
+	(*player.agent).WriteMsg(msgdata)
 }
 
 func AddBattlePlayer(clientid uint32, agent *gate.Agent) {

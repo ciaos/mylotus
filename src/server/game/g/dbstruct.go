@@ -19,12 +19,7 @@ type Character struct {
 	UserId     uint32
 	GsId       int32
 	Status     int32
+	CharName   string
 	CreateTime time.Time
 	UpdateTime time.Time
-}
-
-type UserInfo struct {
-	CharId   uint32
-	CharName string
-	Level    int32
 }

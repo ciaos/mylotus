@@ -2,13 +2,13 @@ package internal
 
 import (
 	"encoding/binary"
-	"fmt"
 	"reflect"
 	"server/conf"
 	"server/game/g"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"server/tool"
+	"strconv"
 	"time"
 
 	"github.com/ciaos/leaf/gate"
@@ -19,12 +19,15 @@ import (
 
 func init() {
 	handler(&clientmsg.Ping{}, handlePing)
+
 	handler(&clientmsg.Req_ServerTime{}, handleReqServerTime)
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
+	handler(&clientmsg.Transfer_Team_Operate{}, handleTransferTeamOperate)
+
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
-
+	handler(&clientmsg.Transfer_Loading_Progress{}, handleTransferLoadingProgress)
 	handler(&clientmsg.Transfer_Command{}, handleTransferMessage)
 }
 
@@ -105,7 +108,8 @@ func handleReqLogin(args []interface{}) {
 
 	c := s.DB("game").C("character")
 
-	var pcharid uint32
+	player := &g.Player{}
+
 	result := g.Character{}
 	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&result)
 	if err != nil {
@@ -125,25 +129,12 @@ func handleReqLogin(args []interface{}) {
 			UserId:     m.UserID,
 			GsId:       m.ServerID,
 			Status:     g.PLAYER_STATUS_ONLINE,
+			CharName:   strconv.Itoa(int(charid)),
 			CreateTime: time.Now(),
 			UpdateTime: time.Now(),
 		})
 		if err != nil {
 			log.Error("create new character error %v", err)
-			a.WriteMsg(&clientmsg.Rlt_Login{
-				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-			})
-			return
-		}
-
-		c = s.DB("game").C(fmt.Sprintf("userinfo_%d", m.ServerID))
-		err = c.Insert(&g.UserInfo{
-			CharId:   charid,
-			CharName: "",
-			Level:    1,
-		})
-		if err != nil {
-			log.Error("create new userinfo error %v", err)
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 			})
@@ -156,7 +147,7 @@ func handleReqLogin(args []interface{}) {
 			IsNewCharacter: true,
 		})
 
-		pcharid = charid
+		player.CharID = charid
 
 	} else {
 		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
@@ -167,10 +158,10 @@ func handleReqLogin(args []interface{}) {
 			IsNewCharacter: false,
 		})
 
-		pcharid = result.CharId
+		player.CharID = result.CharId
 	}
 
-	g.AddGamePlayer(pcharid, &a)
+	g.AddGamePlayer(player, &a)
 }
 
 func handleReqMatch(args []interface{}) {
@@ -188,8 +179,17 @@ func handleReqMatch(args []interface{}) {
 		return
 	}
 
+	player, err := g.GetPlayer(charid.(uint32))
+	if err != nil {
+		a.WriteMsg(&clientmsg.Rlt_Match{
+			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
+		})
+		return
+	}
+
 	innerReq := &proxymsg.Proxy_GS_MS_Match{
 		Charid:    charid.(uint32),
+		Charname:  player.Charname,
 		Matchmode: int32(m.Mode),
 		Action:    int32(m.Action),
 	}
@@ -206,15 +206,32 @@ func handleReqMatch(args []interface{}) {
 	})
 }
 
+func handleTransferTeamOperate(args []interface{}) {
+	m := args[0].(*clientmsg.Transfer_Team_Operate)
+	a := args[1].(gate.Agent)
+
+	if a.UserData() != nil {
+		g.TeamOperate(a.UserData().(uint32), m)
+	}
+}
+
+func handleTransferLoadingProgress(args []interface{}) {
+	m := args[0].(*clientmsg.Transfer_Loading_Progress)
+	a := args[1].(gate.Agent)
+
+	if a.UserData() != nil {
+		g.LoadingRoom(a.UserData().(uint32), m)
+	}
+}
+
 func handleReqConnectBS(args []interface{}) {
 	m := args[0].(*clientmsg.Req_ConnectBS)
 	a := args[1].(gate.Agent)
 
 	if g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey) {
 		g.AddBattlePlayer(m.CharID, &a)
-		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
-			RetCode: clientmsg.Type_BattleRetCode_BRC_NONE,
-		})
+		rsp := g.GenRoomInfoPB(m.RoomID)
+		a.WriteMsg(rsp)
 	} else {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
 			RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
@@ -237,9 +254,10 @@ func handleReqEndBattle(args []interface{}) {
 }
 
 func handleTransferMessage(args []interface{}) {
+	m := args[0].(*clientmsg.Transfer_Command)
 	a := args[1].(gate.Agent)
 	if a.UserData() != nil {
 		charid := a.UserData().(uint32)
-		g.AddMessage(charid, args[0])
+		g.AddMessage(charid, m)
 	}
 }

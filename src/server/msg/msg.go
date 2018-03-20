@@ -9,7 +9,10 @@ import (
 var Processor = protobuf.NewProcessor()
 
 func init() {
+	//0
 	Processor.Register(&clientmsg.Ping{})
+
+	//1 - 10
 	Processor.Register(&clientmsg.Pong{})
 	Processor.Register(&clientmsg.Req_ServerTime{})
 	Processor.Register(&clientmsg.Rlt_ServerTime{})
@@ -20,6 +23,8 @@ func init() {
 	Processor.Register(&clientmsg.Req_Login{})
 	Processor.Register(&clientmsg.Rlt_Login{})
 	Processor.Register(&clientmsg.Req_Match{})
+
+	//11 - 20
 	Processor.Register(&clientmsg.Rlt_Match{})
 	Processor.Register(&clientmsg.Rlt_NotifyBattleAddress{})
 	Processor.Register(&clientmsg.Req_ConnectBS{})
@@ -28,4 +33,6 @@ func init() {
 	Processor.Register(&clientmsg.Req_EndBattle{})
 	Processor.Register(&clientmsg.Rlt_EndBattle{})
 	Processor.Register(&clientmsg.Transfer_Command{})
+	Processor.Register(&clientmsg.Transfer_Loading_Progress{})
+	Processor.Register(&clientmsg.Transfer_Team_Operate{})
 }

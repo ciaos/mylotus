@@ -72,5 +72,5 @@ func (s *MatchSuite) TestMatch(c *C) {
 	}
 
 	msgid, _ := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_MATCH)
 }

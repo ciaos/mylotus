@@ -97,6 +97,6 @@ func QuickMatch(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
 	}
 
 	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_MATCH)
 	return msgid, msgdata
 }

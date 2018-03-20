@@ -2,9 +2,12 @@ package g
 
 import (
 	"fmt"
+	"math/rand"
 	"server/gamedata"
 	"server/gamedata/cfg"
+	"server/msg/clientmsg"
 	"server/msg/proxymsg"
+	"strconv"
 	"strings"
 	//	"sync"
 	"time"
@@ -13,28 +16,40 @@ import (
 )
 
 const (
-	MATCH_OK        = 1
-	MATCH_CONTINUE  = 2
-	MATCH_TIMEOUT   = 3
-	MATCH_ALLOCROOM = 4
-	MATCH_EMPTY     = 5
-	MATCH_FINISH    = 6
-	MATCH_ERROR     = 7
+	MATCH_OK                = "match_ok"
+	MATCH_CONTINUE          = "match_continue"          //匹配中
+	MATCH_TIMEOUT           = "match_timeout"           //匹配超时(补充AI)
+	MATCH_CHARTYPE_CHOOSING = "match_chartype_choosing" //选择角色中
+	MATCH_CHARTYPE_FIXED    = "match_chartype_fixed"    //角色确定
+	MATCH_BEGIN_ALLOCROOM   = "match_begin_allocroom"   //开始申请房间
+	MATCH_ALLOCROOM         = "match_allocroom"         //申请房间中
+	MATCH_EMPTY             = "match_empty"             //桌子已无人
+	MATCH_FINISH            = "match_finish"            //
+	MATCH_ERROR             = "match_error"
+
+	SEAT_NONE  = "seat_none"
+	SEAT_READY = "seat_ready"
 )
 
 type Seat struct {
 	charid     uint32
+	charname   string
 	jointime   int64
 	serverid   int32
 	servertype string
+	chartype   int32
+	ownerid    uint32
+	teamid     int32
+	status     string
 }
 
 //for match server
 type Table struct {
 	seats         []*Seat
 	createtime    int64
+	checktime     int64
 	matchmode     int32
-	status        int32
+	status        string
 	tableid       int32
 	modeplayercnt int32
 }
@@ -60,36 +75,155 @@ func allocTableID() {
 	}
 }
 
-func (table *Table) update(now *time.Time) int32 {
+func fillRobotToTable(table *Table) {
 	r := gamedata.CSVMatchMode.Index((*table).matchmode)
 	if r == nil {
-		log.Error("CSVMatchMode ModeID %v Not Found", (*table).matchmode)
-		return MATCH_ERROR
+		return
 	}
 	row := r.(*cfg.MatchMode)
 
-	if (*now).Unix()-(*table).createtime > int64(row.TimeOutSec) {
-		log.Debug("Tableid %v Timeout Createtime %v Now %v", (*table).tableid, (*table).createtime, (*now).Unix())
-		return MATCH_TIMEOUT
-	}
+	robotnum := row.PlayerCnt - len((*table).seats)
+	ownerid := (*table).seats[0].charid
 
-	if len((*table).seats) >= row.PlayerCnt {
-		return MATCH_OK
-	}
+	i := 1
+	for i <= robotnum {
 
-	if len((*table).seats) <= 0 {
-		log.Debug("tableid %v empty", (*table).tableid)
-		return MATCH_EMPTY
+		charid := uint32(rand.Intn(100000))
+		seat := &Seat{
+			charid:     charid,
+			jointime:   0,
+			serverid:   0,
+			servertype: "",
+			charname:   strconv.Itoa(int(charid)),
+			chartype:   0,
+			ownerid:    ownerid,
+			status:     SEAT_NONE,
+			teamid:     int32(len((*table).seats) % 2),
+		}
+		(*table).seats = append((*table).seats, seat)
+		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
+		i++
 	}
-	return MATCH_CONTINUE
 }
 
-func allocBattleRoom(tableid int32) {
+func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) {
+
+	msg := &clientmsg.Rlt_Match{
+		RetCode: retcode,
+		Members: []*clientmsg.Rlt_Match_MemberInfo{},
+	}
+
+	if retcode == clientmsg.Type_GameRetCode_GRC_MATCH_OK {
+		for _, seat := range table.seats {
+			member := &clientmsg.Rlt_Match_MemberInfo{}
+			member.CharID = (*seat).charid
+			member.OwnerID = (*seat).ownerid
+			member.TeamID = (*seat).teamid
+			member.CharName = (*seat).charname
+			member.CharType = (*seat).chartype
+			msg.Members = append(msg.Members, member)
+		}
+	}
+	for _, seat := range table.seats {
+		if (*seat).ownerid == 0 {
+			log.Debug("notify MatchResult CharID %v Result %v MemberCount %v", (*seat).charid, retcode, len(msg.Members))
+			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
+		}
+	}
+}
+
+func changeTableStatus(table *Table, status string) {
+	(*table).status = status
+	log.Debug("changeTableStatus Table %v Status %v", (*table).tableid, (*table).status)
+
+	if (*table).status == MATCH_ERROR {
+		//notify all member error
+		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
+		deleteTableSeatInfo((*table).tableid)
+		DeleteTable((*table).tableid)
+	} else if (*table).status == MATCH_EMPTY {
+		DeleteTable((*table).tableid)
+	} else if (*table).status == MATCH_OK {
+		//notify all member to choose
+		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+		(*table).checktime = time.Now().Unix()
+		changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+	} else if (*table).status == MATCH_TIMEOUT {
+		fillRobotToTable(table)
+		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+		(*table).checktime = time.Now().Unix()
+		changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
+		table.allocBattleRoom()
+		(*table).checktime = time.Now().Unix()
+		changeTableStatus(table, MATCH_ALLOCROOM)
+	} else if (*table).status == MATCH_FINISH {
+		deleteTableSeatInfo(tableid)
+		table.seats = append([]*Seat{}) //clear seats
+		DeleteTable(tableid)
+	}
+}
+
+func (table *Table) update(now *time.Time) {
+	r := gamedata.CSVMatchMode.Index((*table).matchmode)
+	if r == nil {
+		log.Error("CSVMatchMode ModeID %v Not Found", (*table).matchmode)
+		changeTableStatus(table, MATCH_ERROR)
+		return
+	}
+	row := r.(*cfg.MatchMode)
+
+	if (*table).status == MATCH_CONTINUE {
+		//匹配超时
+		if (*now).Unix()-(*table).createtime > int64(row.MatchTimeOutSec) {
+			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime, (*now).Unix())
+			changeTableStatus(table, MATCH_TIMEOUT)
+			return
+		}
+
+		if len((*table).seats) >= row.PlayerCnt {
+			changeTableStatus(table, MATCH_OK)
+		} else if len((*table).seats) <= 0 {
+			changeTableStatus(table, MATCH_EMPTY)
+		}
+	} else if (*table).status == MATCH_CHARTYPE_CHOOSING {
+		if (*now).Unix()-(*table).checktime > int64(row.ChooseTimeOutSec) {
+			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+			(*table).checktime = (*now).Unix()
+			changeTableStatus(table, MATCH_CHARTYPE_FIXED)
+		}
+	} else if (*table).status == MATCH_CHARTYPE_FIXED {
+		if (*now).Unix()-(*table).checktime > int64(row.FixedWaitTimeSec) {
+			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+			(*table).checktime = (*now).Unix()
+			changeTableStatus(table, MATCH_BEGIN_ALLOCROOM)
+		}
+	} else if (*table).status == MATCH_ALLOCROOM {
+		if (*now).Unix()-(*table).checktime > 5 { //申请房间超时，解散队伍
+			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+			(*table).checktime = (*now).Unix()
+			changeTableStatus(table, MATCH_ERROR)
+		}
+	}
+}
+
+func (table *Table) allocBattleRoom() {
 
 	innerReq := &proxymsg.Proxy_MS_BS_AllocBattleRoom{
-		Matchroomid: tableid,
-		Matchmode:   TableManager[tableid].matchmode,
-		Membercnt:   TableManager[tableid].modeplayercnt,
+		Matchtableid: table.tableid,
+		Matchmode:    table.matchmode,
+	}
+
+	for _, seat := range table.seats {
+		member := &proxymsg.Proxy_MS_BS_AllocBattleRoom_MemberInfo{
+			CharID:       seat.charid,
+			CharName:     seat.charname,
+			CharType:     seat.chartype,
+			TeamID:       seat.teamid,
+			OwnerID:      seat.ownerid,
+			GameServerID: seat.serverid,
+		}
+		innerReq.Members = append(innerReq.Members, member)
 	}
 
 	//todo 固定路由到指定的BattleServer
@@ -97,26 +231,8 @@ func allocBattleRoom(tableid int32) {
 }
 
 func UpdateTableManager(now *time.Time) {
-
-	for i, table := range TableManager {
-		if (*table).status != MATCH_ALLOCROOM {
-			(*table).status = (*table).update(now)
-		}
-
-		if (*table).status == MATCH_OK || (*table).status == MATCH_TIMEOUT {
-
-			(*table).status = MATCH_ALLOCROOM
-			allocBattleRoom(i)
-		}
-		if (*table).status == MATCH_EMPTY {
-			DeleteTable(i)
-		}
-		if (*table).status == MATCH_ERROR {
-
-			//notify all member error
-			deleteTableSeatInfo(i)
-			DeleteTable(i)
-		}
+	for _, table := range TableManager {
+		(*table).update(now)
 	}
 }
 
@@ -134,7 +250,39 @@ func deleteTableSeatInfo(tableid int32) {
 	}
 }
 
-func JoinTable(charid uint32, matchmode int32, serverid int32, servertype string) {
+func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
+
+	allready := true
+
+	tableid, ok := PlayerTableIDMap[charid]
+	if ok {
+		table, ok := TableManager[tableid]
+		if ok {
+			for _, seat := range table.seats {
+				if (*seat).charid == (*req).CharID {
+					if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
+						(*seat).chartype = (*req).CharType
+					}
+					if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
+						(*seat).status = SEAT_READY
+					}
+				}
+
+				if (*seat).status != SEAT_READY {
+					allready = false
+				}
+			}
+
+			//都准备好了就进入锁定倒计时阶段
+			if allready {
+				(*table).checktime = time.Now().Unix()
+				changeTableStatus(table, MATCH_CHARTYPE_FIXED)
+			}
+		}
+	}
+}
+
+func JoinTable(charid uint32, charname string, matchmode int32, serverid int32, servertype string) {
 
 	var createnew = true
 	for i, table := range TableManager {
@@ -144,6 +292,11 @@ func JoinTable(charid uint32, matchmode int32, serverid int32, servertype string
 				jointime:   time.Now().Unix(),
 				serverid:   serverid,
 				servertype: servertype,
+				chartype:   0,
+				ownerid:    0,
+				status:     SEAT_NONE,
+				charname:   charname,
+				teamid:     int32(len((*table).seats) % 2),
 			}
 			TableManager[i].seats = append(TableManager[i].seats, seat)
 			PlayerTableIDMap[charid] = i
@@ -167,6 +320,7 @@ func JoinTable(charid uint32, matchmode int32, serverid int32, servertype string
 		table := &Table{
 			tableid:    tableid,
 			createtime: time.Now().Unix(),
+			checktime:  0,
 			matchmode:  matchmode,
 			seats: []*Seat{
 				&Seat{
@@ -174,6 +328,11 @@ func JoinTable(charid uint32, matchmode int32, serverid int32, servertype string
 					jointime:   time.Now().Unix(),
 					serverid:   serverid,
 					servertype: servertype,
+					chartype:   0,
+					ownerid:    0,
+					status:     SEAT_NONE,
+					charname:   charname,
+					teamid:     0,
 				},
 			},
 			status:        MATCH_CONTINUE,
@@ -208,25 +367,23 @@ func LeaveTable(charid uint32, matchmode int32) {
 	}
 }
 
-func ClearTable(tableid int32, battleroomid int32, battleserverid int32, battleservername string) {
-	table, ok := TableManager[tableid]
+func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
+	table, ok := TableManager[rlt.Matchtableid]
 	if ok {
-		msg := &proxymsg.Proxy_MS_GS_MatchResult{
-			Retcode:          0,
-			Battleroomid:     battleroomid,
-			Battleserverid:   battleserverid,
-			Battleservername: battleservername,
+		msg := &clientmsg.Rlt_NotifyBattleAddress{
+			RoomID:     rlt.Battleroomid,
+			BattleAddr: rlt.Connectaddr,
+			BattleKey:  rlt.Battleroomkey,
 		}
 
 		for _, seat := range table.seats {
-			log.Debug("NotifyConnectBS CharID %v BSID %v RoomID %v", (*seat).charid, battleserverid, battleroomid)
-
-			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCHRESULT), msg)
+			if seat.ownerid == 0 {
+				log.Debug("NotifyConnectBS CharID %v BSID %v RoomID %v", (*seat).charid, rlt.Battleserverid, rlt.Battleroomid)
+				go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE), msg)
+			}
 		}
 
-		deleteTableSeatInfo(tableid)
-		table.seats = append([]*Seat{}) //clear seats
-		DeleteTable(tableid)
+		changeTableStatus(table, MATCH_FINISH)
 	} else {
 		log.Error("ClearTable TableID %v Not Found , TableCount %v", tableid, len(TableManager))
 	}
