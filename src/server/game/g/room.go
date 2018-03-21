@@ -145,6 +145,7 @@ func changeRoomStatus(room *Room, status string) {
 	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
 
 	if (*room).status == ROOM_END {
+		deleteRoomMemberInfo((*room).roomid)
 		DeleteRoom((*room).roomid)
 	}
 }

@@ -61,7 +61,7 @@ func handlePing(args []interface{}) {
 	m := args[0].(*clientmsg.Ping)
 	a := args[1].(gate.Agent)
 
-	//log.Debug("RecvPing %v From %v ", m.GetID(), a.RemoteAddr())
+	//log.Error("RecvPing %v From %v ", m.ID, a.RemoteAddr())
 	a.WriteMsg(&clientmsg.Pong{ID: m.ID})
 
 	//SendMessageTo(int32(conf.Server.ServerID), conf.Server.ServerType, uint64(1), uint32(0), m)

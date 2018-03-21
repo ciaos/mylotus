@@ -26,10 +26,11 @@ const (
 
 	STATUS_NONE = "STATUS_NONE"
 
-	STATUS_LOGIN_CONNECT = "connect_login_server"
-	STATUS_LOGIN         = "start_register"
-	STATUS_LOGIN_LOOP    = "loop_login"
-	STATUS_LOGIN_CLOSE   = "disconnect_login_server"
+	STATUS_LOGIN_CONNECT  = "connect_login_server"
+	STATUS_LOGIN          = "start_register"
+	STATUS_LOGIN_LOOP     = "loop_login"
+	STATUS_GAMESERVERLIST = "gameserverlist"
+	STATUS_LOGIN_CLOSE    = "disconnect_login_server"
 
 	STATUS_GAME_CONNECT      = "connect_game_server"
 	STATUS_GAME_LOGIN        = "start_signin"
@@ -54,10 +55,11 @@ type Client struct {
 	username string
 	password string
 
-	sessionkey   []byte
-	battlekey    []byte
-	battleaddr   string
-	battleroomid int32
+	gameserveraddr string
+	sessionkey     []byte
+	battlekey      []byte
+	battleaddr     string
+	battleroomid   int32
 
 	userid uint32
 	charid uint32
@@ -109,12 +111,23 @@ func handle_Rlt_Register(c *Client, msgdata []byte) {
 	} else if rsp.RetCode == clientmsg.Type_LoginRetCode_LRC_NONE {
 		c.userid = rsp.UserID
 		c.sessionkey = rsp.SessionKey
-		c.ChangeStatus(STATUS_LOGIN_CLOSE)
+		c.ChangeStatus(STATUS_GAMESERVERLIST)
 	} else {
 		c.nextlogintime = time.Now().Unix() + 5
 		c.ChangeStatus(STATUS_NONE)
 		c.lconn.Close()
 	}
+}
+
+func handle_Rlt_ServerList(c *Client, msgdata []byte) {
+	rsp := &clientmsg.Rlt_ServerList{}
+	proto.Unmarshal(msgdata, rsp)
+	for _, server := range rsp.ServerList {
+		if server.ServerID == GameServerID {
+			c.gameserveraddr = server.ConnectAddr
+		}
+	}
+	c.ChangeStatus(STATUS_LOGIN_CLOSE)
 }
 
 func handle_Rlt_Login(c *Client, msgdata []byte) {
@@ -204,6 +217,7 @@ func (c *Client) updateLogin() {
 		if c.nextregistertime < time.Now().Unix() {
 			c.nextregistertime = 0
 			c.lconn, c.err = net.Dial("tcp", LoginServerAddr)
+			tlog.Debugf("client %d connect login %s\n", c.id, LoginServerAddr)
 			if c.err != nil {
 				c.ChangeStatus(STATUS_NONE)
 			} else {
@@ -223,6 +237,12 @@ func (c *Client) updateLogin() {
 		c.lconn.Close()
 		c.nextlogintime = time.Now().Unix() + randInt(1, 3)
 		c.ChangeStatus(STATUS_GAME_CONNECT)
+	} else if c.status == STATUS_GAMESERVERLIST {
+		msg := &clientmsg.Req_ServerList{
+			Channel: 1,
+		}
+		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_SERVERLIST, msg)
+		c.ChangeStatus(STATUS_LOGIN_LOOP)
 	}
 }
 
@@ -244,7 +264,8 @@ func (c *Client) updateGame() {
 	if c.status == STATUS_GAME_CONNECT {
 		if c.nextlogintime < time.Now().Unix() {
 			c.nextlogintime = 0
-			c.gconn, c.err = net.Dial("tcp", GameServerAddr)
+			c.gconn, c.err = net.Dial("tcp", c.gameserveraddr)
+			tlog.Debugf("client %d connect game %s\n", c.id, c.gameserveraddr)
 			if c.err != nil {
 				c.ChangeStatus(STATUS_NONE)
 			} else {
@@ -307,6 +328,8 @@ func (c *Client) recvGame() {
 
 func (c *Client) updateBattle() {
 	if c.status == STATUS_BATTLE_CONNECT {
+
+		tlog.Debugf("client %d connect battle %s\n", c.id, c.battleaddr)
 		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
 		if c.err != nil {
 			c.ChangeStatus(STATUS_NONE)
@@ -404,9 +427,9 @@ func (c *Client) dispatch(msgid interface{}, msgdata []byte) {
 	defer m.Unlock()
 	handler, ok := c.routes[msgid]
 	if ok {
-		if msgid != clientmsg.MessageType_MT_PONG && msgid != clientmsg.MessageType_MT_TRANSFER_COMMAND {
-			tlog.Debugf("clientid %d msgid %d", c.id, msgid)
-		}
+		//if msgid != clientmsg.MessageType_MT_PONG && msgid != clientmsg.MessageType_MT_TRANSFER_COMMAND {
+		//	tlog.Debugf("clientid %d msgid %d", c.id, msgid)
+		//}
 		handler.(func(c *Client, msgdata []byte))(c, msgdata)
 	}
 }
@@ -436,6 +459,7 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_TRANSFER_COMMAND, handle_Transfer_Command)
 	c.book(clientmsg.MessageType_MT_RLT_MATCH, handle_Rlt_Match)
 	c.book(clientmsg.MessageType_MT_RLT_STARTBATTLE, handle_Rlt_StartBattle)
+	c.book(clientmsg.MessageType_MT_RLT_SERVERLIST, handle_Rlt_ServerList)
 }
 
 func (c *Client) Loop(id int32) {
