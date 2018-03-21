@@ -28,17 +28,8 @@ var Server struct {
 	MongoDBHost   string
 	ConnectAddr   string
 
-	GameServerList   []GameServerCfg
 	BattleServerList []BattleServerCfg
 	MatchServerList  []MatchServerCfg
-}
-
-type GameServerCfg struct {
-	ServerID    int
-	ServerType  string
-	ServerName  string
-	Tag         int
-	ConnectAddr string
 }
 
 type BattleServerCfg struct {

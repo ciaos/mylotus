@@ -3,7 +3,8 @@ package internal
 import (
 	"encoding/binary"
 	"reflect"
-	"server/conf"
+	"server/gamedata"
+	"server/gamedata/cfg"
 	"server/msg/clientmsg"
 	"server/tool"
 	"time"
@@ -135,18 +136,21 @@ func handlerReqServerList(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	resMsg := &clientmsg.Rlt_ServerList{}
-	resMsg.ServerCount = int32(len(conf.Server.GameServerList))
 
-	for _, serverInfo := range conf.Server.GameServerList {
+	resMsg.ServerCount = int32(gamedata.CSVGameServer.NumRecord())
 
+	i := 0
+	for i < int(resMsg.ServerCount) {
+
+		gscfg := gamedata.CSVGameServer.Record(i).(*cfg.GameServer)
 		si := &clientmsg.Rlt_ServerList_ServerInfo{}
-		si.ServerID = int32(serverInfo.ServerID)
-		si.ServerName = serverInfo.ServerName
-		si.Status = int32(serverInfo.Tag)
-		si.ConnectAddr = serverInfo.ConnectAddr
+		si.ServerID = gscfg.ServerID
+		si.ServerName = gscfg.ServerName
+		si.Status = gscfg.ServerTag
+		si.ConnectAddr = gscfg.ConnectAddr
 
 		resMsg.ServerList = append(resMsg.ServerList, si)
+		i++
 	}
-
 	a.WriteMsg(resMsg)
 }

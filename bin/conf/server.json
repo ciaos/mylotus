@@ -15,10 +15,6 @@
 	"MongoDBHost": "127.0.0.1:27017",
 	"ConnectAddr" : "192.168.2.137:9999",
 	
-	"GameServerList" : [
-		{"ServerID" : 1, "ServerType" : "gameserver", "ServerName" : "追风一服", "Tag" : 1, "ConnectAddr" : "192.168.2.137:8888"}
-	],
-	
 	"MatchServerList" : [
 		{"ServerID" : 1, "ServerType" : "gameserver"}
 	],

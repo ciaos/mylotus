@@ -25,3 +25,4 @@ func readRf(st interface{}) *recordfile.RecordFile {
 }
 
 var CSVMatchMode = readRf(cfg.MatchMode{})
+var CSVGameServer = readRf(cfg.GameServer{})
