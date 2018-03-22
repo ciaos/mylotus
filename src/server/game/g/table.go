@@ -29,9 +29,9 @@ const (
 	MATCH_FINISH            = "match_finish"            //
 	MATCH_ERROR             = "match_error"
 
-	SEAT_NONE    = "seat_none"
-	SEAT_CONFIRM = "seat_confirm"
-	SEAT_READY   = "seat_ready"
+	SEAT_NONE    = 0
+	SEAT_CONFIRM = 1
+	SEAT_READY   = 2
 )
 
 type Seat struct {
@@ -43,7 +43,7 @@ type Seat struct {
 	chartype   int32
 	ownerid    uint32
 	teamid     int32
-	status     string
+	status     int32
 }
 
 //for match server
@@ -132,6 +132,8 @@ func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) 
 			member.TeamID = (*seat).teamid
 			member.CharName = (*seat).charname
 			member.CharType = (*seat).chartype
+			member.Status = clientmsg.MemberStatus(seat.status)
+
 			msg.Members = append(msg.Members, member)
 		}
 	}
@@ -385,6 +387,10 @@ func LeaveTable(charid uint32, matchmode int32) {
 	if ok {
 		table, ok := TableManager[tableid]
 		if ok {
+			if table.status != MATCH_CONTINUE { //match already done
+				return
+			}
+
 			if len(table.seats) <= 1 {
 				table.seats = append([]*Seat{})
 				log.Debug("LeaveTable TableID %v CharID %v Empty", tableid, charid)
@@ -413,11 +419,29 @@ func ConfirmTable(charid uint32, matchmode int32) {
 	if ok {
 		table, ok := TableManager[tableid]
 		if ok {
+			if table.status != MATCH_CONFIRM {
+				return
+			}
+
 			allconfirmed := true
 			for _, seat := range table.seats {
 				if (*seat).charid == charid {
 					seat.status = SEAT_CONFIRM
 					log.Debug("ConfirmTable TableID %v CharID %v", tableid, charid)
+
+					msg := &clientmsg.Rlt_Match{
+						RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM,
+					}
+
+					member := &clientmsg.Rlt_Match_MemberInfo{}
+					member.CharID = (*seat).charid
+					member.OwnerID = (*seat).ownerid
+					member.TeamID = (*seat).teamid
+					member.CharName = (*seat).charname
+					member.CharType = (*seat).chartype
+					member.Status = clientmsg.MemberStatus(seat.status)
+					msg.Members = append(msg.Members, member)
+					table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
 				}
 
 				if seat.status != SEAT_CONFIRM {

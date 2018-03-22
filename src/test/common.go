@@ -46,6 +46,22 @@ func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata inte
 	return msgid, bodydata[2:bodylen]
 }
 
+func Recv(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
+	//Recv
+	headdata := make([]byte, 2)
+	(*conn).Read(headdata[0:])
+	msglen := binary.BigEndian.Uint16(headdata[0:])
+
+	bodydata := make([]byte, msglen)
+	bodylen, _ := (*conn).Read(bodydata[0:])
+	if msglen == 0 || bodylen == 0 {
+		c.Fatal("empty buffer")
+	}
+	msgid := clientmsg.MessageType(binary.BigEndian.Uint16(bodydata[0:]))
+
+	return msgid, bodydata[2:bodylen]
+}
+
 func SendAndRecvKCP(c *C, conn *kcp.UDPSession, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {
 
 	//Send
