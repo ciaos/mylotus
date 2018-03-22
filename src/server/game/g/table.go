@@ -19,6 +19,8 @@ const (
 	MATCH_OK                = "match_ok"
 	MATCH_CONTINUE          = "match_continue"          //匹配中
 	MATCH_TIMEOUT           = "match_timeout"           //匹配超时(补充AI)
+	MATCH_CONFIRM           = "match_confirm"           //匹配确认
+	MATCH_CLEAR_BADGUY      = "match_clear_badguy"      //清空未点击确认的玩家继续匹配
 	MATCH_CHARTYPE_CHOOSING = "match_chartype_choosing" //选择角色中
 	MATCH_CHARTYPE_FIXED    = "match_chartype_fixed"    //角色确定
 	MATCH_BEGIN_ALLOCROOM   = "match_begin_allocroom"   //开始申请房间
@@ -27,8 +29,9 @@ const (
 	MATCH_FINISH            = "match_finish"            //
 	MATCH_ERROR             = "match_error"
 
-	SEAT_NONE  = "seat_none"
-	SEAT_READY = "seat_ready"
+	SEAT_NONE    = "seat_none"
+	SEAT_CONFIRM = "seat_confirm"
+	SEAT_READY   = "seat_ready"
 )
 
 type Seat struct {
@@ -97,12 +100,20 @@ func fillRobotToTable(table *Table) {
 			charname:   strconv.Itoa(int(charid)),
 			chartype:   0,
 			ownerid:    ownerid,
-			status:     SEAT_NONE,
+			status:     SEAT_CONFIRM,
 			teamid:     int32(len((*table).seats) % 2),
 		}
 		(*table).seats = append((*table).seats, seat)
 		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
 		i++
+	}
+}
+
+func (table *Table) broadcast(msgid uint32, msgdata interface{}) {
+	for _, seat := range table.seats {
+		if seat.ownerid == 0 {
+			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, msgid, msgdata)
+		}
 	}
 }
 
@@ -124,12 +135,7 @@ func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) 
 			msg.Members = append(msg.Members, member)
 		}
 	}
-	for _, seat := range table.seats {
-		if (*seat).ownerid == 0 {
-			log.Debug("notify MatchResult CharID %v Result %v MemberCount %v", (*seat).charid, retcode, len(msg.Members))
-			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
-		}
-	}
+	table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
 }
 
 func changeTableStatus(table *Table, status string) {
@@ -139,20 +145,19 @@ func changeTableStatus(table *Table, status string) {
 	if (*table).status == MATCH_ERROR {
 		//notify all member error
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
-		deleteTableSeatInfo((*table).tableid)
-		DeleteTable((*table).tableid)
+		changeTableStatus(table, MATCH_FINISH)
 	} else if (*table).status == MATCH_EMPTY {
 		DeleteTable((*table).tableid)
 	} else if (*table).status == MATCH_OK {
 		//notify all member to choose
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 		(*table).checktime = time.Now().Unix()
-		changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_TIMEOUT {
 		fillRobotToTable(table)
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 		(*table).checktime = time.Now().Unix()
-		changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
 		table.allocBattleRoom()
 		(*table).checktime = time.Now().Unix()
@@ -161,6 +166,28 @@ func changeTableStatus(table *Table, status string) {
 		deleteTableSeatInfo(tableid)
 		table.seats = append([]*Seat{}) //clear seats
 		DeleteTable(tableid)
+	} else if (*table).status == MATCH_CLEAR_BADGUY {
+
+		msg := &clientmsg.Rlt_Match{
+			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
+		}
+		for i, seat := range (*table).seats { //kick badguy and robot
+			if seat.status != SEAT_CONFIRM || seat.ownerid != 0 {
+				if seat.ownerid == 0 {
+					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
+					log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
+					delete(PlayerTableIDMap, seat.charid)
+				}
+				if len((*table).seats) > 1 {
+					(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
+				} else {
+					(*table).seats = append([]*Seat{})
+					break
+				}
+			}
+		}
+
+		changeTableStatus(table, MATCH_CONTINUE)
 	}
 }
 
@@ -175,7 +202,7 @@ func (table *Table) update(now *time.Time) {
 
 	if (*table).status == MATCH_CONTINUE {
 		//匹配超时
-		if (*now).Unix()-(*table).createtime > int64(row.MatchTimeOutSec) {
+		if (*now).Unix()-(*table).checktime > int64(row.MatchTimeOutSec) {
 			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime, (*now).Unix())
 			changeTableStatus(table, MATCH_TIMEOUT)
 			return
@@ -185,6 +212,12 @@ func (table *Table) update(now *time.Time) {
 			changeTableStatus(table, MATCH_OK)
 		} else if len((*table).seats) <= 0 {
 			changeTableStatus(table, MATCH_EMPTY)
+		}
+	} else if (*table).status == MATCH_CONFIRM {
+		if (*now).Unix()-(*table).checktime > int64(row.ConfirmTimeOutSec) {
+			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+			(*table).checktime = (*now).Unix()
+			changeTableStatus(table, MATCH_CLEAR_BADGUY)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_CHOOSING {
 		if (*now).Unix()-(*table).checktime > int64(row.ChooseTimeOutSec) {
@@ -245,7 +278,9 @@ func deleteTableSeatInfo(tableid int32) {
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range table.seats {
-			delete(PlayerTableIDMap, seat.charid)
+			if seat.ownerid == 0 {
+				delete(PlayerTableIDMap, seat.charid)
+			}
 		}
 	}
 }
@@ -320,7 +355,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, serverid int32, 
 		table := &Table{
 			tableid:    tableid,
 			createtime: time.Now().Unix(),
-			checktime:  0,
+			checktime:  time.Now().Unix(),
 			matchmode:  matchmode,
 			seats: []*Seat{
 				&Seat{
@@ -350,11 +385,17 @@ func LeaveTable(charid uint32, matchmode int32) {
 	if ok {
 		table, ok := TableManager[tableid]
 		if ok {
-			for i, seat := range table.seats {
-				if (*seat).charid == charid {
-					TableManager[tableid].seats = append(table.seats[0:i], table.seats[i+1:]...)
+			if len(table.seats) <= 1 {
+				table.seats = append([]*Seat{})
+				log.Debug("LeaveTable TableID %v CharID %v Empty", tableid, charid)
+			} else {
+				for i, seat := range table.seats {
+					if (*seat).charid == charid {
+						table.seats = append(table.seats[0:i], table.seats[i+1:]...)
 
-					log.Debug("LeaveTable TableID %v CharID %v RestCount %v", tableid, charid, len(table.seats))
+						log.Debug("LeaveTable TableID %v CharID %v RestCount %v", tableid, charid, len(table.seats))
+						break
+					}
 				}
 			}
 		} else {
@@ -367,6 +408,40 @@ func LeaveTable(charid uint32, matchmode int32) {
 	}
 }
 
+func ConfirmTable(charid uint32, matchmode int32) {
+	tableid, ok := PlayerTableIDMap[charid]
+	if ok {
+		table, ok := TableManager[tableid]
+		if ok {
+			allconfirmed := true
+			for _, seat := range table.seats {
+				if (*seat).charid == charid {
+					seat.status = SEAT_CONFIRM
+					log.Debug("ConfirmTable TableID %v CharID %v", tableid, charid)
+				}
+
+				if seat.status != SEAT_CONFIRM {
+					allconfirmed = false
+				}
+			}
+			if allconfirmed {
+				msg := &clientmsg.Rlt_Match{
+					RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED,
+				}
+				table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
+				table.checktime = time.Now().Unix()
+				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+			}
+		} else {
+			log.Error("ConfirmTable TableID %v Not Exist CharID %v", tableid, charid)
+		}
+
+		delete(PlayerTableIDMap, charid)
+	} else {
+		log.Error("ConfirmTable CharID %v Not Exist", charid)
+	}
+}
+
 func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 	table, ok := TableManager[rlt.Matchtableid]
 	if ok {
@@ -376,12 +451,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 			BattleKey:  rlt.Battleroomkey,
 		}
 
-		for _, seat := range table.seats {
-			if seat.ownerid == 0 {
-				log.Debug("NotifyConnectBS CharID %v BSID %v RoomID %v", (*seat).charid, rlt.Battleserverid, rlt.Battleroomid)
-				go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE), msg)
-			}
-		}
+		table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE), msg)
 
 		changeTableStatus(table, MATCH_FINISH)
 	} else {

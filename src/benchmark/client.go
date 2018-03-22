@@ -30,12 +30,14 @@ const (
 	STATUS_GAMESERVERLIST = "gameserverlist"
 	STATUS_LOGIN_CLOSE    = "disconnect_login_server"
 
-	STATUS_GAME_CONNECT      = "connect_game_server"
-	STATUS_GAME_LOGIN        = "start_signin"
-	STATUS_GAME_MATCH        = "start_match"
-	STATUS_GAME_TEAM_OPERATE = "team_operate"
-	STATUS_GAME_LOOP         = "loop_game"
-	STATUS_GAME_CLOSE        = "disconnect_game_server"
+	STATUS_GAME_CONNECT       = "connect_game_server"
+	STATUS_GAME_LOGIN         = "start_signin"
+	STATUS_GAME_MATCH_START   = "match_start"
+	STATUS_GAME_MATCH_OK      = "match_ok"
+	STATUS_GAME_MATCH_CONFIRM = "match_confirmed"
+	STATUS_GAME_TEAM_OPERATE  = "team_operate"
+	STATUS_GAME_LOOP          = "loop_game"
+	STATUS_GAME_CLOSE         = "disconnect_game_server"
 
 	STATUS_BATTLE_CONNECT  = "connect_battle_server"
 	STATUS_BATTLE_PROGRESS = "loading_progress"
@@ -142,7 +144,7 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 
 		c.charid = rsp.CharID
 		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
-		c.ChangeStatus(STATUS_GAME_MATCH)
+		c.ChangeStatus(STATUS_GAME_MATCH_START)
 	} else {
 		c.nextlogintime = time.Now().Unix() + 5
 		c.ChangeStatus(STATUS_NONE)
@@ -154,18 +156,32 @@ func handle_Rlt_Match(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_Match{}
 	proto.Unmarshal(msgdata, rsp)
 
-	c.ChangeStatus(STATUS_GAME_TEAM_OPERATE)
-	msg := &clientmsg.Transfer_Team_Operate{
-		Action:   clientmsg.TeamOperateActionType_TOA_CHOOSE,
-		CharID:   c.charid,
-		CharType: 1001,
+	if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR {
+		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
+		c.ChangeStatus(STATUS_GAME_MATCH_START)
+		return
+	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_OK {
+		c.ChangeStatus(STATUS_GAME_MATCH_OK)
+		msg := &clientmsg.Req_Match{
+			Action: clientmsg.MatchActionType_MAT_CONFIRM,
+			Mode:   clientmsg.MatchModeType_MMT_NORMAL,
+		}
+		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED {
+		c.ChangeStatus(STATUS_GAME_MATCH_CONFIRM)
+		c.ChangeStatus(STATUS_GAME_TEAM_OPERATE)
+		msg := &clientmsg.Transfer_Team_Operate{
+			Action:   clientmsg.TeamOperateActionType_TOA_CHOOSE,
+			CharID:   c.charid,
+			CharType: 1001,
+		}
+		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
+		msg = &clientmsg.Transfer_Team_Operate{
+			Action: clientmsg.TeamOperateActionType_TOA_SETTLE,
+			CharID: c.charid,
+		}
+		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
 	}
-	go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
-	msg = &clientmsg.Transfer_Team_Operate{
-		Action: clientmsg.TeamOperateActionType_TOA_SETTLE,
-		CharID: c.charid,
-	}
-	go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
 	c.ChangeStatus(STATUS_GAME_LOOP)
 }
 
@@ -288,7 +304,7 @@ func (c *Client) updateGame() {
 
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
 		c.ChangeStatus(STATUS_GAME_LOOP)
-	} else if c.status == STATUS_GAME_MATCH {
+	} else if c.status == STATUS_GAME_MATCH_START {
 		if c.nextmatchtime < time.Now().Unix() {
 			c.nextmatchtime = 0
 			msg := &clientmsg.Req_Match{
@@ -356,7 +372,7 @@ func (c *Client) updateBattle() {
 	} else if c.status == STATUS_BATTLE_CLOSE {
 		c.bconn.Close()
 		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
-		c.ChangeStatus(STATUS_GAME_MATCH)
+		c.ChangeStatus(STATUS_GAME_MATCH_START)
 	}
 
 	if c.status == STATUS_BATTLE_LOOP {

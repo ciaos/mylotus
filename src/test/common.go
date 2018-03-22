@@ -5,6 +5,7 @@ import (
 	"net"
 	"server/msg/clientmsg"
 
+	"github.com/ciaos/leaf/kcp"
 	"github.com/golang/protobuf/proto"
 	. "gopkg.in/check.v1"
 )
@@ -17,6 +18,35 @@ const (
 )
 
 func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {
+
+	//Send
+	data, err := proto.Marshal(msgdata.(proto.Message))
+	if err != nil {
+		c.Fatal("proto.Marshal ", err)
+	}
+	reqbuf := make([]byte, 4+len(data))
+	binary.BigEndian.PutUint16(reqbuf[0:], uint16(len(data)+2))
+	binary.BigEndian.PutUint16(reqbuf[2:], uint16(msgid))
+
+	copy(reqbuf[4:], data)
+	(*conn).Write(reqbuf)
+
+	//Recv
+	headdata := make([]byte, 2)
+	(*conn).Read(headdata[0:])
+	msglen := binary.BigEndian.Uint16(headdata[0:])
+
+	bodydata := make([]byte, msglen)
+	bodylen, _ := (*conn).Read(bodydata[0:])
+	if msglen == 0 || bodylen == 0 {
+		c.Fatal("empty buffer")
+	}
+	msgid = clientmsg.MessageType(binary.BigEndian.Uint16(bodydata[0:]))
+
+	return msgid, bodydata[2:bodylen]
+}
+
+func SendAndRecvKCP(c *C, conn *kcp.UDPSession, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {
 
 	//Send
 	data, err := proto.Marshal(msgdata.(proto.Message))
