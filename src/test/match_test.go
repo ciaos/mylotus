@@ -35,7 +35,7 @@ func (s *MatchSuite) SetUpSuite(c *C) {
 	s.password = "123456"
 
 	retcode, _, _ := Register(c, &s.conn, s.username, s.password, false)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 
 	defer s.conn.Close()
 }
@@ -49,7 +49,7 @@ func (s *MatchSuite) SetUpTest(c *C) {
 		c.Fatal("Connect Server Error ", s.err)
 	}
 	retcode, userid, sessionkey := Register(c, &s.conn, s.username, s.password, true)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 	s.conn.Close()
 
 	s.conn, s.err = net.Dial("tcp", GameServerAddr)
@@ -57,7 +57,7 @@ func (s *MatchSuite) SetUpTest(c *C) {
 		c.Fatal("Connect Server Error ", s.err)
 	}
 	code, _, isnew := Login(c, &s.conn, userid, sessionkey)
-	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_NONE)
+	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(isnew, Equals, true)
 }
 

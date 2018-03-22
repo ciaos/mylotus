@@ -83,10 +83,10 @@ func Login(c *C, conn *net.Conn, userid uint32, sessionkey []byte) (clientmsg.Ty
 
 func QuickLogin(c *C, conn *net.Conn, username string, password string) uint32 {
 	retcode, userid, sessionkey := Register(c, conn, username, password, false)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 
 	code, charid, _ := Login(c, conn, userid, sessionkey)
-	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_NONE)
+	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	return charid
 }
 

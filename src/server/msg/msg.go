@@ -22,9 +22,11 @@ func init() {
 	Processor.Register(&clientmsg.Rlt_ServerList{})
 	Processor.Register(&clientmsg.Req_Login{})
 	Processor.Register(&clientmsg.Rlt_Login{})
-	Processor.Register(&clientmsg.Req_Match{})
+	Processor.Register(&clientmsg.Req_SetCharName{})
 
 	//11 - 20
+	Processor.Register(&clientmsg.Rlt_SetCharName{})
+	Processor.Register(&clientmsg.Req_Match{})
 	Processor.Register(&clientmsg.Rlt_Match{})
 	Processor.Register(&clientmsg.Rlt_NotifyBattleAddress{})
 	Processor.Register(&clientmsg.Req_ConnectBS{})
@@ -33,6 +35,8 @@ func init() {
 	Processor.Register(&clientmsg.Req_EndBattle{})
 	Processor.Register(&clientmsg.Rlt_EndBattle{})
 	Processor.Register(&clientmsg.Transfer_Command{})
+
+	//21 - 30
 	Processor.Register(&clientmsg.Transfer_Loading_Progress{})
 	Processor.Register(&clientmsg.Transfer_Team_Operate{})
 }

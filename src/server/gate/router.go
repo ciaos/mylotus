@@ -19,6 +19,7 @@ func init() {
 	msg.Processor.SetRouter(&clientmsg.Req_Login{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Match{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Transfer_Team_Operate{}, game.ChanRPC)
+	msg.Processor.SetRouter(&clientmsg.Req_SetCharName{}, game.ChanRPC)
 
 	//battle server
 	msg.Processor.SetRouter(&clientmsg.Req_ConnectBS{}, game.ChanRPC)

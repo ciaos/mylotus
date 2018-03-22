@@ -87,5 +87,5 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	if err != nil {
 		c.Fatal("Rlt_ConnectBS Decode Error ", err)
 	}
-	c.Assert(rMsg.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_NONE)
+	c.Assert(rMsg.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_OK)
 }

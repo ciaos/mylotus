@@ -88,7 +88,7 @@ func fillRobotToTable(table *Table) {
 	i := 1
 	for i <= robotnum {
 
-		charid := uint32(rand.Intn(100000))
+		charid := 1000000000 + uint32(rand.Intn(100000000))
 		seat := &Seat{
 			charid:     charid,
 			jointime:   0,

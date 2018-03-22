@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	LoginServerAddr = "192.168.2.137:8888"
-
-	GameServerID = 1
+	LoginServerAddr = "127.0.0.1:8888"
+	GameServerID    = 1
+	ClientNum       = 2
+	OneBattleTime   = 10
 )
 
 func Send(conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) {

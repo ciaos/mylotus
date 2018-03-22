@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -21,9 +22,6 @@ var format = logging.MustStringFormatter(
 )
 
 const (
-	CLIENT_NUM        = 2
-	BATTLE_BASIC_TIME = 10
-
 	STATUS_NONE = "STATUS_NONE"
 
 	STATUS_LOGIN_CONNECT  = "connect_login_server"
@@ -108,7 +106,7 @@ func handle_Rlt_Register(c *Client, msgdata []byte) {
 			ClientVersion: 0,
 		}
 		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
-	} else if rsp.RetCode == clientmsg.Type_LoginRetCode_LRC_NONE {
+	} else if rsp.RetCode == clientmsg.Type_LoginRetCode_LRC_OK {
 		c.userid = rsp.UserID
 		c.sessionkey = rsp.SessionKey
 		c.ChangeStatus(STATUS_GAMESERVERLIST)
@@ -133,7 +131,15 @@ func handle_Rlt_ServerList(c *Client, msgdata []byte) {
 func handle_Rlt_Login(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_Login{}
 	proto.Unmarshal(msgdata, rsp)
-	if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_NONE {
+	if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_OK {
+
+		if rsp.IsNewCharacter {
+			msg := &clientmsg.Req_SetCharName{
+				CharName: "robot_" + strconv.Itoa(int(rsp.CharID)),
+			}
+			go Send(&c.gconn, clientmsg.MessageType_MT_REQ_SETCHARNAME, msg)
+		}
+
 		c.charid = rsp.CharID
 		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
 		c.ChangeStatus(STATUS_GAME_MATCH)
@@ -171,13 +177,13 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.battleroomid = rsp.RoomID
 	c.ChangeStatus(STATUS_BATTLE_CONNECT)
 
-	c.maxbattletime = BATTLE_BASIC_TIME + randInt(1, 2)
+	c.maxbattletime = OneBattleTime + randInt(1, 2)
 }
 
 func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_ConnectBS{}
 	proto.Unmarshal(msgdata, rsp)
-	if rsp.RetCode != clientmsg.Type_BattleRetCode_BRC_NONE {
+	if rsp.RetCode != clientmsg.Type_BattleRetCode_BRC_OK {
 		c.ChangeStatus(STATUS_BATTLE_CLOSE)
 	}
 
@@ -487,10 +493,10 @@ func main() {
 
 	m = new(sync.Mutex)
 
-	w.Add(CLIENT_NUM)
+	w.Add(ClientNum)
 
 	i := 1
-	for i <= CLIENT_NUM {
+	for i <= ClientNum {
 		client := &Client{}
 		go (*client).Loop(int32(i))
 		i += 1

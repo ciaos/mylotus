@@ -45,9 +45,9 @@ func (s *LoginSuite) TestLogin(c *C) {
 	password := "123456"
 
 	retcode, userid, sessionkey := Register(c, &s.conn, username, password, false)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 
 	code, _, isnew := Login(c, &s.conn, userid, sessionkey)
-	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_NONE)
+	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(isnew, Equals, true)
 }

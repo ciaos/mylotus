@@ -260,7 +260,7 @@ func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 
 func GenRoomInfoPB(roomid int32) *clientmsg.Rlt_ConnectBS {
 	rsp := &clientmsg.Rlt_ConnectBS{
-		RetCode: clientmsg.Type_BattleRetCode_BRC_NONE,
+		RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 	}
 	room, ok := RoomManager[roomid]
 	if ok {

@@ -101,7 +101,7 @@ func handleRegister(args []interface{}) {
 				if err != nil {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				} else {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_NONE, UserID: userid, SessionKey: sessionkey})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: userid, SessionKey: sessionkey})
 				}
 			}
 		}
@@ -122,7 +122,7 @@ func handleRegister(args []interface{}) {
 				if err != nil {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				} else {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_NONE, UserID: result.UserID, SessionKey: sessionkey})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: result.UserID, SessionKey: sessionkey})
 				}
 			} else {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR})

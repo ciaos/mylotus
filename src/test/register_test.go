@@ -51,13 +51,13 @@ func (s *RegisterSuite) TestRegister(c *C) {
 	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST)
 
 	retcode, _, _ = Register(c, &s.conn, s.username, s.password, false)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 
 	retcode, _, _ = Register(c, &s.conn, s.username, s.password, false)
 	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_ACCOUNT_EXIST)
 
 	retcode, _, _ = Register(c, &s.conn, s.username, s.password, true)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_NONE)
+	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 
 	s.password = "123"
 	retcode, _, _ = Register(c, &s.conn, s.username, s.password, true)

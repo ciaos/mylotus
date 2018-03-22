@@ -8,7 +8,6 @@ import (
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"server/tool"
-	"strconv"
 	"time"
 
 	"github.com/ciaos/leaf/gate"
@@ -22,6 +21,7 @@ func init() {
 
 	handler(&clientmsg.Req_ServerTime{}, handleReqServerTime)
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
+	handler(&clientmsg.Req_SetCharName{}, handleReqSetCharName)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
 	handler(&clientmsg.Transfer_Team_Operate{}, handleTransferTeamOperate)
 
@@ -129,7 +129,7 @@ func handleReqLogin(args []interface{}) {
 			UserId:     m.UserID,
 			GsId:       m.ServerID,
 			Status:     g.PLAYER_STATUS_ONLINE,
-			CharName:   strconv.Itoa(int(charid)),
+			CharName:   "",
 			CreateTime: time.Now(),
 			UpdateTime: time.Now(),
 		})
@@ -142,7 +142,7 @@ func handleReqLogin(args []interface{}) {
 		}
 
 		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode:        clientmsg.Type_GameRetCode_GRC_NONE,
+			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
 			CharID:         charid,
 			IsNewCharacter: true,
 		})
@@ -152,16 +152,50 @@ func handleReqLogin(args []interface{}) {
 	} else {
 		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
 
+		isnew := false
+		if result.CharName == "" {
+			isnew = true
+		}
+
 		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode:        clientmsg.Type_GameRetCode_GRC_NONE,
+			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
 			CharID:         result.CharId,
-			IsNewCharacter: false,
+			IsNewCharacter: isnew,
 		})
 
 		player.CharID = result.CharId
 	}
 
 	g.AddGamePlayer(player, &a)
+}
+
+func handleReqSetCharName(args []interface{}) {
+	m := args[0].(*clientmsg.Req_SetCharName)
+	a := args[1].(gate.Agent)
+
+	charid := a.UserData()
+	if charid == nil {
+		log.Error("Player SetCharName Login")
+		a.Close()
+		return
+	}
+
+	if m.CharName == "" {
+		log.Error("Player %v SetCharName empty", charid)
+		a.WriteMsg(&clientmsg.Rlt_SetCharName{
+			RetCode: clientmsg.Type_GameRetCode_GRC_NAME_NOT_VALID,
+		})
+		return
+	}
+
+	s := g.Mongo.Ref()
+	defer g.Mongo.UnRef(s)
+
+	c := s.DB("game").C("character")
+	c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$set": bson.M{"charname": m.CharName}})
+	a.WriteMsg(&clientmsg.Rlt_SetCharName{
+		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
+	})
 }
 
 func handleReqMatch(args []interface{}) {
@@ -171,11 +205,10 @@ func handleReqMatch(args []interface{}) {
 	charid := a.UserData()
 	if charid == nil {
 		log.Error("Player Match Not Login")
-
 		a.WriteMsg(&clientmsg.Rlt_Match{
 			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
 		})
-
+		a.Close()
 		return
 	}
 
@@ -248,7 +281,7 @@ func handleReqEndBattle(args []interface{}) {
 	log.Debug("handleReqEndBattle %v", m.CharID)
 
 	a.WriteMsg(&clientmsg.Rlt_EndBattle{
-		RetCode: clientmsg.Type_BattleRetCode_BRC_NONE,
+		RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 		CharID:  m.CharID,
 	})
 }
