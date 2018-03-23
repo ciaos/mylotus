@@ -183,7 +183,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 	room := &Room{
 		roomid:         roomid,
 		createtime:     time.Now().Unix(),
-		nextchecktime:  time.Now().Unix() + 5,
+		nextchecktime:  time.Now().Unix() + 10,
 		status:         ROOM_STATUS_NONE,
 		matchmode:      msg.Matchmode,
 		battlekey:      battlekey,
@@ -223,7 +223,7 @@ func (room *Room) notifyBattleStart() {
 	rsp := &clientmsg.Rlt_StartBattle{
 		RandSeed: room.seed,
 	}
-
+	log.Debug("notifyBattleStart %v", room.roomid)
 	room.broadcast(rsp)
 }
 
