@@ -56,7 +56,7 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 	log.Debug("proxyHandleGSMSMatch CharID %v Action %v", msg.Charid, msg.Action)
 
 	if msg.Action == int32(clientmsg.MatchActionType_MAT_JOIN) {
-		g.JoinTable(msg.Charid, msg.Charname, msg.Matchmode, pmsg.Fromid, pmsg.Fromtype)
+		g.JoinTable(msg.Charid, msg.Charname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CANCEL) {
 		g.LeaveTable(msg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CONFIRM) {

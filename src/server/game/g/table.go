@@ -52,6 +52,7 @@ type Table struct {
 	createtime    int64
 	checktime     int64
 	matchmode     int32
+	mapid         int32
 	status        string
 	tableid       int32
 	modeplayercnt int32
@@ -329,10 +330,14 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 	}
 }
 
-func JoinTable(charid uint32, charname string, matchmode int32, serverid int32, servertype string) {
+func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
 
 	var createnew = true
 	for i, table := range TableManager {
+		if table.mapid != mapid || table.matchmode != matchmode {
+			continue
+		}
+
 		if len((*table).seats) < int((*table).modeplayercnt) {
 			seat := &Seat{
 				charid:     charid,
@@ -369,6 +374,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, serverid int32, 
 			createtime: time.Now().Unix(),
 			checktime:  time.Now().Unix(),
 			matchmode:  matchmode,
+			mapid:      mapid,
 			seats: []*Seat{
 				&Seat{
 					charid:     charid,

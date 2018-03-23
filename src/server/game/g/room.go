@@ -42,6 +42,7 @@ type Room struct {
 	status        string
 	roomid        int32
 	matchmode     int32
+	mapid         int32
 	battlekey     []byte
 	frameid       uint32
 	seed          int32
@@ -186,6 +187,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		nextchecktime:  time.Now().Unix() + 10,
 		status:         ROOM_STATUS_NONE,
 		matchmode:      msg.Matchmode,
+		mapid:          msg.Mapid,
 		battlekey:      battlekey,
 		members:        make(map[uint32]*Member),
 		messages:       append([]interface{}{}),
@@ -258,11 +260,12 @@ func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 }
 
 func GenRoomInfoPB(roomid int32) *clientmsg.Rlt_ConnectBS {
-	rsp := &clientmsg.Rlt_ConnectBS{
-		RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
-	}
+	rsp := &clientmsg.Rlt_ConnectBS{}
 	room, ok := RoomManager[roomid]
 	if ok {
+		rsp.RetCode = clientmsg.Type_BattleRetCode_BRC_OK
+		rsp.MapID = room.mapid
+
 		for _, member := range room.members {
 			m := &clientmsg.Rlt_ConnectBS_MemberInfo{
 				CharID:   member.charid,
@@ -274,6 +277,9 @@ func GenRoomInfoPB(roomid int32) *clientmsg.Rlt_ConnectBS {
 
 			rsp.Member = append(rsp.Member, m)
 		}
+	} else {
+		log.Error("GenRoomInfoPB RoomID %v Error", roomid)
+		rsp.RetCode = clientmsg.Type_BattleRetCode_BRC_OTHER
 	}
 	return rsp
 }

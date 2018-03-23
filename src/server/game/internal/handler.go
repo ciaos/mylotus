@@ -235,6 +235,7 @@ func handleReqMatch(args []interface{}) {
 		Charid:    charid.(uint32),
 		Charname:  player.Charname,
 		Matchmode: int32(m.Mode),
+		Mapid:     m.MapID,
 		Action:    int32(m.Action),
 	}
 
