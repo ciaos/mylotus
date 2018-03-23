@@ -136,8 +136,6 @@ func (room *Room) update(now *time.Time) {
 			changeRoomStatus(room, ROOM_END)
 		}
 	}
-
-	return
 }
 
 func changeRoomStatus(room *Room, status string) {
@@ -147,6 +145,8 @@ func changeRoomStatus(room *Room, status string) {
 	if (*room).status == ROOM_END {
 		deleteRoomMemberInfo((*room).roomid)
 		DeleteRoom((*room).roomid)
+	} else if (*room).status == ROOM_FIGHTING {
+		room.notifyBattleStart()
 	}
 }
 
@@ -247,7 +247,6 @@ func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 					room.memberok += 1
 
 					if room.memberok >= len(room.members) {
-						room.notifyBattleStart()
 						changeRoomStatus(room, ROOM_FIGHTING)
 					}
 				}

@@ -100,7 +100,7 @@ func fillRobotToTable(table *Table) {
 			charname:   strconv.Itoa(int(charid)),
 			chartype:   0,
 			ownerid:    ownerid,
-			status:     SEAT_CONFIRM,
+			status:     SEAT_NONE,
 			teamid:     int32(len((*table).seats) % 2),
 		}
 		(*table).seats = append((*table).seats, seat)
@@ -110,11 +110,13 @@ func fillRobotToTable(table *Table) {
 }
 
 func (table *Table) broadcast(msgid uint32, msgdata interface{}) {
-	for _, seat := range table.seats {
-		if seat.ownerid == 0 {
-			go SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, msgid, msgdata)
+	go func() {
+		for _, seat := range table.seats {
+			if seat.ownerid == 0 {
+				SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, msgid, msgdata)
+			}
 		}
-	}
+	}()
 }
 
 func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) {
@@ -177,7 +179,7 @@ func changeTableStatus(table *Table, status string) {
 			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
 		}
 		for i, seat := range (*table).seats { //kick badguy and robot
-			if seat.status != SEAT_CONFIRM || seat.ownerid != 0 {
+			if seat.status != SEAT_CONFIRM {
 				if seat.ownerid == 0 {
 					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), badmsg)
 					log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
@@ -306,6 +308,7 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 						(*seat).chartype = (*req).CharType
 					}
 					if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
+						(*seat).chartype = (*req).CharType
 						(*seat).status = SEAT_READY
 					}
 				}
@@ -431,14 +434,13 @@ func ConfirmTable(charid uint32, matchmode int32) {
 			}
 
 			allconfirmed := true
-			for _, seat := range table.seats {
-				if (*seat).charid == charid {
-					seat.status = SEAT_CONFIRM
-					log.Debug("ConfirmTable TableID %v CharID %v", tableid, charid)
 
-					msg := &clientmsg.Rlt_Match{
-						RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM,
-					}
+			msg := &clientmsg.Rlt_Match{}
+
+			for _, seat := range table.seats {
+				if (*seat).charid == charid || (*seat).ownerid == charid {
+					seat.status = SEAT_CONFIRM
+					log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", tableid, seat.charid, seat.ownerid)
 
 					member := &clientmsg.Rlt_Match_MemberInfo{}
 					member.CharID = (*seat).charid
@@ -448,21 +450,24 @@ func ConfirmTable(charid uint32, matchmode int32) {
 					member.CharType = (*seat).chartype
 					member.Status = clientmsg.MemberStatus(seat.status)
 					msg.Members = append(msg.Members, member)
-					table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
 				}
 
 				if seat.status != SEAT_CONFIRM {
 					allconfirmed = false
 				}
 			}
+
 			if allconfirmed {
-				msg := &clientmsg.Rlt_Match{
-					RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED,
-				}
-				table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
 				table.checktime = time.Now().Unix()
 				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+				log.Debug("AllConfirmTable TableID %v", tableid)
+
+				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED
+			} else {
+				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 			}
+
+			table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
 		} else {
 			log.Error("ConfirmTable TableID %v Not Exist CharID %v", tableid, charid)
 		}
