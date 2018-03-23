@@ -37,6 +37,10 @@ func queueMessage(args []interface{}) {
 		proxyHandleMSGSMatchResult(pmsg)
 	case proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE:
 		proxyHandleMSGSBeginBattle(pmsg)
+	case proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE:
+		proxyHandleGSMSTeamOperate(pmsg)
+	case proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE:
+		proxyHandleMSGSTeamOperate(pmsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", pmsg.Msgid)
 	}
@@ -105,6 +109,28 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 	err := proto.Unmarshal(pmsg.Msgdata, msg)
 	if err != nil {
 		log.Error("proxymsg.Rlt_Match Decode Error %v", err)
+		return
+	}
+
+	g.SendMsgToPlayer(pmsg.Charid, msg)
+}
+
+func proxyHandleGSMSTeamOperate(pmsg *proxymsg.InternalMessage) {
+	msg := &clientmsg.Transfer_Team_Operate{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Transfer_Team_Operate Error1 %v", err)
+		return
+	}
+
+	g.TeamOperate(pmsg.Charid, msg)
+}
+
+func proxyHandleMSGSTeamOperate(pmsg *proxymsg.InternalMessage) {
+	msg := &clientmsg.Transfer_Team_Operate{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Transfer_Team_Operate Error1 %v", err)
 		return
 	}
 

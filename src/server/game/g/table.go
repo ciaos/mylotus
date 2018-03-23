@@ -170,13 +170,16 @@ func changeTableStatus(table *Table, status string) {
 		DeleteTable(tableid)
 	} else if (*table).status == MATCH_CLEAR_BADGUY {
 
-		msg := &clientmsg.Rlt_Match{
+		badmsg := &clientmsg.Rlt_Match{
 			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
+		}
+		goodmsg := &clientmsg.Rlt_Match{
+			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
 		}
 		for i, seat := range (*table).seats { //kick badguy and robot
 			if seat.status != SEAT_CONFIRM || seat.ownerid != 0 {
 				if seat.ownerid == 0 {
-					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
+					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), badmsg)
 					log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
 					delete(PlayerTableIDMap, seat.charid)
 				}
@@ -186,6 +189,8 @@ func changeTableStatus(table *Table, status string) {
 					(*table).seats = append([]*Seat{})
 					break
 				}
+			} else {
+				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), goodmsg)
 			}
 		}
 
@@ -310,6 +315,8 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 				}
 			}
 
+			table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE), req)
+
 			//都准备好了就进入锁定倒计时阶段
 			if allready {
 				(*table).checktime = time.Now().Unix()
@@ -338,7 +345,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, serverid int32, 
 			TableManager[i].seats = append(TableManager[i].seats, seat)
 			PlayerTableIDMap[charid] = i
 
-			log.Debug("JoinTable TableID %v CharID %v", i, charid)
+			log.Debug("JoinTable TableID %v CharID %v CharName %v", i, charid, charname)
 
 			createnew = false
 			break
@@ -378,7 +385,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, serverid int32, 
 		TableManager[tableid] = table
 		PlayerTableIDMap[charid] = tableid
 
-		log.Debug("JoinTable CreateTableID %v CharID %v", tableid, charid)
+		log.Debug("JoinTable CreateTableID %v CharID %v CharName %v", tableid, charid, charname)
 	}
 }
 

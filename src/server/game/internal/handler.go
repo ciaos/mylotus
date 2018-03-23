@@ -164,6 +164,7 @@ func handleReqLogin(args []interface{}) {
 		})
 
 		player.CharID = result.CharId
+		player.Charname = result.CharName
 	}
 
 	g.AddGamePlayer(player, &a)
@@ -177,6 +178,14 @@ func handleReqSetCharName(args []interface{}) {
 	if charid == nil {
 		log.Error("Player SetCharName Login")
 		a.Close()
+		return
+	}
+
+	player, err := g.GetPlayer(charid.(uint32))
+	if err != nil {
+		a.WriteMsg(&clientmsg.Rlt_SetCharName{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
 		return
 	}
 
@@ -196,6 +205,8 @@ func handleReqSetCharName(args []interface{}) {
 	a.WriteMsg(&clientmsg.Rlt_SetCharName{
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 	})
+
+	player.Charname = m.CharName
 }
 
 func handleReqMatch(args []interface{}) {
@@ -243,9 +254,16 @@ func handleTransferTeamOperate(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Team_Operate)
 	a := args[1].(gate.Agent)
 
-	if a.UserData() != nil {
-		g.TeamOperate(a.UserData().(uint32), m)
+	charid := a.UserData()
+	if charid == nil {
+		log.Error("Player TeamOperate Not Login")
+		return
 	}
+
+	skeleton.Go(func() {
+		g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE), m)
+	}, func() {
+	})
 }
 
 func handleTransferLoadingProgress(args []interface{}) {
