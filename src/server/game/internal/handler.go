@@ -103,6 +103,8 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
+	log.Debug("GamePlayer Begin Login UserID %v", userid)
+
 	s := g.Mongo.Ref()
 	defer g.Mongo.UnRef(s)
 
@@ -166,7 +168,7 @@ func handleReqLogin(args []interface{}) {
 		player.CharID = result.CharId
 		player.Charname = result.CharName
 	}
-
+	log.Debug("GamePlayer End Login %v", player.CharID)
 	g.AddGamePlayer(player, &a)
 }
 
@@ -260,6 +262,8 @@ func handleTransferTeamOperate(args []interface{}) {
 		log.Error("Player TeamOperate Not Login")
 		return
 	}
+
+	//log.Debug("handleTransferTeamOperate %v %v %v %v", charid, m.Action, m.CharID, m.CharType)
 
 	skeleton.Go(func() {
 		g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE), m)

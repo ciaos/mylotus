@@ -122,6 +122,7 @@ func proxyHandleGSMSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Transfer_Team_Operate Error1 %v", err)
 		return
 	}
+	//log.Debug("proxyHandleGSMSTeamOperate %v %v %v %v", pmsg.Charid, msg.Action, msg.CharID, msg.CharType)
 
 	g.TeamOperate(pmsg.Charid, msg)
 }
@@ -134,6 +135,7 @@ func proxyHandleMSGSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
+	//log.Debug("Transfer_Team_Operate %v %v %v %v", pmsg.Charid, msg.Action, msg.CharID, msg.CharType)
 	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
 

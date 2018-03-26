@@ -255,6 +255,7 @@ func (table *Table) allocBattleRoom() {
 	innerReq := &proxymsg.Proxy_MS_BS_AllocBattleRoom{
 		Matchtableid: table.tableid,
 		Matchmode:    table.matchmode,
+		Mapid:        table.mapid,
 	}
 
 	for _, seat := range table.seats {
@@ -318,7 +319,7 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 					allready = false
 				}
 			}
-
+			//log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
 			table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE), req)
 
 			//都准备好了就进入锁定倒计时阶段
@@ -326,7 +327,11 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 				(*table).checktime = time.Now().Unix()
 				changeTableStatus(table, MATCH_CHARTYPE_FIXED)
 			}
+		} else {
+			log.Error("TeamOperate Table Not Exist", tableid)
 		}
+	} else {
+		log.Error("TeamOperate Error CharID %v Not In Table", charid)
 	}
 }
 
@@ -476,9 +481,8 @@ func ConfirmTable(charid uint32, matchmode int32) {
 			table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT), msg)
 		} else {
 			log.Error("ConfirmTable TableID %v Not Exist CharID %v", tableid, charid)
+			delete(PlayerTableIDMap, charid)
 		}
-
-		delete(PlayerTableIDMap, charid)
 	} else {
 		log.Error("ConfirmTable CharID %v Not Exist", charid)
 	}

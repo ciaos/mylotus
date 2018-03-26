@@ -66,13 +66,6 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	if err != nil {
 		c.Fatal("Rlt_Match Decode Error")
 	}
-	c.Assert(rspMatch.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM)
-
-	msgid, msgdata = Recv(c, &s.conn)
-	err = proto.Unmarshal(msgdata, rspMatch)
-	if err != nil {
-		c.Fatal("Rlt_Match Decode Error")
-	}
 	c.Assert(rspMatch.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED)
 
 	operateMsg := &clientmsg.Transfer_Team_Operate{
@@ -108,5 +101,6 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 		c.Fatal("Rlt_ConnectBS Decode Error ", err)
 	}
 	c.Assert(rMsg.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_OK)
+	c.Assert(rMsg.MapID, Equals, int32(100))
 	s.bconn.Close()
 }

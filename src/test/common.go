@@ -140,6 +140,7 @@ func QuickMatch(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
 	reqMsg := &clientmsg.Req_Match{
 		Action: clientmsg.MatchActionType_MAT_JOIN,
 		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
+		MapID:  100,
 	}
 
 	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)

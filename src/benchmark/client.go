@@ -179,12 +179,19 @@ func handle_Rlt_Match(c *Client, msgdata []byte) {
 		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
 		c.ChangeStatus(STATUS_GAME_TEAM_OPERATE_FIXED)
 		msg = &clientmsg.Transfer_Team_Operate{
-			Action: clientmsg.TeamOperateActionType_TOA_SETTLE,
-			CharID: c.charid,
+			Action:   clientmsg.TeamOperateActionType_TOA_SETTLE,
+			CharID:   c.charid,
+			CharType: 1001,
 		}
 		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
 	}
 	c.ChangeStatus(STATUS_GAME_LOOP)
+}
+
+func handle_Rlt_TeamOperate(c *Client, msgdata []byte) {
+	//	rsp := &clientmsg.Transfer_Team_Operate{}
+	//	proto.Unmarshal(msgdata, rsp)
+	//	tlog.Debug("TeamOperate %d %d %d \n", rsp.Action, rsp.CharID, rsp.CharType)
 }
 
 func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
@@ -484,6 +491,7 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_RLT_MATCH, handle_Rlt_Match)
 	c.book(clientmsg.MessageType_MT_RLT_STARTBATTLE, handle_Rlt_StartBattle)
 	c.book(clientmsg.MessageType_MT_RLT_SERVERLIST, handle_Rlt_ServerList)
+	c.book(clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, handle_Rlt_TeamOperate)
 }
 
 func (c *Client) Loop(id int32) {

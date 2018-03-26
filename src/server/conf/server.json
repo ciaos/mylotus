@@ -1,25 +1,25 @@
 {
 	"LogLevel": "debug",
 	"LogPath": "",
-	"TCPAddr" : "0.0.0.0:8888",
-	"UDPAddr": "0.0.0.0:9999",
+	"TCPAddr" : "0.0.0.0:8000",
+	"UDPAddr": "0.0.0.0:9000",
 	"MaxConnNum": 20000,
-	"ConsolePort": 3333,
+	"ConsolePort": 4444,
 	
 	"TickInterval" : 33,
 	
-	"ServerID" : 1,
+	"ServerID" : 0,
 	"ServerType": "gameserver",
 	"RedisHost": "127.0.0.1:6379",
 	"RedisPassWord" : "",
 	"MongoDBHost": "127.0.0.1:27017",
-	"ConnectAddr" : "192.168.2.137:9999",
+	"ConnectAddr" : "192.168.2.137:9000",
 
 	"MatchServerList" : [
-		{"ServerID" : 1, "ServerType" : "gameserver"}
+		{"ServerID" : 0, "ServerType" : "gameserver"}
 	],
 	
 	"BattleServerList" : [
-		{"ServerID" : 1, "ServerType" : "gameserver"}
+		{"ServerID" : 0, "ServerType" : "gameserver"}
 	]
 }
