@@ -28,18 +28,20 @@ var Server struct {
 	MongoDBHost   string
 	ConnectAddr   string
 
+	GameServerRename   string
+	MatchServerRename  string
+	BattleServerRename string
+
 	BattleServerList []BattleServerCfg
 	MatchServerList  []MatchServerCfg
 }
 
 type BattleServerCfg struct {
-	ServerID   int
-	ServerType string
+	ServerID int
 }
 
 type MatchServerCfg struct {
-	ServerID   int
-	ServerType string
+	ServerID int
 }
 
 func init() {

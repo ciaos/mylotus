@@ -39,4 +39,14 @@ func init() {
 	//21 - 30
 	Processor.Register(&clientmsg.Transfer_Loading_Progress{})
 	Processor.Register(&clientmsg.Transfer_Team_Operate{})
+	Processor.Register(&clientmsg.Req_Friend_Operate{})
+	Processor.Register(&clientmsg.Rlt_Friend_Operate{})
+	Processor.Register(&clientmsg.Req_Chat{})
+	Processor.Register(&clientmsg.Rlt_Chat{})
+	Processor.Register(&clientmsg.Req_QueryCharInfo{})
+	Processor.Register(&clientmsg.Rlt_QueryCharInfo{})
+	Processor.Register(&clientmsg.Req_MakeTeamOperate{})
+	Processor.Register(&clientmsg.Rlt_MakeTeamOperate{})
+
+	//31 - 40
 }

@@ -211,7 +211,6 @@ func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
 	if rsp.RetCode != clientmsg.Type_BattleRetCode_BRC_OK {
 		c.ChangeStatus(STATUS_BATTLE_CLOSE)
 	}
-
 	c.ChangeStatus(STATUS_BATTLE_PROGRESS)
 	msg := &clientmsg.Transfer_Loading_Progress{
 		CharID:   c.charid,
@@ -240,7 +239,7 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Transfer_Command{}
 	proto.Unmarshal(msgdata, rsp)
 
-	//	fmt.Printf("client %d CharID %s recv transfer command from %s\n", c.id, c.charid, rsp.GetCharID())
+	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
 }
 
 func (c *Client) updateLogin() {
@@ -397,15 +396,15 @@ func (c *Client) updateBattle() {
 		}
 
 		if c.startbattle {
-			i := 1
-			for i < 3 {
-				msg := &clientmsg.Transfer_Command{
-					CharID: c.charid,
-				}
-				go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+			/*	i := 1
+				for i < 3 {
+					msg := &clientmsg.Transfer_Command{
+						CharID: c.charid,
+					}
+					go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
 
-				i += 1
-			}
+					i += 1
+				}*/
 		}
 
 		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {

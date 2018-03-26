@@ -41,6 +41,8 @@ func queueMessage(args []interface{}) {
 		proxyHandleGSMSTeamOperate(pmsg)
 	case proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE:
 		proxyHandleMSGSTeamOperate(pmsg)
+	case proxymsg.ProxyMessageType_PMT_GS_MS_OFFLINE:
+		proxyHandleGSMSOffline(pmsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", pmsg.Msgid)
 	}
@@ -66,6 +68,17 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 	}
 }
 
+func proxyHandleGSMSOffline(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_GS_MS_Offline{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_GS_MS_Offline Decode Error %v", err)
+		return
+	}
+	log.Debug("proxyHandleGSMSOffline CharID %v Offline", msg.Charid)
+	g.LeaveTable(msg.Charid, 0)
+}
+
 func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 	msg := &proxymsg.Proxy_MS_BS_AllocBattleRoom{}
 	err := proto.Unmarshal(pmsg.Msgdata, msg)
@@ -77,11 +90,12 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 	roomid, battlekey := g.CreateRoom(msg)
 
 	rsp := &proxymsg.Proxy_BS_MS_AllocBattleRoom{
-		Retcode:       0,
-		Matchtableid:  msg.Matchtableid,
-		Battleroomid:  roomid,
-		Battleroomkey: battlekey,
-		Connectaddr:   conf.Server.ConnectAddr,
+		Retcode:        0,
+		Matchtableid:   msg.Matchtableid,
+		Battleroomid:   roomid,
+		Battleroomkey:  battlekey,
+		Connectaddr:    conf.Server.ConnectAddr,
+		Battleserverid: int32(conf.Server.ServerID),
 	}
 
 	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.Matchtableid, roomid)
@@ -146,6 +160,11 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Rlt_NotifyBattleAddress Decode Error %v", err)
 		return
 	}
+	player, err := g.GetPlayer(pmsg.Charid)
+	if player != nil {
+		player.BattleServerID = int(msg.BattleServerID)
+		player.MatchServerID = 0
+	}
 
 	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
@@ -157,6 +176,7 @@ func updateFrame(args []interface{}) {
 
 	g.UpdateTableManager(&a)
 	g.UpdateRoomManager(&a)
+	g.UpdatePlayerManager(&a)
 }
 
 func rpcNewAgent(args []interface{}) {
@@ -176,6 +196,6 @@ func rpcCloseAgent(args []interface{}) {
 
 	if clientid != nil {
 		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String())
-		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String())
+		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), false)
 	}
 }

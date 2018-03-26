@@ -81,10 +81,29 @@ func (room *Room) broadcast(msgdata interface{}) {
 		if member.ownerid != 0 {
 			continue
 		}
+
+		if member.status != MEMBER_CONNECTED {
+			continue
+		}
+
 		agent, ok := BattlePlayerManager[(*member).charid]
 		if ok {
 			(*agent).WriteMsg(msgdata)
 		}
+	}
+}
+
+func (room *Room) checkOffline() {
+	var allOffLine = true
+	for _, member := range room.members {
+		if member.status == MEMBER_CONNECTED && member.ownerid == 0 {
+			allOffLine = false
+			break
+		}
+	}
+	if allOffLine {
+		log.Debug("AllMemberOffline %v", (*room).roomid)
+		changeRoomStatus(room, ROOM_END)
 	}
 }
 
@@ -107,6 +126,7 @@ func (room *Room) update(now *time.Time) {
 				FrameID: (*room).frameid,
 				CharID:  0,
 			}
+
 			(*room).broadcast(message)
 		}
 	} else if (*room).status == ROOM_CONNECTING {
@@ -125,17 +145,7 @@ func (room *Room) update(now *time.Time) {
 			return
 		}
 
-		var allOffLine = true
-		for _, member := range (*room).members {
-			if member.status == MEMBER_CONNECTED && member.ownerid == 0 {
-				allOffLine = false
-				break
-			}
-		}
-		if allOffLine {
-			log.Debug("AllMemberOffline %v", (*room).roomid)
-			changeRoomStatus(room, ROOM_END)
-		}
+		room.checkOffline()
 	}
 }
 
@@ -207,6 +217,12 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 			gameserverid: mem.GameServerID,
 			ownerid:      mem.OwnerID,
 			progress:     0,
+		}
+
+		//Leave Previous Room
+		_, ok := PlayerRoomIDMap[mem.CharID]
+		if ok {
+			LeaveRoom(mem.CharID)
 		}
 
 		changeMemberStatus(member, MEMBER_UNCONNECTED)
@@ -336,6 +352,7 @@ func setRoomMemberStatus(charid uint32, status string) {
 				changeMemberStatus(member, status)
 
 				log.Debug("SetRoomMemberStatus RoomID %v CharID %v Status %v", roomid, charid, status)
+				room.checkOffline()
 			}
 		} else {
 			delete(PlayerRoomIDMap, charid)

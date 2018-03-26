@@ -247,6 +247,11 @@ func (table *Table) update(now *time.Time) {
 			(*table).checktime = (*now).Unix()
 			changeTableStatus(table, MATCH_ERROR)
 		}
+	} else if (*table).status == MATCH_FINISH {
+		if (*now).Unix()-(*table).checktime > 5 { //房间超时，解散
+			log.Error("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+			changeTableStatus(table, MATCH_FINISH)
+		}
 	}
 }
 
@@ -492,9 +497,10 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 	table, ok := TableManager[rlt.Matchtableid]
 	if ok {
 		msg := &clientmsg.Rlt_NotifyBattleAddress{
-			RoomID:     rlt.Battleroomid,
-			BattleAddr: rlt.Connectaddr,
-			BattleKey:  rlt.Battleroomkey,
+			RoomID:         rlt.Battleroomid,
+			BattleAddr:     rlt.Connectaddr,
+			BattleKey:      rlt.Battleroomkey,
+			BattleServerID: rlt.Battleserverid,
 		}
 
 		table.broadcast(uint32(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE), msg)

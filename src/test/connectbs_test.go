@@ -55,6 +55,7 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	if err != nil {
 		c.Fatal("Rlt_Match Decode Error")
 	}
+
 	c.Assert(rspMatch.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 
 	reqMatch := &clientmsg.Req_Match{
@@ -68,11 +69,22 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	}
 	c.Assert(rspMatch.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED)
 
-	operateMsg := &clientmsg.Transfer_Team_Operate{
-		Action: clientmsg.TeamOperateActionType_TOA_SETTLE,
-		CharID: s.charid,
+	for _, member := range rspMatch.Members {
+		operateMsg := &clientmsg.Transfer_Team_Operate{
+			Action:   clientmsg.TeamOperateActionType_TOA_SETTLE,
+			CharID:   member.CharID,
+			CharType: 1001,
+		}
+		msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, operateMsg)
+		c.Assert(msgid, Equals, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE)
+		err = proto.Unmarshal(msgdata, operateMsg)
+		if err != nil {
+			c.Fatal("Transfer_Team_Operate Decode Error")
+		}
+		c.Assert(operateMsg.CharType, Equals, int32(1001))
 	}
-	msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, operateMsg)
+
+	msgid, msgdata = Recv(c, &s.conn)
 
 	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
 	rspAddress := &clientmsg.Rlt_NotifyBattleAddress{}
@@ -102,5 +114,9 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	}
 	c.Assert(rMsg.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_OK)
 	c.Assert(rMsg.MapID, Equals, int32(100))
+
+	for _, member := range rMsg.Member {
+		c.Assert(member.CharType, Equals, int32(1001))
+	}
 	s.bconn.Close()
 }

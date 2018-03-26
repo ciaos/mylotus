@@ -15,11 +15,15 @@
 	"MongoDBHost": "127.0.0.1:27017",
 	"ConnectAddr" : "192.168.2.137:9999",
 	
+	"GameServerRename" : "gameserver",
+	"MatchServerRename" : "gameserver",
+	"BattleServerRename" : "gameserver",
+	
 	"MatchServerList" : [
-		{"ServerID" : 1, "ServerType" : "gameserver"}
+		{"ServerID" : 1}
 	],
 	
 	"BattleServerList" : [
-		{"ServerID" : 1, "ServerType" : "gameserver"}
+		{"ServerID" : 1}
 	]
 }

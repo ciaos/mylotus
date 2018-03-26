@@ -24,6 +24,10 @@ func init() {
 	handler(&clientmsg.Req_SetCharName{}, handleReqSetCharName)
 	handler(&clientmsg.Req_Match{}, handleReqMatch)
 	handler(&clientmsg.Transfer_Team_Operate{}, handleTransferTeamOperate)
+	handler(&clientmsg.Req_Friend_Operate{}, handleReqFriendOperate)
+	handler(&clientmsg.Req_Chat{}, handleReqChat)
+	handler(&clientmsg.Req_QueryCharInfo{}, handleReqQueryCharInfo)
+	handler(&clientmsg.Req_MakeTeamOperate{}, handleReqMakeTeamOperate)
 
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
@@ -170,6 +174,24 @@ func handleReqLogin(args []interface{}) {
 	}
 	log.Debug("GamePlayer End Login %v", player.CharID)
 	g.AddGamePlayer(player, &a)
+
+	//加载资产
+	skeleton.Go(func() {
+		s1 := g.Mongo.Ref()
+		defer g.Mongo.UnRef(s1)
+
+		c := s1.DB("game").C("friendship")
+		friendasset := g.FriendAsset{}
+		err = c.Find(bson.M{"charid": player.CharID}).One(&friendasset)
+		if err != nil && err.Error() == "not found" {
+			c.Insert(&g.FriendAsset{
+				CharID: player.CharID,
+			})
+		}
+		player.AssetFriend = friendasset
+	}, func() {
+
+	})
 }
 
 func handleReqSetCharName(args []interface{}) {
@@ -241,14 +263,18 @@ func handleReqMatch(args []interface{}) {
 		Action:    int32(m.Action),
 	}
 
-	var res bool
+	var msid int
 	skeleton.Go(func() {
-		res = g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
+			msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+		} else {
+			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+		}
 	}, func() {
-		if res == false {
-			a.WriteMsg(&clientmsg.Rlt_Match{
-				RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
-			})
+		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
+			player.MatchServerID = msid
+		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
+			player.MatchServerID = 0
 		}
 	})
 }
@@ -264,11 +290,166 @@ func handleTransferTeamOperate(args []interface{}) {
 	}
 
 	//log.Debug("handleTransferTeamOperate %v %v %v %v", charid, m.Action, m.CharID, m.CharType)
+	player, err := g.GetPlayer(charid.(uint32))
+	if err != nil {
+		log.Error("PlayerInfo Not Found %v", charid.(uint32))
+		return
+	}
 
-	skeleton.Go(func() {
-		g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE), m)
-	}, func() {
-	})
+	if player.MatchServerID > 0 {
+		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE), m)
+	}
+}
+
+func handleReqFriendOperate(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Friend_Operate)
+	a := args[1].(gate.Agent)
+
+	charid := a.UserData()
+	if charid == nil {
+		log.Error("Player ReqFriendOperate Not Login")
+		return
+	}
+
+	rsp := &clientmsg.Rlt_Friend_Operate{
+		Action:  m.Action,
+		RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+	}
+
+	s := g.Mongo.Ref()
+	defer g.Mongo.UnRef(s)
+
+	if m.Action == clientmsg.FriendOperateActionType_FOAT_SEARCH {
+		c := s.DB("game").C("character")
+		results := []g.Character{}
+		err := c.Find(bson.M{"charname": bson.M{"$regex": bson.RegEx{m.SearchName, "i"}}}).Select(bson.M{"charid": 1}).Limit(10).All(&results)
+		if err == nil {
+			for _, result := range results {
+				rsp.SearchedCharIDs = append(rsp.SearchedCharIDs, result.CharId)
+			}
+			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+		}
+	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
+		c := s.DB("game").C("friendship")
+
+		exist, _ := c.Find(bson.M{"charid": m.OperateCharID, "applylist.fromid": charid.(uint32)}).Count()
+		if exist == 0 {
+			err := c.Update(bson.M{"charid": m.OperateCharID}, bson.M{"$push": bson.M{
+				"applylist": bson.M{"fromid": charid.(uint32), "msg": m},
+			}})
+			if err == nil {
+				rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+			} else {
+				log.Error("FriendOperateActionType_FOAT_ADD_FRIEND Error %v", err)
+			}
+		} else {
+			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+		}
+	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
+		c := s.DB("game").C("friendship")
+		c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$pull": bson.M{
+			"friends": m.OperateCharID,
+		}})
+		c.Update(bson.M{"charid": m.OperateCharID}, bson.M{"$pull": bson.M{
+			"friends": charid.(uint32),
+		}})
+		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
+		c := s.DB("game").C("friendship")
+		err := c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$pull": bson.M{
+			"applylist": bson.M{"fromid": m.OperateCharID},
+		}})
+		if err != nil {
+			log.Error("FriendOperateActionType_FOAT_ACCEPT Error %v", err)
+		}
+		exist, _ := c.Find(bson.M{"charid": charid.(uint32), "friends": m.OperateCharID}).Count()
+		if exist == 0 {
+			c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$push": bson.M{
+				"friends": m.OperateCharID,
+			}})
+		}
+		exist, _ = c.Find(bson.M{"charid": m.OperateCharID, "friends": charid.(uint32)}).Count()
+		if exist == 0 {
+			c.Update(bson.M{"charid": m.OperateCharID}, bson.M{"$push": bson.M{
+				"friends": charid.(uint32),
+			}})
+		}
+		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+	}
+	a.WriteMsg(rsp)
+}
+
+func handleReqChat(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Chat)
+	a := args[1].(gate.Agent)
+
+	charid := a.UserData()
+	if charid == nil {
+		log.Error("Player ReqChat Not Login")
+		return
+	}
+
+	if m.Channel == clientmsg.ChatChannelType_CCT_WORLD {
+		rsp := &clientmsg.Rlt_Chat{
+			Channel:     m.Channel,
+			TargetID:    m.TargetID,
+			MessageType: m.MessageType,
+			MessageData: m.MessageData,
+			SenderID:    charid.(uint32),
+		}
+		g.BroadCastMsgToGamePlayers(rsp)
+	}
+}
+
+func handleReqQueryCharInfo(args []interface{}) {
+	m := args[0].(*clientmsg.Req_QueryCharInfo)
+	a := args[1].(gate.Agent)
+
+	charid := a.UserData()
+	if charid == nil {
+		log.Error("Player ReqQueryCharInfo Not Login")
+		return
+	}
+
+	rsp := &clientmsg.Rlt_QueryCharInfo{}
+	if len(m.CharIDs) <= 0 || len(m.CharIDs) > 10 {
+		log.Error("handleReqQueryCharInfo Too Many %v", len(m.CharIDs))
+		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_QUERY_TOO_MANY
+		a.WriteMsg(rsp)
+		return
+	}
+
+	charids := make([]uint32, len(m.CharIDs))
+	for i, charid := range m.CharIDs {
+		charids[i] = charid
+	}
+
+	s := g.Mongo.Ref()
+	defer g.Mongo.UnRef(s)
+
+	c := s.DB("game").C("friendship")
+	results := []g.Character{}
+	err := c.Find(bson.M{"charid": bson.M{"$in": charids}}).All(&results)
+	if err != nil {
+		log.Error("handleReqQueryCharInfo %v Error %v", charids, err)
+		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OTHER
+		a.WriteMsg(rsp)
+		return
+	}
+
+	rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+	for _, result := range results {
+		userinfo := &clientmsg.Rlt_QueryCharInfo_UserBasicInfo{
+			CharID:   result.CharId,
+			CharName: result.CharName,
+			Level:    0,
+		}
+		rsp.UserInfo = append(rsp.UserInfo, userinfo)
+	}
+	a.WriteMsg(rsp)
+}
+
+func handleReqMakeTeamOperate(args []interface{}) {
 }
 
 func handleTransferLoadingProgress(args []interface{}) {

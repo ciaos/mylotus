@@ -2,10 +2,13 @@ package g
 
 import (
 	"errors"
+	"server/conf"
+	"server/msg/clientmsg"
+	"server/msg/proxymsg"
 	"strings"
+	"time"
 
 	"github.com/ciaos/leaf/gate"
-
 	"github.com/ciaos/leaf/log"
 )
 
@@ -15,10 +18,28 @@ const (
 	PLAYER_STATUS_BATTLE  = 2
 )
 
+//Asset
+type FriendAsset_ApplyInfo struct {
+	Fromid uint32
+	Msg    clientmsg.Req_Friend_Operate
+}
+type FriendAsset struct {
+	CharID    uint32
+	Friends   []uint32
+	ApplyList []FriendAsset_ApplyInfo
+}
+
+//PlayerInfo
 type Player struct {
-	CharID   uint32
-	Charname string
-	Level    uint32
+	CharID         uint32
+	Charname       string
+	Level          uint32
+	MatchServerID  int
+	BattleServerID int
+	OnlineTime     int64
+	OfflineTime    int64
+
+	AssetFriend FriendAsset
 }
 
 type PlayerInfo struct {
@@ -37,6 +58,9 @@ func AddGamePlayer(player *Player, agent *gate.Agent) {
 	}
 	(*agent).SetUserData(player.CharID)
 
+	player.OnlineTime = time.Now().Unix()
+	player.OfflineTime = 0
+
 	playerinfo := &PlayerInfo{
 		agent:  agent,
 		player: player,
@@ -46,12 +70,24 @@ func AddGamePlayer(player *Player, agent *gate.Agent) {
 	log.Debug("AddGamePlayer %v", player.CharID)
 }
 
-func RemoveGamePlayer(clientid uint32, remoteaddr string) {
+func RemoveGamePlayer(clientid uint32, remoteaddr string, removenow bool) {
 	player, ok := GamePlayerManager[clientid]
 	if ok {
 		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
-			delete(GamePlayerManager, clientid)
-			log.Debug("RemoveGamePlayer %v", clientid)
+			if removenow {
+				delete(GamePlayerManager, clientid)
+				log.Debug("RemoveGamePlayer %v", clientid)
+			} else {
+				player.player.OfflineTime = time.Now().Unix()
+
+				if player.player.MatchServerID > 0 {
+					innerReq := &proxymsg.Proxy_GS_MS_Offline{
+						Charid: clientid,
+					}
+
+					go SendMessageTo(int32(player.player.MatchServerID), conf.Server.MatchServerRename, clientid, uint32(proxymsg.ProxyMessageType_PMT_GS_MS_OFFLINE), innerReq)
+				}
+			}
 		}
 	}
 }
@@ -94,6 +130,26 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string) {
 			delete(BattlePlayerManager, clientid)
 			LeaveRoom(clientid)
 			log.Debug("RemoveBattlePlayer %v", clientid)
+		}
+	}
+}
+
+func (player *PlayerInfo) update(now *time.Time) {
+	if player.player.OfflineTime > 0 && (time.Now().Unix()-player.player.OfflineTime > 10) {
+		RemoveGamePlayer(player.player.CharID, (*player.agent).RemoteAddr().String(), true)
+	}
+}
+
+func UpdatePlayerManager(now *time.Time) {
+	for _, player := range GamePlayerManager {
+		(*player).update(now)
+	}
+}
+
+func BroadCastMsgToGamePlayers(msgdata interface{}) {
+	for _, player := range GamePlayerManager {
+		if player.player.OfflineTime == 0 {
+			(*player.agent).WriteMsg(msgdata)
 		}
 	}
 }

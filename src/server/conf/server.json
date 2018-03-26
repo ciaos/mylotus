@@ -8,18 +8,22 @@
 	
 	"TickInterval" : 33,
 	
-	"ServerID" : 0,
+	"ServerID" : 2,
 	"ServerType": "gameserver",
 	"RedisHost": "127.0.0.1:6379",
 	"RedisPassWord" : "",
 	"MongoDBHost": "127.0.0.1:27017",
 	"ConnectAddr" : "192.168.2.137:9000",
+	
+	"GameServerRename" : "gameserver",
+	"MatchServerRename" : "gameserver",
+	"BattleServerRename" : "gameserver",
 
 	"MatchServerList" : [
-		{"ServerID" : 0, "ServerType" : "gameserver"}
+		{"ServerID" : 2}
 	],
 	
 	"BattleServerList" : [
-		{"ServerID" : 0, "ServerType" : "gameserver"}
+		{"ServerID" : 2}
 	]
 }

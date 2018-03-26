@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	LoginServerAddr = "127.0.0.1:8888"
-	GameServerAddr  = "127.0.0.1:8888"
+	LoginServerAddr = "127.0.0.1:8000"
+	GameServerAddr  = LoginServerAddr
 
-	GameServerID = 1
+	GameServerID = 2
 )
 
 func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {

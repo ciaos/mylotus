@@ -34,28 +34,30 @@ func UninitRedisConnection() {
 	Predis.conn.Close()
 }
 
-func RandSendMessageTo(toserver string, charid uint32, msgid uint32, msgdata interface{}) bool {
+func RandSendMessageTo(toserver string, charid uint32, msgid uint32, msgdata interface{}) (int, bool) {
 
 	switch toserver {
 	case "matchserver":
 		if len(conf.Server.MatchServerList) > 0 {
 			idx := int(charid) % len(conf.Server.MatchServerList)
 			matchserver := &conf.Server.MatchServerList[idx]
-			return SendMessageTo(int32((*matchserver).ServerID), (*matchserver).ServerType, charid, msgid, msgdata)
+			ret := SendMessageTo(int32((*matchserver).ServerID), conf.Server.MatchServerRename, charid, msgid, msgdata)
+			return matchserver.ServerID, ret
 		} else {
-			return false
+			return 0, false
 		}
 	case "battleserver":
 		if len(conf.Server.BattleServerList) > 0 {
 			idx := int(charid) % len(conf.Server.BattleServerList)
 			battleserver := &conf.Server.BattleServerList[idx]
-			return SendMessageTo(int32((*battleserver).ServerID), (*battleserver).ServerType, charid, msgid, msgdata)
+			ret := SendMessageTo(int32((*battleserver).ServerID), conf.Server.BattleServerRename, charid, msgid, msgdata)
+			return battleserver.ServerID, ret
 		} else {
-			return false
+			return 0, false
 		}
 	}
 
-	return false
+	return 0, false
 }
 
 func SendMessageTo(toid int32, toserver string, charid uint32, msgid uint32, msgdata interface{}) bool {
