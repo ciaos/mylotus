@@ -63,14 +63,14 @@ func (pinfo *PlayerInfo) UpdatePlayerAsset(now *time.Time) {
 
 	//sync to client
 	pinfo.syncPlayerAssetFriend()
-	/*	pinfo.syncPlayerAssetCash()
-		pinfo.syncPlayerAssetMail()
-		pinfo.syncPlayerAssetItem()
-		pinfo.syncPlayerAssetHero()
-		pinfo.syncPlayerAssetTutorial()
-		pinfo.syncPlayerAssetStatistic()
-		pinfo.syncPlayerAssetAchievement()
-		pinfo.syncPlayerAssetTask()*/
+	pinfo.syncPlayerAssetCash()
+	pinfo.syncPlayerAssetMail()
+	pinfo.syncPlayerAssetItem()
+	pinfo.syncPlayerAssetHero()
+	pinfo.syncPlayerAssetTutorial()
+	pinfo.syncPlayerAssetStatistic()
+	pinfo.syncPlayerAssetAchievement()
+	pinfo.syncPlayerAssetTask()
 
 	//sync to db
 	if now.Unix()-pinfo.player.Asset.lastSaveDBTime > int64(conf.Server.SaveAssetStep) {

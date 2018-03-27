@@ -14,7 +14,7 @@ const (
 	LoginServerAddr = "127.0.0.1:8000"
 	GameServerID    = 2
 	ClientNum       = 2
-	OneBattleTime   = 10
+	OneBattleTime   = 100
 )
 
 func Send(conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) {

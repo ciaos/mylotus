@@ -52,7 +52,7 @@ type Room struct {
 	members map[uint32]*Member
 
 	messages       []*clientmsg.Transfer_Command_CommandData
-	messagesbackup []*clientmsg.Transfer_Command_CommandData
+	messagesbackup []*clientmsg.Transfer_Command
 }
 
 var PlayerRoomIDMap = make(map[uint32]int32)
@@ -126,18 +126,24 @@ func (room *Room) update(now *time.Time) {
 		rsp := &clientmsg.Transfer_Command{
 			FrameID: room.frameid,
 		}
-
-		msgCnt := len((*room).messages)
-		if msgCnt > 0 {
-			for _, message := range (*room).messages {
-				rsp.Messages = append(rsp.Messages, message)
-			}
-
-			//(*room).messagesbackup = append((*room).messagesbackup, (*room).messages...)
-			(*room).messages = append([]*clientmsg.Transfer_Command_CommandData{})
+		for _, message := range (*room).messages {
+			rsp.Messages = append(rsp.Messages, message)
 		}
-
 		(*room).broadcast(rsp)
+
+		//backup
+		(*room).messagesbackup = append((*room).messagesbackup, rsp)
+		//clear
+		(*room).messages = append([]*clientmsg.Transfer_Command_CommandData{})
+
+		//bug
+		if now.Unix()-(*room).createtime > int64(600) {
+			room.broadcast(&clientmsg.Rlt_EndBattle{
+				RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
+			})
+			changeRoomStatus(room, ROOM_END)
+			return
+		}
 	} else if (*room).status == ROOM_CONNECTING {
 		if (*now).Unix()-(*room).createtime > 30 {
 			changeRoomStatus(room, ROOM_FIGHTING)
@@ -163,6 +169,7 @@ func changeRoomStatus(room *Room, status string) {
 	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
 
 	if (*room).status == ROOM_END {
+		room.messagesbackup = append([]*clientmsg.Transfer_Command{})
 		deleteRoomMemberInfo((*room).roomid)
 		DeleteRoom((*room).roomid)
 	} else if (*room).status == ROOM_FIGHTING {
@@ -210,7 +217,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		battlekey:      battlekey,
 		members:        make(map[uint32]*Member),
 		messages:       append([]*clientmsg.Transfer_Command_CommandData{}),
-		messagesbackup: append([]*clientmsg.Transfer_Command_CommandData{}),
+		messagesbackup: append([]*clientmsg.Transfer_Command{}),
 		memberok:       0,
 		frameid:        0,
 		seed:           int32(rand.Intn(100000)),
@@ -384,7 +391,8 @@ func AddMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
 			delete(PlayerRoomIDMap, charid)
 		}
 	} else {
-		log.Error("AddMessage CharID %v Not Exist Size %v", charid, len(PlayerRoomIDMap))
+		//正常情况
+		//log.Debug("AddMessage CharID %v Not Exist Size %v", charid, len(PlayerRoomIDMap))
 	}
 }
 

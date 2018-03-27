@@ -57,13 +57,13 @@ func (s *QueryUserInfoSuite) TestQueryUserInfo(c *C) {
 	req := &clientmsg.Req_QueryCharInfo{}
 	req.CharIDs = append(req.CharIDs, s.charid)
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_QUERY_CHARINFO, req)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_QUERY_CHARINFO)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_QUERY_CHARINFO, req, clientmsg.MessageType_MT_RLT_QUERY_CHARINFO)
 	rspMsg := &clientmsg.Rlt_QueryCharInfo{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
 		c.Fatal("Rlt_QueryCharInfo Decode Error ", err)
 	}
+
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(len(rspMsg.UserInfo), Equals, 1)
 	c.Assert(rspMsg.UserInfo[0].CharID, Equals, s.charid)

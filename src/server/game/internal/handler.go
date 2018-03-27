@@ -413,7 +413,7 @@ func handleReqQueryCharInfo(args []interface{}) {
 	s := g.Mongo.Ref()
 	defer g.Mongo.UnRef(s)
 
-	c := s.DB("game").C("friendship")
+	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 	results := []g.Character{}
 	err := c.Find(bson.M{"charid": bson.M{"$in": charids}}).All(&results)
 	if err != nil {
