@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/binary"
 	"reflect"
+	"server/game/g"
 	"server/gamedata"
 	"server/gamedata/cfg"
 	"server/msg/clientmsg"
@@ -38,7 +39,7 @@ func getNextSeq() uint32 {
 	s := Pmongo.Ref()
 	defer Pmongo.UnRef(s)
 
-	c := s.DB("login").C("counter")
+	c := s.DB(g.DB_NAME_LOGIN).C(g.TB_NAME_COUNTER)
 
 	doc := struct{ Seq uint32 }{}
 	cid := "counterid"
@@ -64,11 +65,11 @@ func handleRegister(args []interface{}) {
 	s := Pmongo.Ref()
 	defer Pmongo.UnRef(s)
 
-	c := s.DB("login").C("account")
+	c := s.DB(g.DB_NAME_LOGIN).C(g.TB_NAME_ACCOUNT)
 
 	result := Account{}
-	err := c.Find(bson.M{"username": m.UserName}).One(&result)
-	if err != nil {
+	err := c.Find(bson.M{"username": m.UserName}).Select(bson.M{"userid": 1, "password": 1}).One(&result)
+	if err != nil && err.Error() == "not found" {
 		//Account Not Exist
 		if m.IsLogin {
 			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST})

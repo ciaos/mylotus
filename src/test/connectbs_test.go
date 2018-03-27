@@ -49,7 +49,7 @@ func (s *ConnectBSSuite) TearDownTest(c *C) {
 }
 
 func (s *ConnectBSSuite) TestConnectBS(c *C) {
-	msgid, msgdata := QuickMatch(c, &s.conn)
+	msgdata := QuickMatch(c, &s.conn)
 	rspMatch := &clientmsg.Rlt_Match{}
 	err := proto.Unmarshal(msgdata, rspMatch)
 	if err != nil {
@@ -62,7 +62,7 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 		Action: clientmsg.MatchActionType_MAT_CONFIRM,
 		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
 	}
-	msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMatch)
+	msgdata = SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMatch, clientmsg.MessageType_MT_RLT_MATCH)
 	err = proto.Unmarshal(msgdata, rspMatch)
 	if err != nil {
 		c.Fatal("Rlt_Match Decode Error")
@@ -75,17 +75,15 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 			CharID:   member.CharID,
 			CharType: 1001,
 		}
-		msgid, msgdata = SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, operateMsg)
-		c.Assert(msgid, Equals, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE)
+		msgdata = SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, operateMsg, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE)
 		err = proto.Unmarshal(msgdata, operateMsg)
 		if err != nil {
 			c.Fatal("Transfer_Team_Operate Decode Error")
 		}
 		c.Assert(operateMsg.CharType, Equals, int32(1001))
 	}
-
+	var msgid clientmsg.MessageType
 	msgid, msgdata = Recv(c, &s.conn)
-
 	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
 	rspAddress := &clientmsg.Rlt_NotifyBattleAddress{}
 	err = proto.Unmarshal(msgdata, rspAddress)

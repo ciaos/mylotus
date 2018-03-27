@@ -19,7 +19,8 @@ var Server struct {
 	ConsolePort int
 	ProfilePath string
 
-	TickInterval int
+	TickInterval  int
+	SaveAssetStep int
 
 	ServerID      int
 	ServerType    string

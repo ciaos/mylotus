@@ -20,13 +20,17 @@ func (m *Module) OnInit() {
 	m.Skeleton = skeleton
 
 	g.InitMongoConnection()
+	g.InitRedisConnection()
+
 	g.InitTableManager()
 	g.InitRoomManager()
-	g.InitRedisConnection()
 
 }
 
 func (m *Module) OnDestroy() {
-	g.UninitMongoConnection()
+	g.UninitRoomManager()
+	g.UninitTableManager()
+
 	g.UninitRedisConnection()
+	g.UninitMongoConnection()
 }

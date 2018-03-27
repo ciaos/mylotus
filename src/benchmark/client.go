@@ -239,6 +239,15 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Transfer_Command{}
 	proto.Unmarshal(msgdata, rsp)
 
+	if len(rsp.Messages) > 0 {
+		ping := &clientmsg.Ping{}
+		err := proto.Unmarshal(rsp.Messages[0].Msgdata, ping)
+		if err != nil {
+			tlog.Errorf("Unmartial Error")
+			return
+		}
+		tlog.Debugf("client %d recv tranfer_cmd from %d, frame %d PingID %d Total %d\n", c.charid, rsp.Messages[0].CharID, rsp.FrameID, ping.ID, len(rsp.Messages))
+	}
 	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
 }
 
@@ -396,15 +405,22 @@ func (c *Client) updateBattle() {
 		}
 
 		if c.startbattle {
-			/*	i := 1
-				for i < 3 {
-					msg := &clientmsg.Transfer_Command{
-						CharID: c.charid,
-					}
-					go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+			i := 0
+			for i < 1 {
+				ping := &clientmsg.Ping{
+					ID: c.charid,
+				}
+				msgbuff, _ := proto.Marshal(ping)
+				cdata := &clientmsg.Transfer_Command_CommandData{
+					Msgdata: msgbuff,
+				}
 
-					i += 1
-				}*/
+				msg := &clientmsg.Transfer_Command{}
+				msg.Messages = append(msg.Messages, cdata)
+				go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+
+				i += 1
+			}
 		}
 
 		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {

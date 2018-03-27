@@ -59,8 +59,7 @@ func (s *SearchSuite) TestSearch(c *C) {
 		SearchName: "robot",
 	}
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
 	rspMsg := &clientmsg.Rlt_Friend_Operate{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
@@ -68,4 +67,5 @@ func (s *SearchSuite) TestSearch(c *C) {
 	}
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(rspMsg.Action, Equals, req.Action)
+	c.Assert(len(rspMsg.SearchedCharIDs), Not(Equals), 0)
 }

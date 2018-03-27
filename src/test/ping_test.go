@@ -44,9 +44,7 @@ func (s *PingSuite) TestPing(c *C) {
 		ID: uint32(rand.Intn(10000)),
 	}
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_PING, reqMsg)
-
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_PONG)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_PING, reqMsg, clientmsg.MessageType_MT_PONG)
 	rspMsg := &clientmsg.Pong{}
 	proto.Unmarshal(msgdata, rspMsg)
 	c.Assert(rspMsg.ID, Equals, reqMsg.ID)

@@ -58,8 +58,7 @@ func (s *SetCharNameSuite) TestSetCharName(c *C) {
 		CharName: "player_" + strconv.Itoa(int(charid)),
 	}
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_SETCHARNAME, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_SETCHARNAME)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_SETCHARNAME, reqMsg, clientmsg.MessageType_MT_RLT_SETCHARNAME)
 	rspMsg := &clientmsg.Rlt_SetCharName{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {

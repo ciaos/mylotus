@@ -41,9 +41,7 @@ func (s *ServerTimeSuite) TestServerTime(c *C) {
 	reqMsg := &clientmsg.Req_ServerTime{
 		Time: uint32(time.Now().Unix()),
 	}
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_SERVERTIME, reqMsg)
-
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_SERVERTIME)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_SERVERTIME, reqMsg, clientmsg.MessageType_MT_RLT_SERVERTIME)
 	rspMsg := &clientmsg.Rlt_ServerTime{}
 	proto.Unmarshal(msgdata, rspMsg)
 	c.Assert(rspMsg.Time, Not(Equals), 0)

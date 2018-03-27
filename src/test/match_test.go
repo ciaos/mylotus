@@ -74,15 +74,11 @@ func (s *MatchSuite) TestMatch(c *C) {
 		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
 	}
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_MATCH)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg, clientmsg.MessageType_MT_RLT_MATCH)
 	rspMsg := &clientmsg.Rlt_Match{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
 		c.Fatal("Rlt_Match Decode Error")
 	}
-	/*	for _, member := range rspMsg.Members {
-			fmt.Println(fmt.Sprintf("%v %v %v %v", member.CharID, member.CharName, member.Status, member.TeamID))
-		}
-	*/
+	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 }

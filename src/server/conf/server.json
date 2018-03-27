@@ -6,7 +6,8 @@
 	"MaxConnNum": 20000,
 	"ConsolePort": 4444,
 	
-	"TickInterval" : 33,
+	"TickInterval" : 100,
+	"SaveAssetStep" : 60,
 	
 	"ServerID" : 2,
 	"ServerType": "gameserver",

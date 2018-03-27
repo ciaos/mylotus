@@ -34,7 +34,7 @@ func UninitRedisConnection() {
 	Predis.conn.Close()
 }
 
-func RandSendMessageTo(toserver string, charid uint32, msgid uint32, msgdata interface{}) (int, bool) {
+func RandSendMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) (int, bool) {
 
 	switch toserver {
 	case "matchserver":
@@ -60,7 +60,7 @@ func RandSendMessageTo(toserver string, charid uint32, msgid uint32, msgdata int
 	return 0, false
 }
 
-func SendMessageTo(toid int32, toserver string, charid uint32, msgid uint32, msgdata interface{}) bool {
+func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) bool {
 
 	//EncodeMsgData
 	msgbuff, err := proto.Marshal(msgdata.(proto.Message))
@@ -75,7 +75,7 @@ func SendMessageTo(toid int32, toserver string, charid uint32, msgid uint32, msg
 		Toid:     toid,
 		Totype:   toserver,
 		Charid:   charid,
-		Msgid:    msgid,
+		Msgid:    uint32(msgid),
 		Msgdata:  msgbuff,
 	}
 

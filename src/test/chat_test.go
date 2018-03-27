@@ -60,8 +60,7 @@ func (s *ChatSuite) TestChat(c *C) {
 	req.TargetID = 0
 	req.MessageData = "Hello"
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_CHAT, req)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_CHAT)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_CHAT, req, clientmsg.MessageType_MT_RLT_CHAT)
 	rspMsg := &clientmsg.Rlt_Chat{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {

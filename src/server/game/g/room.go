@@ -51,28 +51,40 @@ type Room struct {
 
 	members map[uint32]*Member
 
-	messages       []interface{}
-	messagesbackup []interface{}
+	messages       []*clientmsg.Transfer_Command_CommandData
+	messagesbackup []*clientmsg.Transfer_Command_CommandData
 }
 
 var PlayerRoomIDMap = make(map[uint32]int32)
 var RoomManager = make(map[int32]*Room)
-var roomid int32
+var g_roomid int32
 
 //var mRoomID *sync.Mutex
 
 func InitRoomManager() {
-	roomid = 0
+	g_roomid = 0
 
 	//mRoomID = new(sync.Mutex)
+}
+
+func UninitRoomManager() {
+	for roomid, room := range RoomManager {
+		for memberid, _ := range room.members {
+			delete(room.members, memberid)
+		}
+		delete(RoomManager, roomid)
+	}
+	for charid := range PlayerRoomIDMap {
+		delete(PlayerRoomIDMap, charid)
+	}
 }
 
 func allocRoomID() {
 	//mRoomID.Lock()
 	//defer mRoomID.Unlock()
-	roomid += 1
-	if roomid > MAX_ROOM_COUNT {
-		roomid = 1
+	g_roomid += 1
+	if g_roomid > MAX_ROOM_COUNT {
+		g_roomid = 1
 	}
 }
 
@@ -111,24 +123,21 @@ func (room *Room) update(now *time.Time) {
 	if (*room).status == ROOM_FIGHTING {
 		(*room).frameid++
 
+		rsp := &clientmsg.Transfer_Command{
+			FrameID: room.frameid,
+		}
+
 		msgCnt := len((*room).messages)
 		if msgCnt > 0 {
-			//log.Debug("RoomID %v BroadCast Message Count %v", (*room).roomid, msgCnt)
-
 			for _, message := range (*room).messages {
-				(*room).broadcast(message)
+				rsp.Messages = append(rsp.Messages, message)
 			}
 
 			//(*room).messagesbackup = append((*room).messagesbackup, (*room).messages...)
-			(*room).messages = append([]interface{}{})
-		} else {
-			message := &clientmsg.Transfer_Command{
-				FrameID: (*room).frameid,
-				CharID:  0,
-			}
-
-			(*room).broadcast(message)
+			(*room).messages = append([]*clientmsg.Transfer_Command_CommandData{})
 		}
+
+		(*room).broadcast(rsp)
 	} else if (*room).status == ROOM_CONNECTING {
 		if (*now).Unix()-(*room).createtime > 30 {
 			changeRoomStatus(room, ROOM_FIGHTING)
@@ -189,10 +198,10 @@ func deleteRoomMemberInfo(roomid int32) {
 func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 	allocRoomID()
 
-	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, roomid)), []byte(tool.CRYPT_KEY))
+	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, g_roomid)), []byte(tool.CRYPT_KEY))
 
 	room := &Room{
-		roomid:         roomid,
+		roomid:         g_roomid,
 		createtime:     time.Now().Unix(),
 		nextchecktime:  time.Now().Unix() + 10,
 		status:         ROOM_STATUS_NONE,
@@ -200,8 +209,8 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		mapid:          msg.Mapid,
 		battlekey:      battlekey,
 		members:        make(map[uint32]*Member),
-		messages:       append([]interface{}{}),
-		messagesbackup: append([]interface{}{}),
+		messages:       append([]*clientmsg.Transfer_Command_CommandData{}),
+		messagesbackup: append([]*clientmsg.Transfer_Command_CommandData{}),
 		memberok:       0,
 		frameid:        0,
 		seed:           int32(rand.Intn(100000)),
@@ -231,9 +240,9 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 	}
 
 	changeRoomStatus(room, ROOM_STATUS_NONE)
-	RoomManager[roomid] = room
+	RoomManager[room.roomid] = room
 
-	log.Debug("Create RoomID %v", roomid)
+	log.Debug("Create RoomID %v", room.roomid)
 	return room.roomid, room.battlekey
 }
 
@@ -365,14 +374,32 @@ func AddMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
 	if ok {
 		room, ok := RoomManager[roomid]
 		if ok {
-			transcmd.CharID = charid
-			transcmd.FrameID = (*room).frameid
-			(*room).messages = append((*room).messages, transcmd)
+			for _, message := range transcmd.Messages {
+				message.CharID = charid
+				(*room).messages = append((*room).messages, message)
+			}
+
 		} else {
 			log.Error("AddMessage RoomID %v Not Exist", roomid)
+			delete(PlayerRoomIDMap, charid)
 		}
 	} else {
 		log.Error("AddMessage CharID %v Not Exist Size %v", charid, len(PlayerRoomIDMap))
+	}
+}
+
+func TransferRoomMessage(charid uint32, transcmd *clientmsg.Transfer_Battle_Message) {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			room.broadcast(transcmd)
+		} else {
+			log.Error("TransferRoomMessage RoomID %v Not Exist", roomid)
+			delete(PlayerRoomIDMap, charid)
+		}
+	} else {
+		log.Error("TransferRoomMessage CharID %v Not Exist", charid)
 	}
 }
 

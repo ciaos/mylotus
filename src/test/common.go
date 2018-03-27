@@ -5,6 +5,8 @@ import (
 	"net"
 	"server/msg/clientmsg"
 
+	"time"
+
 	"github.com/ciaos/leaf/kcp"
 	"github.com/golang/protobuf/proto"
 	. "gopkg.in/check.v1"
@@ -17,9 +19,29 @@ const (
 	GameServerID = 2
 )
 
-func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) (clientmsg.MessageType, []byte) {
+func SendAndRecvUtil(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}, waitmsgid clientmsg.MessageType) []byte {
+	Send(c, conn, msgid, msgdata)
+	ch := make(chan []byte, 1)
+	go func() {
+		for {
+			msgid, msgdata := Recv(c, conn)
+			if msgid == waitmsgid {
+				ch <- msgdata
+				break
+			}
+		}
+	}()
 
-	//Send
+	select {
+	case msgdata := <-ch:
+		return msgdata
+	case <-time.After(time.Second * 20):
+		c.Fatal("Wait TimeOut")
+	}
+	return nil
+}
+
+func Send(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) {
 	data, err := proto.Marshal(msgdata.(proto.Message))
 	if err != nil {
 		c.Fatal("proto.Marshal ", err)
@@ -30,20 +52,6 @@ func SendAndRecv(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata inte
 
 	copy(reqbuf[4:], data)
 	(*conn).Write(reqbuf)
-
-	//Recv
-	headdata := make([]byte, 2)
-	(*conn).Read(headdata[0:])
-	msglen := binary.BigEndian.Uint16(headdata[0:])
-
-	bodydata := make([]byte, msglen)
-	bodylen, _ := (*conn).Read(bodydata[0:])
-	if msglen == 0 || bodylen == 0 {
-		c.Fatal("empty buffer")
-	}
-	msgid = clientmsg.MessageType(binary.BigEndian.Uint16(bodydata[0:]))
-
-	return msgid, bodydata[2:bodylen]
 }
 
 func Recv(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
@@ -99,8 +107,7 @@ func Register(c *C, conn *net.Conn, username string, password string, islogin bo
 		ClientVersion: 0,
 	}
 
-	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_REGISTER, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_REGISTER)
+	msgdata := SendAndRecvUtil(c, conn, clientmsg.MessageType_MT_REQ_REGISTER, reqMsg, clientmsg.MessageType_MT_RLT_REGISTER)
 	rspMsg := &clientmsg.Rlt_Register{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
@@ -116,8 +123,7 @@ func Login(c *C, conn *net.Conn, userid uint32, sessionkey []byte) (clientmsg.Ty
 		ServerID:   GameServerID,
 	}
 
-	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_LOGIN, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_LOGIN)
+	msgdata := SendAndRecvUtil(c, conn, clientmsg.MessageType_MT_REQ_LOGIN, reqMsg, clientmsg.MessageType_MT_RLT_LOGIN)
 	rspMsg := &clientmsg.Rlt_Login{}
 	err := proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
@@ -136,14 +142,13 @@ func QuickLogin(c *C, conn *net.Conn, username string, password string) uint32 {
 	return charid
 }
 
-func QuickMatch(c *C, conn *net.Conn) (clientmsg.MessageType, []byte) {
+func QuickMatch(c *C, conn *net.Conn) []byte {
 	reqMsg := &clientmsg.Req_Match{
 		Action: clientmsg.MatchActionType_MAT_JOIN,
 		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
 		MapID:  100,
 	}
 
-	msgid, msgdata := SendAndRecv(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_MATCH)
-	return msgid, msgdata
+	msgdata := SendAndRecvUtil(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg, clientmsg.MessageType_MT_RLT_MATCH)
+	return msgdata
 }

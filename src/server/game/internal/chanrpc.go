@@ -43,9 +43,32 @@ func queueMessage(args []interface{}) {
 		proxyHandleMSGSTeamOperate(pmsg)
 	case proxymsg.ProxyMessageType_PMT_GS_MS_OFFLINE:
 		proxyHandleGSMSOffline(pmsg)
+	case proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE:
+		proxyHandleGSGSFriendOperate(pmsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", pmsg.Msgid)
 	}
+}
+
+func proxyHandleGSGSFriendOperate(pmsg *proxymsg.InternalMessage) {
+	m := &clientmsg.Req_Friend_Operate{}
+	err := proto.Unmarshal(pmsg.Msgdata, m)
+	if err != nil {
+		log.Error("proxymsg.Req_Friend_Operate Decode Error %v", err)
+		return
+	}
+
+	player, _ := g.GetPlayer(m.OperateCharID)
+	if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
+		player.AssetFriend_AddApplyInfo(pmsg.Charid, m)
+	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
+		player.AssetFriend_DelFriend(m.OperateCharID, pmsg.Charid)
+	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
+		player.AssetFriend_AcceptApplyInfo(m.OperateCharID, pmsg.Charid)
+	} else {
+		log.Error("Invalid Friend Operate Type %v", m.Action)
+	}
+
 }
 
 func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
@@ -101,7 +124,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.Matchtableid, roomid)
 
 	skeleton.Go(func() {
-		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, uint32(proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM), rsp)
+		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM, rsp)
 	}, func() {})
 }
 
@@ -166,6 +189,7 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 		player.MatchServerID = 0
 	}
 
+	log.Debug("proxyHandleMSGSBeginBattle Rlt_NotifyBattleAddress %v", pmsg.Charid)
 	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
 

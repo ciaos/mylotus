@@ -3,7 +3,6 @@ package g
 import (
 	"errors"
 	"server/conf"
-	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"strings"
 	"time"
@@ -18,17 +17,6 @@ const (
 	PLAYER_STATUS_BATTLE  = 2
 )
 
-//Asset
-type FriendAsset_ApplyInfo struct {
-	Fromid uint32
-	Msg    clientmsg.Req_Friend_Operate
-}
-type FriendAsset struct {
-	CharID    uint32
-	Friends   []uint32
-	ApplyList []FriendAsset_ApplyInfo
-}
-
 //PlayerInfo
 type Player struct {
 	CharID         uint32
@@ -38,8 +26,7 @@ type Player struct {
 	BattleServerID int
 	OnlineTime     int64
 	OfflineTime    int64
-
-	AssetFriend FriendAsset
+	Asset          PlayerAsset
 }
 
 type PlayerInfo struct {
@@ -75,6 +62,7 @@ func RemoveGamePlayer(clientid uint32, remoteaddr string, removenow bool) {
 	if ok {
 		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
 			if removenow {
+				player.player.SavePlayerAsset()
 				delete(GamePlayerManager, clientid)
 				log.Debug("RemoveGamePlayer %v", clientid)
 			} else {
@@ -85,7 +73,7 @@ func RemoveGamePlayer(clientid uint32, remoteaddr string, removenow bool) {
 						Charid: clientid,
 					}
 
-					go SendMessageTo(int32(player.player.MatchServerID), conf.Server.MatchServerRename, clientid, uint32(proxymsg.ProxyMessageType_PMT_GS_MS_OFFLINE), innerReq)
+					go SendMessageTo(int32(player.player.MatchServerID), conf.Server.MatchServerRename, clientid, proxymsg.ProxyMessageType_PMT_GS_MS_OFFLINE, innerReq)
 				}
 			}
 		}
@@ -97,7 +85,6 @@ func GetPlayer(clientid uint32) (*Player, error) {
 	if ok {
 		return exist.player, nil
 	}
-	log.Error("Player Not Found %v", clientid)
 	return nil, errors.New("GetPlayer Error")
 }
 
@@ -142,7 +129,8 @@ func (player *PlayerInfo) update(now *time.Time) {
 
 func UpdatePlayerManager(now *time.Time) {
 	for _, player := range GamePlayerManager {
-		(*player).update(now)
+		player.update(now)
+		player.UpdatePlayerAsset(now)
 	}
 }
 

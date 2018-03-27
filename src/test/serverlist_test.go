@@ -41,9 +41,7 @@ func (s *ServerListSuite) TestServerList(c *C) {
 		Channel: 0,
 	}
 
-	msgid, msgdata := SendAndRecv(c, &s.conn, clientmsg.MessageType_MT_REQ_SERVERLIST, reqMsg)
-
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_SERVERLIST)
+	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_SERVERLIST, reqMsg, clientmsg.MessageType_MT_RLT_SERVERLIST)
 	rspMsg := &clientmsg.Rlt_ServerList{}
 	proto.Unmarshal(msgdata, rspMsg)
 	c.Assert(rspMsg.ServerCount, Not(Equals), 0)

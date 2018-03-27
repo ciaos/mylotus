@@ -32,7 +32,8 @@ func init() {
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
 	handler(&clientmsg.Transfer_Loading_Progress{}, handleTransferLoadingProgress)
-	handler(&clientmsg.Transfer_Command{}, handleTransferMessage)
+	handler(&clientmsg.Transfer_Command{}, handleTransferCommand)
+	handler(&clientmsg.Transfer_Battle_Message{}, handleTransferBattleMessage)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -43,7 +44,7 @@ func getNextSeq() uint32 {
 	s := g.Mongo.Ref()
 	defer g.Mongo.UnRef(s)
 
-	c := s.DB("game").C("counter")
+	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_COUNTER)
 
 	doc := struct{ Seq uint32 }{}
 	cid := "counterid"
@@ -86,6 +87,7 @@ func handleReqLogin(args []interface{}) {
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
+		a.Close()
 		return
 	}
 
@@ -94,6 +96,7 @@ func handleReqLogin(args []interface{}) {
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
+		a.Close()
 		log.Error("handleReqLogin DesDecrypt Error", err)
 		return
 	}
@@ -104,6 +107,7 @@ func handleReqLogin(args []interface{}) {
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
+		a.Close()
 		return
 	}
 
@@ -112,19 +116,21 @@ func handleReqLogin(args []interface{}) {
 	s := g.Mongo.Ref()
 	defer g.Mongo.UnRef(s)
 
-	c := s.DB("game").C("character")
+	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 
 	player := &g.Player{}
 
+	isnew := false
 	result := g.Character{}
-	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&result)
-	if err != nil {
+	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).Select(bson.M{"charid": 1, "charname": 1}).One(&result)
+	if err != nil && err.Error() == "not found" {
 		//create new character
 		charid := getNextSeq()
 		if charid == 0 {
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 			})
+			a.Close()
 			log.Error("handleReqLogin getNextSeq Failed")
 			return
 		}
@@ -147,50 +153,39 @@ func handleReqLogin(args []interface{}) {
 			return
 		}
 
-		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-			CharID:         charid,
-			IsNewCharacter: true,
-		})
-
+		isnew = true
 		player.CharID = charid
-
 	} else {
 		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
 
-		isnew := false
 		if result.CharName == "" {
 			isnew = true
 		}
 
-		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-			CharID:         result.CharId,
-			IsNewCharacter: isnew,
-		})
-
 		player.CharID = result.CharId
 		player.Charname = result.CharName
 	}
-	log.Debug("GamePlayer End Login %v", player.CharID)
-	g.AddGamePlayer(player, &a)
 
-	//加载资产
+	var ret bool
 	skeleton.Go(func() {
-		s1 := g.Mongo.Ref()
-		defer g.Mongo.UnRef(s1)
-
-		c := s1.DB("game").C("friendship")
-		friendasset := g.FriendAsset{}
-		err = c.Find(bson.M{"charid": player.CharID}).One(&friendasset)
-		if err != nil && err.Error() == "not found" {
-			c.Insert(&g.FriendAsset{
-				CharID: player.CharID,
-			})
-		}
-		player.AssetFriend = friendasset
+		ret = player.LoadPlayerAsset()
 	}, func() {
+		if ret == true {
+			log.Debug("GamePlayer End Login %v", player.CharID)
+			g.AddGamePlayer(player, &a)
 
+			a.WriteMsg(&clientmsg.Rlt_Login{
+				RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
+				CharID:         player.CharID,
+				IsNewCharacter: isnew,
+			})
+		} else {
+			a.WriteMsg(&clientmsg.Rlt_Login{
+				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+			})
+			a.Close()
+			log.Error("load asset Error %v", player.CharID)
+		}
 	})
 }
 
@@ -224,7 +219,7 @@ func handleReqSetCharName(args []interface{}) {
 	s := g.Mongo.Ref()
 	defer g.Mongo.UnRef(s)
 
-	c := s.DB("game").C("character")
+	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 	c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$set": bson.M{"charname": m.CharName}})
 	a.WriteMsg(&clientmsg.Rlt_SetCharName{
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
@@ -266,9 +261,9 @@ func handleReqMatch(args []interface{}) {
 	var msid int
 	skeleton.Go(func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
-			msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+			msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 		} else {
-			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_MATCH), innerReq)
+			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 		}
 	}, func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
@@ -297,7 +292,7 @@ func handleTransferTeamOperate(args []interface{}) {
 	}
 
 	if player.MatchServerID > 0 {
-		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), uint32(proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE), m)
+		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE, m)
 	}
 }
 
@@ -311,6 +306,12 @@ func handleReqFriendOperate(args []interface{}) {
 		return
 	}
 
+	player, _ := g.GetPlayer(charid.(uint32))
+	if player == nil {
+		log.Error("Player ReqFriendOperate Not Exist %v", charid.(uint32))
+		return
+	}
+
 	rsp := &clientmsg.Rlt_Friend_Operate{
 		Action:  m.Action,
 		RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
@@ -320,7 +321,7 @@ func handleReqFriendOperate(args []interface{}) {
 	defer g.Mongo.UnRef(s)
 
 	if m.Action == clientmsg.FriendOperateActionType_FOAT_SEARCH {
-		c := s.DB("game").C("character")
+		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 		results := []g.Character{}
 		err := c.Find(bson.M{"charname": bson.M{"$regex": bson.RegEx{m.SearchName, "i"}}}).Select(bson.M{"charid": 1}).Limit(10).All(&results)
 		if err == nil {
@@ -330,50 +331,35 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
-		c := s.DB("game").C("friendship")
-
-		exist, _ := c.Find(bson.M{"charid": m.OperateCharID, "applylist.fromid": charid.(uint32)}).Count()
-		if exist == 0 {
-			err := c.Update(bson.M{"charid": m.OperateCharID}, bson.M{"$push": bson.M{
-				"applylist": bson.M{"fromid": charid.(uint32), "msg": m},
-			}})
-			if err == nil {
-				rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
-			} else {
-				log.Error("FriendOperateActionType_FOAT_ADD_FRIEND Error %v", err)
-			}
-		} else {
+		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
+		character := &g.Character{}
+		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
+		if err == nil {
+			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
-		c := s.DB("game").C("friendship")
-		c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$pull": bson.M{
-			"friends": m.OperateCharID,
-		}})
-		c.Update(bson.M{"charid": m.OperateCharID}, bson.M{"$pull": bson.M{
-			"friends": charid.(uint32),
-		}})
-		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+		player.AssetFriend_DelFriend(player.CharID, m.OperateCharID)
+
+		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
+		character := &g.Character{}
+		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
+		if err == nil {
+			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
+		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
-		c := s.DB("game").C("friendship")
-		err := c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$pull": bson.M{
-			"applylist": bson.M{"fromid": m.OperateCharID},
-		}})
-		if err != nil {
-			log.Error("FriendOperateActionType_FOAT_ACCEPT Error %v", err)
+		player.AssetFriend_AcceptApplyInfo(player.CharID, m.OperateCharID)
+
+		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
+		character := &g.Character{}
+		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
+		if err == nil {
+			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
-		exist, _ := c.Find(bson.M{"charid": charid.(uint32), "friends": m.OperateCharID}).Count()
-		if exist == 0 {
-			c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$push": bson.M{
-				"friends": m.OperateCharID,
-			}})
-		}
-		exist, _ = c.Find(bson.M{"charid": m.OperateCharID, "friends": charid.(uint32)}).Count()
-		if exist == 0 {
-			c.Update(bson.M{"charid": m.OperateCharID}, bson.M{"$push": bson.M{
-				"friends": charid.(uint32),
-			}})
-		}
+	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_REJECT {
+		player.AssetFriend_RejectApplyInfo(m.OperateCharID)
 		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 	}
 	a.WriteMsg(rsp)
@@ -490,11 +476,18 @@ func handleReqEndBattle(args []interface{}) {
 	})
 }
 
-func handleTransferMessage(args []interface{}) {
+func handleTransferCommand(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Command)
 	a := args[1].(gate.Agent)
 	if a.UserData() != nil {
-		charid := a.UserData().(uint32)
-		g.AddMessage(charid, m)
+		g.AddMessage(a.UserData().(uint32), m)
+	}
+}
+
+func handleTransferBattleMessage(args []interface{}) {
+	m := args[0].(*clientmsg.Transfer_Battle_Message)
+	a := args[1].(gate.Agent)
+	if a.UserData() != nil {
+		g.TransferRoomMessage(a.UserData().(uint32), m)
 	}
 }

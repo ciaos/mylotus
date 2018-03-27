@@ -77,10 +77,17 @@ func (s *FriendSuite) TestFriendAdd(c *C) {
 	req.Action = clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND
 	req.OperateCharID = s.charid_1
 	req.Message = "Hello"
-	msgid, msgdata := SendAndRecv(c, &s.conn_2, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req)
-	msgid, msgdata = SendAndRecv(c, &s.conn_2, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
-	err := proto.Unmarshal(msgdata, rspMsg)
+
+	var msgdata []byte
+	var err error
+
+	msgdata = SendAndRecvUtil(c, &s.conn_2, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
+	err = proto.Unmarshal(msgdata, rspMsg)
+	if err != nil {
+		c.Fatal("Rlt_Friend_Operate Decode Error ", err)
+	}
+	msgdata = SendAndRecvUtil(c, &s.conn_2, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
+	err = proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
 		c.Fatal("Rlt_Friend_Operate Decode Error ", err)
 	}
@@ -89,8 +96,7 @@ func (s *FriendSuite) TestFriendAdd(c *C) {
 
 	req.Action = clientmsg.FriendOperateActionType_FOAT_ACCEPT
 	req.OperateCharID = s.charid_2
-	msgid, msgdata = SendAndRecv(c, &s.conn_1, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
+	msgdata = SendAndRecvUtil(c, &s.conn_1, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
 	err = proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
 		c.Fatal("Rlt_Friend_Operate Decode Error ", err)
@@ -100,13 +106,11 @@ func (s *FriendSuite) TestFriendAdd(c *C) {
 
 	req.Action = clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND
 	req.OperateCharID = s.charid_2
-	msgid, msgdata = SendAndRecv(c, &s.conn_1, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
+	msgdata = SendAndRecvUtil(c, &s.conn_1, clientmsg.MessageType_MT_REQ_FRIEND_OPERATE, req, clientmsg.MessageType_MT_RLT_FRIEND_OPERATE)
 	err = proto.Unmarshal(msgdata, rspMsg)
 	if err != nil {
 		c.Fatal("Rlt_Friend_Operate Decode Error ", err)
 	}
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(rspMsg.Action, Equals, req.Action)
-
 }
