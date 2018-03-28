@@ -122,14 +122,9 @@ func handleReqLogin(args []interface{}) {
 
 	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 
-	player := &g.Player{
-		UserID: m.UserID,
-		Status: g.PLAYER_STATUS_LOGIN,
-	}
-
+	player := &g.Player{}
 	isnew := false
-	result := g.Character{}
-	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).Select(bson.M{"charid": 1, "charname": 1}).One(&result)
+	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&player.Char)
 	if err != nil && err.Error() == "not found" {
 		//create new character
 		charid := getNextSeq()
@@ -142,16 +137,16 @@ func handleReqLogin(args []interface{}) {
 			return
 		}
 
-		err = c.Insert(&g.Character{
-			Id:         bson.NewObjectId(),
-			CharId:     charid,
-			UserId:     m.UserID,
+		character := &g.Character{
+			CharID:     charid,
+			UserID:     m.UserID,
 			GsId:       m.ServerID,
-			Status:     g.PLAYER_STATUS_ONLINE,
+			Status:     int32(clientmsg.UserStatus_US_PLAYER_ONLINE),
 			CharName:   "",
 			CreateTime: time.Now(),
 			UpdateTime: time.Now(),
-		})
+		}
+		err = c.Insert(character)
 		if err != nil {
 			log.Error("create new character error %v", err)
 			a.WriteMsg(&clientmsg.Rlt_Login{
@@ -161,29 +156,40 @@ func handleReqLogin(args []interface{}) {
 		}
 
 		isnew = true
-		player.CharID = charid
-	} else {
-		c.Update(bson.M{"_id": result.Id}, bson.M{"$set": bson.M{"updatetime": time.Now(), "status": g.PLAYER_STATUS_ONLINE}})
+		player.Char = character
+	}
 
-		if result.CharName == "" {
+	cache, _ := g.GetPlayer(player.Char.CharID)
+	if cache != nil {
+		if cache.Char.CharName == "" {
 			isnew = true
 		}
-
-		player.CharID = result.CharId
-		player.Charname = result.CharName
+	} else if player.Char.CharName == "" {
+		isnew = true
 	}
 
 	var ret bool
 	skeleton.Go(func() {
-		ret = player.LoadPlayerAsset()
+		if cache != nil {
+			ret = player.SyncPlayerAsset()
+		} else {
+			ret = player.LoadPlayerAsset()
+		}
 	}, func() {
 		if ret == true {
-			log.Debug("GamePlayer End Login %v", player.CharID)
-			g.AddGamePlayer(player, &a)
+			if cache != nil {
+				cache.Char.UpdateTime = time.Now()
+				g.AddCachedGamePlayer(cache, &a)
+				cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			} else {
+				player.Char.UpdateTime = time.Now()
+				g.AddGamePlayer(player, &a)
+				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			}
 
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-				CharID:         player.CharID,
+				CharID:         player.Char.CharID,
 				IsNewCharacter: isnew,
 			})
 		} else {
@@ -191,7 +197,7 @@ func handleReqLogin(args []interface{}) {
 				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 			})
 			a.Close()
-			log.Error("load asset Error %v", player.CharID)
+			log.Error("load asset Error %v", player.Char.CharID)
 		}
 	})
 }
@@ -212,7 +218,7 @@ func handleReqReConnectGS(args []interface{}) {
 
 	userid := binary.BigEndian.Uint32(useridBuf)
 	player, err := g.GetPlayer(m.CharID)
-	if err != nil || player.UserID != userid || player.Status != g.PLAYER_STATUS_OFFLINE {
+	if err != nil || player.Char.UserID != userid || player.Char.Status != int32(clientmsg.UserStatus_US_PLAYER_OFFLINE) {
 		a.WriteMsg(&clientmsg.Rlt_Re_ConnectGS{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
@@ -263,16 +269,11 @@ func handleReqSetCharName(args []interface{}) {
 		return
 	}
 
-	s := g.Mongo.Ref()
-	defer g.Mongo.UnRef(s)
-
-	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-	c.Update(bson.M{"charid": charid.(uint32)}, bson.M{"$set": bson.M{"charname": m.CharName}})
 	a.WriteMsg(&clientmsg.Rlt_SetCharName{
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 	})
 
-	player.Charname = m.CharName
+	player.Char.CharName = m.CharName
 }
 
 func handleReqMatch(args []interface{}) {
@@ -299,7 +300,7 @@ func handleReqMatch(args []interface{}) {
 
 	innerReq := &proxymsg.Proxy_GS_MS_Match{
 		Charid:    charid.(uint32),
-		Charname:  player.Charname,
+		Charname:  player.Char.CharName,
 		Matchmode: int32(m.Mode),
 		Mapid:     m.MapID,
 		Action:    int32(m.Action),
@@ -314,8 +315,10 @@ func handleReqMatch(args []interface{}) {
 		}
 	}, func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
 			player.MatchServerID = msid
 		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			player.MatchServerID = 0
 		}
 	})
@@ -373,7 +376,7 @@ func handleReqFriendOperate(args []interface{}) {
 		err := c.Find(bson.M{"charname": bson.M{"$regex": bson.RegEx{m.SearchName, "i"}}}).Select(bson.M{"charid": 1}).Limit(10).All(&results)
 		if err == nil {
 			for _, result := range results {
-				rsp.SearchedCharIDs = append(rsp.SearchedCharIDs, result.CharId)
+				rsp.SearchedCharIDs = append(rsp.SearchedCharIDs, result.CharID)
 			}
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
@@ -386,7 +389,7 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
-		player.AssetFriend_DelFriend(player.CharID, m.OperateCharID)
+		player.AssetFriend_DelFriend(player.Char.CharID, m.OperateCharID)
 
 		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 		character := &g.Character{}
@@ -396,7 +399,7 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
-		player.AssetFriend_AcceptApplyInfo(player.CharID, m.OperateCharID)
+		player.AssetFriend_AcceptApplyInfo(player.Char.CharID, m.OperateCharID)
 
 		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 		character := &g.Character{}
@@ -473,9 +476,9 @@ func handleReqQueryCharInfo(args []interface{}) {
 	rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 	for _, result := range results {
 		userinfo := &clientmsg.Rlt_QueryCharInfo_UserBasicInfo{
-			CharID:   result.CharId,
+			CharID:   result.CharID,
 			CharName: result.CharName,
-			Level:    0,
+			Status:   clientmsg.UserStatus(result.Status),
 		}
 		rsp.UserInfo = append(rsp.UserInfo, userinfo)
 	}
@@ -503,9 +506,9 @@ func handleReqConnectBS(args []interface{}) {
 
 	if g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey) {
 		player := &g.BPlayer{
-			CharID:       m.CharID,
-			GameServerID: int(g.GetMemberGSID(m.CharID)),
-			UpdateTime:   time.Now().Unix(),
+			CharID:        m.CharID,
+			GameServerID:  int(g.GetMemberGSID(m.CharID)),
+			HeartBeatTime: time.Now().Unix(),
 		}
 		g.AddBattlePlayer(player, &a)
 		rsp := g.GenRoomInfoPB(m.CharID, false)
@@ -556,7 +559,7 @@ func handleReqBattleHeartBeat(args []interface{}) {
 			a.Close()
 			return
 		}
-		player.UpdateTime = time.Now().Unix()
+		player.HeartBeatTime = time.Now().Unix()
 	}
 }
 

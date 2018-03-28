@@ -222,6 +222,7 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 	}
 	player, err := g.GetPlayer(pmsg.Charid)
 	if player != nil {
+		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BATTLE)
 		player.BattleServerID = int(msg.BattleServerID)
 		player.MatchServerID = 0
 	}
@@ -269,6 +270,7 @@ func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 		}
 		g.SendMsgToPlayer(msg.CharID, rsp)
 	} else {
+		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		player.BattleServerID = 0
 	}
 }
@@ -287,6 +289,9 @@ func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
+	if player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE {
+		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+	}
 	player.BattleServerID = 0
 }
 

@@ -114,7 +114,7 @@ func fillRobotToTable(table *Table) {
 			chartype:   0,
 			ownerid:    ownerid,
 			status:     SEAT_NONE,
-			teamid:     int32(len((*table).seats) % 2),
+			teamid:     int32(len((*table).seats)%2 + 1),
 		}
 		(*table).seats = append((*table).seats, seat)
 		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
@@ -379,7 +379,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 				ownerid:    0,
 				status:     SEAT_NONE,
 				charname:   charname,
-				teamid:     int32(len((*table).seats) % 2),
+				teamid:     int32(len((*table).seats)%2 + 1),
 			}
 			TableManager[i].seats = append(TableManager[i].seats, seat)
 			PlayerTableIDMap[charid] = i

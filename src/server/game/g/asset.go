@@ -59,6 +59,20 @@ func (player *Player) LoadPlayerAsset() bool {
 	return ret
 }
 
+func (player *Player) SyncPlayerAsset() bool {
+	player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetCash |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetMail |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetItem |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetHero |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetTutorial |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetStatistic |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetAchievement |= DIRTYFLAG_TO_CLIENT
+	player.Asset.DirtyFlag_AssetTask |= DIRTYFLAG_TO_CLIENT
+
+	return true
+}
+
 func (pinfo *PlayerInfo) UpdatePlayerAsset(now *time.Time) {
 
 	//sync to client
@@ -103,13 +117,13 @@ func (player *Player) loadPlayerAssetFriend() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
 	player.Asset.AssetFriend = &clientmsg.Rlt_Asset_Friend{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetFriend)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetFriend)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetFriend.CharID = player.CharID
+		player.Asset.AssetFriend.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetFriend)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetFriend Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetFriend Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_CLIENT
@@ -121,13 +135,13 @@ func (player *Player) loadPlayerAssetCash() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Cash)
 	player.Asset.AssetCash = &clientmsg.Rlt_Asset_Cash{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetCash)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetCash)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetCash.CharID = player.CharID
+		player.Asset.AssetCash.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetCash)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetCash Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetCash Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetCash |= DIRTYFLAG_TO_CLIENT
@@ -139,13 +153,13 @@ func (player *Player) loadPlayerAssetMail() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Mail)
 	player.Asset.AssetMail = &clientmsg.Rlt_Asset_Mail{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetMail)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetMail)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetMail.CharID = player.CharID
+		player.Asset.AssetMail.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetMail)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetMail Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetMail Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetMail |= DIRTYFLAG_TO_CLIENT
@@ -157,13 +171,13 @@ func (player *Player) loadPlayerAssetItem() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Item)
 	player.Asset.AssetItem = &clientmsg.Rlt_Asset_Item{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetItem)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetItem)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetItem.CharID = player.CharID
+		player.Asset.AssetItem.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetItem)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetItem Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetItem Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetItem |= DIRTYFLAG_TO_CLIENT
@@ -175,13 +189,13 @@ func (player *Player) loadPlayerAssetHero() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
 	player.Asset.AssetHero = &clientmsg.Rlt_Asset_Hero{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetHero)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetHero)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetHero.CharID = player.CharID
+		player.Asset.AssetHero.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetHero)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetHero Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetHero Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetHero |= DIRTYFLAG_TO_CLIENT
@@ -193,13 +207,13 @@ func (player *Player) loadPlayerAssetTutorial() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Tutorial)
 	player.Asset.AssetTutorial = &clientmsg.Rlt_Asset_Tutorial{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetTutorial)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetTutorial)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetTutorial.CharID = player.CharID
+		player.Asset.AssetTutorial.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetTutorial)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetTutorial Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetTutorial Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetTutorial |= DIRTYFLAG_TO_CLIENT
@@ -211,13 +225,13 @@ func (player *Player) loadPlayerAssetStatistic() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Statistic)
 	player.Asset.AssetStatistic = &clientmsg.Rlt_Asset_Statistic{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetStatistic)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetStatistic)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetStatistic.CharID = player.CharID
+		player.Asset.AssetStatistic.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetStatistic)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetStatistic Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetStatistic Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetStatistic |= DIRTYFLAG_TO_CLIENT
@@ -229,13 +243,13 @@ func (player *Player) loadPlayerAssetAchievement() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Achievement)
 	player.Asset.AssetAchievement = &clientmsg.Rlt_Asset_Achievement{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetAchievement)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetAchievement)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetAchievement.CharID = player.CharID
+		player.Asset.AssetAchievement.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetAchievement)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetAchievement Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetAchievement Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetAchievement |= DIRTYFLAG_TO_CLIENT
@@ -247,13 +261,13 @@ func (player *Player) loadPlayerAssetTask() bool {
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Task)
 	player.Asset.AssetTask = &clientmsg.Rlt_Asset_Task{}
-	err := c.Find(bson.M{"charid": player.CharID}).One(&player.Asset.AssetTask)
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetTask)
 	if err != nil && err.Error() == "not found" {
-		player.Asset.AssetTask.CharID = player.CharID
+		player.Asset.AssetTask.CharID = player.Char.CharID
 		err = c.Insert(player.Asset.AssetTask)
 	}
 	if err != nil {
-		log.Error("Load Player %v AssetTask Error %v", player.CharID, err)
+		log.Error("Load Player %v AssetTask Error %v", player.Char.CharID, err)
 		return false
 	}
 	player.Asset.DirtyFlag_AssetTask |= DIRTYFLAG_TO_CLIENT
@@ -333,9 +347,9 @@ func (player *Player) savePlayerAssetFriend() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetFriend)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetFriend)
 	if err != nil {
-		log.Error("Save Player %v AssetFriend Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetFriend Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -351,9 +365,9 @@ func (player *Player) savePlayerAssetCash() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Cash)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetCash)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetCash)
 	if err != nil {
-		log.Error("Save Player %v AssetCash Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetCash Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -369,9 +383,9 @@ func (player *Player) savePlayerAssetMail() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Mail)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetMail)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetMail)
 	if err != nil {
-		log.Error("Save Player %v AssetMail Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetMail Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -387,9 +401,9 @@ func (player *Player) savePlayerAssetItem() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Item)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetItem)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetItem)
 	if err != nil {
-		log.Error("Save Player %v AssetItem Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetItem Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -405,9 +419,9 @@ func (player *Player) savePlayerAssetHero() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetHero)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetHero)
 	if err != nil {
-		log.Error("Save Player %v AssetHero Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetHero Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -423,9 +437,9 @@ func (player *Player) savePlayerAssetTutorial() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Tutorial)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetTutorial)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetTutorial)
 	if err != nil {
-		log.Error("Save Player %v AssetTutorial Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetTutorial Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -441,9 +455,9 @@ func (player *Player) savePlayerAssetStatistic() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Statistic)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetStatistic)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetStatistic)
 	if err != nil {
-		log.Error("Save Player %v AssetStatistic Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetStatistic Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -459,9 +473,9 @@ func (player *Player) savePlayerAssetAchievement() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Achievement)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetAchievement)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetAchievement)
 	if err != nil {
-		log.Error("Save Player %v AssetAchievement Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetAchievement Error %v", player.Char.CharID, err)
 		return false
 	}
 
@@ -477,9 +491,9 @@ func (player *Player) savePlayerAssetTask() bool {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(AssetName_Task)
-	err := c.Update(bson.M{"charid": player.CharID}, player.Asset.AssetTask)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.Asset.AssetTask)
 	if err != nil {
-		log.Error("Save Player %v AssetTask Error %v", player.CharID, err)
+		log.Error("Save Player %v AssetTask Error %v", player.Char.CharID, err)
 		return false
 	}
 
