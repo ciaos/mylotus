@@ -5,7 +5,7 @@ import (
 )
 
 func (a *A) Say() {
-	fmt.Println("Say %v", a)
+	fmt.Printf("Say %v\n", a)
 }
 
 type A struct {

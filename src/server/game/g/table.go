@@ -155,6 +155,14 @@ func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) 
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
+func ReconnectTable(charid uint32, pmsg *proxymsg.InternalMessage) {
+	rsp := proxymsg.Proxy_MS_GS_Reconnect{
+		Ok: false,
+	}
+
+	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_RECONNECT, rsp)
+}
+
 func changeTableStatus(table *Table, status string) {
 	(*table).status = status
 	log.Debug("changeTableStatus Table %v Status %v", (*table).tableid, (*table).status)
@@ -262,7 +270,7 @@ func (table *Table) update(now *time.Time) {
 		}
 	} else if (*table).status == MATCH_FINISH {
 		if (*now).Unix()-(*table).checktime > 5 { //房间超时，解散
-			log.Error("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+			log.Debug("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
 			changeTableStatus(table, MATCH_END)
 		}
 	}

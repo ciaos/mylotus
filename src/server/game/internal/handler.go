@@ -28,12 +28,16 @@ func init() {
 	handler(&clientmsg.Req_Chat{}, handleReqChat)
 	handler(&clientmsg.Req_QueryCharInfo{}, handleReqQueryCharInfo)
 	handler(&clientmsg.Req_MakeTeamOperate{}, handleReqMakeTeamOperate)
+	handler(&clientmsg.Req_Mail_Action{}, handleReqMailAction)
+	handler(&clientmsg.Req_Re_ConnectGS{}, handleReqReConnectGS)
 
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
 	handler(&clientmsg.Transfer_Loading_Progress{}, handleTransferLoadingProgress)
 	handler(&clientmsg.Transfer_Command{}, handleTransferCommand)
 	handler(&clientmsg.Transfer_Battle_Message{}, handleTransferBattleMessage)
+	handler(&clientmsg.Req_Re_ConnectBS{}, handleReqReConnectBS)
+	handler(&clientmsg.Req_Battle_Heartbeat{}, handleReqBattleHeartBeat)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -118,7 +122,10 @@ func handleReqLogin(args []interface{}) {
 
 	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 
-	player := &g.Player{}
+	player := &g.Player{
+		UserID: m.UserID,
+		Status: g.PLAYER_STATUS_LOGIN,
+	}
 
 	isnew := false
 	result := g.Character{}
@@ -187,6 +194,46 @@ func handleReqLogin(args []interface{}) {
 			log.Error("load asset Error %v", player.CharID)
 		}
 	})
+}
+
+func handleReqReConnectGS(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Re_ConnectGS)
+	a := args[1].(gate.Agent)
+
+	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
+	if err != nil {
+		a.WriteMsg(&clientmsg.Rlt_Re_ConnectGS{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		a.Close()
+		log.Error("handleReqReConnectGS DesDecrypt Error", err)
+		return
+	}
+
+	userid := binary.BigEndian.Uint32(useridBuf)
+	player, err := g.GetPlayer(m.CharID)
+	if err != nil || player.UserID != userid || player.Status != g.PLAYER_STATUS_OFFLINE {
+		a.WriteMsg(&clientmsg.Rlt_Re_ConnectGS{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		a.Close()
+		return
+	}
+
+	g.ReconnectGamePlayer(m.CharID, &a)
+	g.SendMsgToPlayer(m.CharID, &clientmsg.Rlt_Re_ConnectGS{
+		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
+	})
+
+	if player.MatchServerID != 0 {
+		skeleton.Go(func() {
+			innerReq := &proxymsg.Proxy_GS_MS_Reconnect{
+				Charid: m.CharID,
+			}
+			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, m.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT, innerReq)
+		}, func() {
+		})
+	}
 }
 
 func handleReqSetCharName(args []interface{}) {
@@ -438,6 +485,9 @@ func handleReqQueryCharInfo(args []interface{}) {
 func handleReqMakeTeamOperate(args []interface{}) {
 }
 
+func handleReqMailAction(args []interface{}) {
+}
+
 func handleTransferLoadingProgress(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Loading_Progress)
 	a := args[1].(gate.Agent)
@@ -452,8 +502,13 @@ func handleReqConnectBS(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	if g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey) {
-		g.AddBattlePlayer(m.CharID, &a)
-		rsp := g.GenRoomInfoPB(m.RoomID)
+		player := &g.BPlayer{
+			CharID:       m.CharID,
+			GameServerID: int(g.GetMemberGSID(m.CharID)),
+			UpdateTime:   time.Now().Unix(),
+		}
+		g.AddBattlePlayer(player, &a)
+		rsp := g.GenRoomInfoPB(m.CharID, false)
 		a.WriteMsg(rsp)
 	} else {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
@@ -479,6 +534,7 @@ func handleReqEndBattle(args []interface{}) {
 func handleTransferCommand(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Command)
 	a := args[1].(gate.Agent)
+
 	if a.UserData() != nil {
 		g.AddMessage(a.UserData().(uint32), m)
 	}
@@ -489,5 +545,31 @@ func handleTransferBattleMessage(args []interface{}) {
 	a := args[1].(gate.Agent)
 	if a.UserData() != nil {
 		g.TransferRoomMessage(a.UserData().(uint32), m)
+	}
+}
+
+func handleReqBattleHeartBeat(args []interface{}) {
+	a := args[1].(gate.Agent)
+	if a.UserData() != nil {
+		player, err := g.GetBattlePlayer(a.UserData().(uint32))
+		if err != nil {
+			a.Close()
+			return
+		}
+		player.UpdateTime = time.Now().Unix()
+	}
+}
+
+func handleReqReConnectBS(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Re_ConnectBS)
+	a := args[1].(gate.Agent)
+	if g.ReConnectRoom(m.CharID, m.FrameID, m.BattleKey) {
+		g.ReconnectBattlePlayer(m.CharID, &a)
+		rsp := g.GenRoomInfoPB(m.CharID, true)
+		a.WriteMsg(rsp)
+	} else {
+		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+			RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
+		})
 	}
 }

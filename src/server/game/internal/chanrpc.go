@@ -45,6 +45,16 @@ func queueMessage(args []interface{}) {
 		proxyHandleGSMSOffline(pmsg)
 	case proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE:
 		proxyHandleGSGSFriendOperate(pmsg)
+	case proxymsg.ProxyMessageType_PMT_GS_BS_QUERY_BATTLEINFO:
+		proxyHandleGSBSQueryBattleInfo(pmsg)
+	case proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO:
+		proxyHandleBSGSQueryBattleInfo(pmsg)
+	case proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE:
+		proxyHandleBSGSFinishBattle(pmsg)
+	case proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT:
+		proxyHandleGSMSReconnect(pmsg)
+	case proxymsg.ProxyMessageType_PMT_MS_GS_RECONNECT:
+		proxyHandleMSGSReconnect(pmsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", pmsg.Msgid)
 	}
@@ -88,6 +98,33 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 		g.ConfirmTable(msg.Charid, msg.Matchmode)
 	} else {
 		log.Error("proxyHandleGSMSMatch Invalid Action %v", msg.Action)
+	}
+}
+
+func proxyHandleGSMSReconnect(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_GS_MS_Reconnect{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_GS_MS_Reconnect Decode Error %v", err)
+		return
+	}
+
+	g.ReconnectTable(msg.Charid, pmsg)
+}
+
+func proxyHandleMSGSReconnect(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_MS_GS_Reconnect{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_MS_GS_Reconnect Decode Error %v", err)
+		return
+	}
+
+	if msg.Ok == false {
+		player, _ := g.GetPlayer(pmsg.Charid)
+		if player != nil {
+			player.MatchServerID = 0
+		}
 	}
 }
 
@@ -180,7 +217,7 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 	msg := &clientmsg.Rlt_NotifyBattleAddress{}
 	err := proto.Unmarshal(pmsg.Msgdata, msg)
 	if err != nil {
-		log.Error("proxymsg.Rlt_NotifyBattleAddress Decode Error %v", err)
+		log.Error("clientmsg.Rlt_NotifyBattleAddress Decode Error %v", err)
 		return
 	}
 	player, err := g.GetPlayer(pmsg.Charid)
@@ -193,6 +230,66 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
 
+func proxyHandleGSBSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_GS_BS_Query_BattleInfo{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_GS_BS_Query_BattleInfo Decode Error %v", err)
+		return
+	}
+
+	rsp := &proxymsg.Proxy_BS_GS_Query_BattleInfo{
+		CharID: msg.Charid,
+	}
+	rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = g.QueryBattleInfo(msg.Charid)
+	skeleton.Go(func() {
+		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO, rsp)
+	}, func() {})
+}
+
+func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_BS_GS_Query_BattleInfo{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_BS_GS_Query_BattleInfo Decode Error %v", err)
+		return
+	}
+
+	player, err := g.GetPlayer(msg.CharID)
+	if err != nil {
+		log.Error("proxyHandleBSGSQueryBattleInfo GetPlayer NULL %v", msg.CharID)
+		return
+	}
+
+	if msg.InBattle {
+		rsp := &clientmsg.Rlt_Continue_Battle{
+			CharID:     msg.CharID,
+			BattleKey:  msg.BattleKey,
+			BattleAddr: msg.BattleAddr,
+		}
+		g.SendMsgToPlayer(msg.CharID, rsp)
+	} else {
+		player.BattleServerID = 0
+	}
+}
+
+func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_BS_GS_FINISH_BATTLE{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("proxymsg.Proxy_BS_GS_FINISH_BATTLE Decode Error %v", err)
+		return
+	}
+
+	player, err := g.GetPlayer(msg.CharID)
+	if err != nil {
+		log.Error("proxyHandleBSGSFinishBattle GetPlayer NULL %v", msg.CharID)
+		return
+	}
+
+	player.BattleServerID = 0
+}
+
 func updateFrame(args []interface{}) {
 
 	a := args[0].(time.Time)
@@ -200,7 +297,8 @@ func updateFrame(args []interface{}) {
 
 	g.UpdateTableManager(&a)
 	g.UpdateRoomManager(&a)
-	g.UpdatePlayerManager(&a)
+	g.UpdateGamePlayerManager(&a)
+	g.UpdateBattlePlayerManager(&a)
 }
 
 func rpcNewAgent(args []interface{}) {

@@ -3,6 +3,7 @@ package g
 import (
 	"fmt"
 	"math/rand"
+	"server/conf"
 	"server/tool"
 	"strings"
 	//	"sync"
@@ -21,6 +22,7 @@ const (
 
 	MEMBER_UNCONNECTED = "member_unconnected"
 	MEMBER_CONNECTED   = "member_connected"
+	MEMBER_RECONNECTED = "member_reconnected"
 	MEMBER_OFFLINE     = "member_offline"
 	MEMBER_END         = "member_end"
 )
@@ -34,6 +36,7 @@ type Member struct {
 	gameserverid int32
 	ownerid      uint32 // robot 有控制者
 	progress     int32
+	frameid      uint32
 }
 
 type Room struct {
@@ -98,17 +101,30 @@ func (room *Room) broadcast(msgdata interface{}) {
 			continue
 		}
 
-		agent, ok := BattlePlayerManager[(*member).charid]
+		player, ok := BattlePlayerManager[(*member).charid]
 		if ok {
-			(*agent).WriteMsg(msgdata)
+			(*player.agent).WriteMsg(msgdata)
 		}
+	}
+}
+
+func (room *Room) sendmsg(charid uint32, msgdata interface{}) {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if !ok || roomid != room.roomid {
+		log.Error("room Sendmsg Error %v RoomID %v CharID %v Room.RoomID %v", ok, roomid, charid, room.roomid)
+		return
+	}
+
+	player, ok := BattlePlayerManager[charid]
+	if ok {
+		(*player.agent).WriteMsg(msgdata)
 	}
 }
 
 func (room *Room) checkOffline() {
 	var allOffLine = true
 	for _, member := range room.members {
-		if member.status == MEMBER_CONNECTED && member.ownerid == 0 {
+		if (member.status == MEMBER_CONNECTED || member.status == MEMBER_RECONNECTED) && member.ownerid == 0 {
 			allOffLine = false
 			break
 		}
@@ -135,6 +151,29 @@ func (room *Room) update(now *time.Time) {
 		(*room).messagesbackup = append((*room).messagesbackup, rsp)
 		//clear
 		(*room).messages = append([]*clientmsg.Transfer_Command_CommandData{})
+
+		for _, member := range room.members {
+			if member.status == MEMBER_RECONNECTED {
+				if member.frameid < room.frameid {
+					maxSendCnt := 100
+					for maxSendCnt > 0 {
+						maxSendCnt--
+
+						msgdata := room.messagesbackup[member.frameid]
+						room.sendmsg(member.charid, msgdata)
+
+						member.frameid = msgdata.FrameID
+
+						if member.frameid >= room.frameid || member.frameid >= uint32(len(room.messagesbackup)) {
+							member.status = MEMBER_CONNECTED
+							break
+						}
+					}
+				} else {
+					member.status = MEMBER_CONNECTED
+				}
+			}
+		}
 
 		//bug
 		if now.Unix()-(*room).createtime > int64(600) {
@@ -196,8 +235,11 @@ func DeleteRoom(roomid int32) {
 func deleteRoomMemberInfo(roomid int32) {
 	room, ok := RoomManager[roomid]
 	if ok {
-		for charid, _ := range room.members {
-			delete(PlayerRoomIDMap, charid)
+		for charid, member := range room.members {
+			if member.ownerid == 0 {
+				delete(PlayerRoomIDMap, charid)
+			}
+			delete(room.members, charid)
 		}
 	}
 }
@@ -233,6 +275,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 			gameserverid: mem.GameServerID,
 			ownerid:      mem.OwnerID,
 			progress:     0,
+			frameid:      0,
 		}
 
 		//Leave Previous Room
@@ -291,8 +334,26 @@ func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 	}
 }
 
-func GenRoomInfoPB(roomid int32) *clientmsg.Rlt_ConnectBS {
-	rsp := &clientmsg.Rlt_ConnectBS{}
+func QueryBattleInfo(charid uint32) (bool, []byte, string) {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			_, ok := room.members[charid]
+			if ok {
+				return true, room.battlekey, conf.Server.ConnectAddr
+			}
+		}
+	}
+	return false, nil, ""
+}
+
+func GenRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
+	rsp := &clientmsg.Rlt_ConnectBS{
+		IsReconnect: isreconnect,
+	}
+
+	roomid, _ := PlayerRoomIDMap[charid]
 	room, ok := RoomManager[roomid]
 	if ok {
 		rsp.RetCode = clientmsg.Type_BattleRetCode_BRC_OK
@@ -348,6 +409,52 @@ func ConnectRoom(charid uint32, roomid int32, battlekey []byte) bool {
 		log.Error("ConnectRoom RoomID %v Not Exist", roomid)
 	}
 	return false
+}
+
+func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte) bool {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
+			if err != nil {
+				log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)
+				return false
+			}
+
+			if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, roomid)) != 0 {
+				log.Error("ReConnectRoom Battlekey Mismatch")
+				return false
+			}
+
+			member, ok := room.members[charid]
+			if ok {
+				changeMemberStatus(member, MEMBER_RECONNECTED)
+				member.frameid = frameid
+				log.Debug("ReConnectRoom RoomID %v CharID %v", roomid, charid)
+				return true
+			} else {
+				log.Error("ReConnectRoom RoomID %v Member Not Exist %v", roomid, charid)
+			}
+		} else {
+			log.Error("ReConnectRoom RoomID %v Not Exist", roomid)
+		}
+	}
+	return false
+}
+
+func GetMemberGSID(charid uint32) int32 {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			member, ok := room.members[charid]
+			if ok {
+				return member.gameserverid
+			}
+		}
+	}
+	return 0
 }
 
 func LeaveRoom(charid uint32) {

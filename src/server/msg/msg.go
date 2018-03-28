@@ -59,4 +59,14 @@ func init() {
 	Processor.Register(&clientmsg.Rlt_Asset_Statistic{})
 	Processor.Register(&clientmsg.Rlt_Asset_Achievement{})
 	Processor.Register(&clientmsg.Rlt_Asset_Task{})
+
+	//41 - 50
+	Processor.Register(&clientmsg.Req_Mail_Action{})
+	Processor.Register(&clientmsg.Rlt_Mail_Action{})
+	Processor.Register(&clientmsg.Rlt_Give_Reward{})
+	Processor.Register(&clientmsg.Req_Re_ConnectGS{})
+	Processor.Register(&clientmsg.Rlt_Re_ConnectGS{})
+	Processor.Register(&clientmsg.Req_Re_ConnectBS{})
+	Processor.Register(&clientmsg.Rlt_Continue_Battle{})
+	Processor.Register(&clientmsg.Req_Battle_Heartbeat{})
 }

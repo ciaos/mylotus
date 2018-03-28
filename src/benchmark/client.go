@@ -246,7 +246,9 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 			tlog.Errorf("Unmartial Error")
 			return
 		}
-		//tlog.Debugf("client %d recv tranfer_cmd from %d, frame %d PingID %d Total %d\n", c.charid, rsp.Messages[0].CharID, rsp.FrameID, ping.ID, len(rsp.Messages))
+		//	tlog.Debugf("client %d recv tranfer_cmd from %d, frame %d PingID %d Total %d\n", c.charid, rsp.Messages[0].CharID, rsp.FrameID, ping.ID, len(rsp.Messages))
+	} else {
+		//	tlog.Debugf("client %d recv tranfer_cmd from server, frame %d Total %d\n", c.charid, rsp.FrameID, len(rsp.Messages))
 	}
 	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
 }
@@ -397,10 +399,8 @@ func (c *Client) updateBattle() {
 		if c.startbattletime != 0 && c.nextpingbstime < time.Now().Unix() {
 			c.nextpingbstime = time.Now().Unix() + 3
 
-			msg := &clientmsg.Ping{
-				ID: uint32(rand.Intn(10000)),
-			}
-			go SendKCP(c.bconn, clientmsg.MessageType_MT_PING, msg)
+			msg := &clientmsg.Req_Battle_Heartbeat{}
+			go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_BATTLE_HEARTBEAT, msg)
 
 		}
 
