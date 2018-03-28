@@ -122,6 +122,23 @@ func fillRobotToTable(table *Table) {
 	}
 }
 
+func autoChooseToTable(table *Table) {
+	for _, seat := range table.seats {
+		if (*seat).chartype == 0 {
+
+			(*seat).chartype = 1001
+
+			msg := &clientmsg.Transfer_Team_Operate{
+				Action:   clientmsg.TeamOperateActionType_TOA_SETTLE,
+				CharID:   seat.charid,
+				CharType: (*seat).chartype,
+			}
+			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE, msg)
+			log.Debug("autoChooseToTable Table %v CharID %v CharName %v CharType %v", table.tableid, seat.charid, seat.charname, seat.chartype)
+		}
+	}
+}
+
 func (table *Table) broadcast(msgid proxymsg.ProxyMessageType, msgdata interface{}) {
 	go func() {
 		for _, seat := range table.seats {
@@ -184,6 +201,8 @@ func changeTableStatus(table *Table, status string) {
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 		(*table).checktime = time.Now().Unix()
 		changeTableStatus(table, MATCH_CONFIRM)
+	} else if (*table).status == MATCH_CHARTYPE_FIXED {
+		autoChooseToTable(table)
 	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
 		table.allocBattleRoom()
 		(*table).checktime = time.Now().Unix()

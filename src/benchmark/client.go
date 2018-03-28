@@ -399,8 +399,8 @@ func (c *Client) updateBattle() {
 		if c.startbattletime != 0 && c.nextpingbstime < time.Now().Unix() {
 			c.nextpingbstime = time.Now().Unix() + 3
 
-			msg := &clientmsg.Req_Battle_Heartbeat{}
-			go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_BATTLE_HEARTBEAT, msg)
+			msg := &clientmsg.Transfer_Battle_Heartbeat{}
+			go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
 
 		}
 
