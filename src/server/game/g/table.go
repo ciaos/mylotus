@@ -416,7 +416,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 					ownerid:    0,
 					status:     SEAT_NONE,
 					charname:   charname,
-					teamid:     0,
+					teamid:     1,
 				},
 			},
 			status:        MATCH_CONTINUE,
@@ -535,7 +535,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 func FormatTableInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
-		return fmt.Sprintf("TableID:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).createtime, (*table).status, len((*table).seats))
+		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime, (*table).status, len((*table).seats))
 	}
 	return ""
 }
@@ -545,7 +545,7 @@ func FormatSeatInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tJoinTime:%v\tServerID:%v\tServerType:%v", (*seat).charid, (*seat).jointime, (*seat).serverid, (*seat).servertype)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v", (*seat).charid, (*seat).charname, (*seat).jointime, (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid)}, "\r\n")
 		}
 	}
 	return output

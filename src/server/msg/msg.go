@@ -68,5 +68,5 @@ func init() {
 	Processor.Register(&clientmsg.Rlt_Re_ConnectGS{})
 	Processor.Register(&clientmsg.Req_Re_ConnectBS{})
 	Processor.Register(&clientmsg.Rlt_Continue_Battle{})
-	Processor.Register(&clientmsg.Req_Battle_Heartbeat{})
+	Processor.Register(&clientmsg.Transfer_Battle_Heartbeat{})
 }

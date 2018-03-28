@@ -34,5 +34,5 @@ func init() {
 	msg.Processor.SetRouter(&clientmsg.Transfer_Loading_Progress{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Transfer_Battle_Message{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Re_ConnectBS{}, game.ChanRPC)
-	msg.Processor.SetRouter(&clientmsg.Req_Battle_Heartbeat{}, game.ChanRPC)
+	msg.Processor.SetRouter(&clientmsg.Transfer_Battle_Heartbeat{}, game.ChanRPC)
 }

@@ -10,9 +10,7 @@ import (
 func init() {
 	skeleton.RegisterCommand("echo", "echo user inputs", commandEcho)
 	skeleton.RegisterCommand("lroom", "list room info", commandRoom)
-	skeleton.RegisterCommand("lroomcnt", "list room cnt", commandRoomCount)
 	skeleton.RegisterCommand("ltable", "list table info", commandTable)
-	skeleton.RegisterCommand("ltablecnt", "list table cnt", commandTableCount)
 	skeleton.RegisterCommand("lgplayer", "list gameserver online member count", commandGPlayer)
 	skeleton.RegisterCommand("lbplayer", "list battleserver online member count", commandBPlayer)
 }
@@ -34,11 +32,6 @@ func commandRoom(args []interface{}) interface{} {
 	}
 }
 
-func commandRoomCount(args []interface{}) interface{} {
-	output := fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))
-	return output
-}
-
 func commandTable(args []interface{}) interface{} {
 	if len(args) == 1 {
 		tableid, _ := strconv.Atoi(args[0].(string))
@@ -50,11 +43,6 @@ func commandTable(args []interface{}) interface{} {
 		}
 		return output
 	}
-}
-
-func commandTableCount(args []interface{}) interface{} {
-	output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
-	return output
 }
 
 func commandGPlayer(args []interface{}) interface{} {

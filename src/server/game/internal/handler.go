@@ -37,7 +37,7 @@ func init() {
 	handler(&clientmsg.Transfer_Command{}, handleTransferCommand)
 	handler(&clientmsg.Transfer_Battle_Message{}, handleTransferBattleMessage)
 	handler(&clientmsg.Req_Re_ConnectBS{}, handleReqReConnectBS)
-	handler(&clientmsg.Req_Battle_Heartbeat{}, handleReqBattleHeartBeat)
+	handler(&clientmsg.Transfer_Battle_Heartbeat{}, handleReqBattleHeartBeat)
 }
 
 func handler(m interface{}, h interface{}) {
@@ -508,7 +508,7 @@ func handleReqConnectBS(args []interface{}) {
 		player := &g.BPlayer{
 			CharID:        m.CharID,
 			GameServerID:  int(g.GetMemberGSID(m.CharID)),
-			HeartBeatTime: time.Now().Unix(),
+			HeartBeatTime: time.Now(),
 		}
 		g.AddBattlePlayer(player, &a)
 		rsp := g.GenRoomInfoPB(m.CharID, false)
@@ -559,7 +559,8 @@ func handleReqBattleHeartBeat(args []interface{}) {
 			a.Close()
 			return
 		}
-		player.HeartBeatTime = time.Now().Unix()
+		player.HeartBeatTime = time.Now()
+		a.WriteMsg(&clientmsg.Transfer_Battle_Heartbeat{})
 	}
 }
 
