@@ -8,15 +8,10 @@ import (
 )
 
 func init() {
-	skeleton.RegisterCommand("echo", "echo user inputs", commandEcho)
 	skeleton.RegisterCommand("lroom", "list room info", commandRoom)
 	skeleton.RegisterCommand("ltable", "list table info", commandTable)
 	skeleton.RegisterCommand("lgplayer", "list gameserver online member count", commandGPlayer)
 	skeleton.RegisterCommand("lbplayer", "list battleserver online member count", commandBPlayer)
-}
-
-func commandEcho(args []interface{}) interface{} {
-	return fmt.Sprintf("%v", args)
 }
 
 func commandRoom(args []interface{}) interface{} {

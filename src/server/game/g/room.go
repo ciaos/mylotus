@@ -40,8 +40,8 @@ type Member struct {
 }
 
 type Room struct {
-	createtime    int64
-	nextchecktime int64
+	createtime    time.Time
+	nextchecktime time.Time
 	status        string
 	roomid        int32
 	matchmode     int32
@@ -165,33 +165,36 @@ func (room *Room) update(now *time.Time) {
 						member.frameid = msgdata.FrameID
 
 						if member.frameid >= room.frameid || member.frameid >= uint32(len(room.messagesbackup)) {
-							member.status = MEMBER_CONNECTED
+							log.Debug("Reconnect All Frame Sent 1 CharID %v, FrameID %v", member.charid, member.frameid)
+							changeMemberStatus(member, MEMBER_CONNECTED)
 							break
 						}
 					}
 				} else {
-					member.status = MEMBER_CONNECTED
+					log.Debug("Reconnect All Frame Sent 2 CharID %v, FrameID %v", member.charid, member.frameid)
+					changeMemberStatus(member, MEMBER_CONNECTED)
 				}
 			}
 		}
 
 		//bug
-		if now.Unix()-(*room).createtime > int64(600) {
+		if now.Unix()-(*room).createtime.Unix() > int64(600) {
 			room.broadcast(&clientmsg.Rlt_EndBattle{
 				RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 			})
+			log.Debug("room Fight TimeOut Now %v CreateTime %v", now.Unix(), room.createtime)
 			changeRoomStatus(room, ROOM_END)
 			return
 		}
 	} else if (*room).status == ROOM_CONNECTING {
-		if (*now).Unix()-(*room).createtime > 30 {
+		if (*now).Unix()-(*room).createtime.Unix() > 30 {
 			changeRoomStatus(room, ROOM_FIGHTING)
 			return
 		}
 	}
 
-	if (*room).nextchecktime < (*now).Unix() {
-		(*room).nextchecktime = (*now).Unix() + 5
+	if (*room).nextchecktime.Unix() < (*now).Unix() {
+		(*room).nextchecktime = now.Add(time.Duration(5 * time.Second))
 
 		if (*room).status == ROOM_STATUS_NONE {
 			log.Error("ROOM_STATUS_NONE TimeOut %v", (*room).roomid)
@@ -253,8 +256,8 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 
 	room := &Room{
 		roomid:         g_roomid,
-		createtime:     time.Now().Unix(),
-		nextchecktime:  time.Now().Unix() + 10,
+		createtime:     time.Now(),
+		nextchecktime:  time.Now().Add(time.Duration(5 * time.Second)),
 		status:         ROOM_STATUS_NONE,
 		matchmode:      msg.Matchmode,
 		mapid:          msg.Mapid,
@@ -281,8 +284,9 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		}
 
 		//Leave Previous Room
-		_, ok := PlayerRoomIDMap[mem.CharID]
+		roomid, ok := PlayerRoomIDMap[mem.CharID]
 		if ok {
+			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, roomid)
 			LeaveRoom(mem.CharID)
 		}
 
@@ -397,6 +401,13 @@ func ConnectRoom(charid uint32, roomid int32, battlekey []byte) bool {
 		if ok {
 			changeMemberStatus(member, MEMBER_CONNECTED)
 			PlayerRoomIDMap[charid] = roomid
+
+			//set connect for robot
+			for _, mem := range room.members {
+				if mem.ownerid == charid {
+					changeMemberStatus(mem, MEMBER_CONNECTED)
+				}
+			}
 
 			if room.status == ROOM_STATUS_NONE {
 				changeRoomStatus(room, ROOM_CONNECTING)
@@ -523,7 +534,7 @@ func TransferRoomMessage(charid uint32, transcmd *clientmsg.Transfer_Battle_Mess
 func FormatRoomInfo(roomid int32) string {
 	room, ok := RoomManager[roomid]
 	if ok {
-		return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v", (*room).roomid, (*room).createtime, (*room).status, len((*room).members))
+		return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v", (*room).roomid, (*room).createtime.Format("2006-01-02 15:04:05"), (*room).status, len((*room).members))
 	}
 	return ""
 }

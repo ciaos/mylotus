@@ -12,7 +12,6 @@ import (
 
 	"github.com/ciaos/leaf/gate"
 	"github.com/ciaos/leaf/log"
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -44,26 +43,8 @@ func handler(m interface{}, h interface{}) {
 	skeleton.RegisterChanRPC(reflect.TypeOf(m), h)
 }
 
-func getNextSeq() uint32 {
-	s := g.Mongo.Ref()
-	defer g.Mongo.UnRef(s)
-
-	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_COUNTER)
-
-	doc := struct{ Seq uint32 }{}
-	cid := "counterid"
-
-	change := mgo.Change{
-		Update:    bson.M{"$inc": bson.M{"seq": 1}},
-		Upsert:    true,
-		ReturnNew: true,
-	}
-	if _, err := c.Find(bson.M{"_id": cid}).Apply(change, &doc); err != nil {
-		log.Error("getNextSeq counter failed:", err.Error())
-		return 0
-	}
-
-	return doc.Seq
+func getNextSeq() (int, error) {
+	return g.Mongo.NextSeq(g.DB_NAME_GAME, g.TB_NAME_COUNTER, "counterid")
 }
 
 func handlePing(args []interface{}) {
@@ -134,18 +115,18 @@ func handleReqLogin(args []interface{}) {
 	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&player.Char)
 	if err != nil && err.Error() == "not found" {
 		//create new character
-		charid := getNextSeq()
-		if charid == 0 {
+		charid, err := getNextSeq()
+		if err != nil {
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 			})
 			a.Close()
-			log.Error("handleReqLogin getNextSeq Failed")
+			log.Error("handleReqLogin getNextSeq Failed %v", err)
 			return
 		}
 
 		character := &g.Character{
-			CharID:     charid,
+			CharID:     uint32(charid),
 			UserID:     m.UserID,
 			GsId:       m.ServerID,
 			Status:     int32(clientmsg.UserStatus_US_PLAYER_ONLINE),
@@ -166,6 +147,7 @@ func handleReqLogin(args []interface{}) {
 		player.Char = character
 	}
 
+	//check if in cache
 	cache, _ := g.GetPlayer(player.Char.CharID)
 	if cache != nil {
 		if cache.Char.CharName == "" {
@@ -319,17 +301,17 @@ func handleReqMatch(args []interface{}) {
 	skeleton.Go(func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
-				msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
+				msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 			}
 		} else {
 			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
-			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		}
 	}, func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 			player.MatchServerID = msid
 		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			player.MatchServerID = 0
 		}
 	})

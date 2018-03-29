@@ -38,7 +38,7 @@ const (
 type Seat struct {
 	charid     uint32
 	charname   string
-	jointime   int64
+	jointime   time.Time
 	serverid   int32
 	servertype string
 	chartype   int32
@@ -50,8 +50,8 @@ type Seat struct {
 //for match server
 type Table struct {
 	seats         []*Seat
-	createtime    int64
-	checktime     int64
+	createtime    time.Time
+	checktime     time.Time
 	matchmode     int32
 	mapid         int32
 	status        string
@@ -107,7 +107,7 @@ func fillRobotToTable(table *Table) {
 		charid := 1000000000 + uint32(rand.Intn(100000000))
 		seat := &Seat{
 			charid:     charid,
-			jointime:   0,
+			jointime:   time.Now(),
 			serverid:   0,
 			servertype: "",
 			charname:   strconv.Itoa(int(charid)),
@@ -187,25 +187,25 @@ func changeTableStatus(table *Table, status string) {
 	if (*table).status == MATCH_ERROR {
 		//notify all member error
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
-		table.checktime = time.Now().Unix()
+		table.checktime = time.Now()
 		changeTableStatus(table, MATCH_FINISH)
 	} else if (*table).status == MATCH_EMPTY {
 		DeleteTable((*table).tableid)
 	} else if (*table).status == MATCH_OK {
 		//notify all member to choose
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-		(*table).checktime = time.Now().Unix()
+		(*table).checktime = time.Now()
 		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_TIMEOUT {
 		fillRobotToTable(table)
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-		(*table).checktime = time.Now().Unix()
+		(*table).checktime = time.Now()
 		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		autoChooseToTable(table)
 	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
 		table.allocBattleRoom()
-		(*table).checktime = time.Now().Unix()
+		(*table).checktime = time.Now()
 		changeTableStatus(table, MATCH_ALLOCROOM)
 	} else if (*table).status == MATCH_END {
 		deleteTableSeatInfo(table.tableid)
@@ -252,8 +252,8 @@ func (table *Table) update(now *time.Time) {
 
 	if (*table).status == MATCH_CONTINUE {
 		//匹配超时
-		if (*now).Unix()-(*table).checktime > int64(row.MatchTimeOutSec) {
-			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime, (*now).Unix())
+		if (*now).Unix()-(*table).checktime.Unix() > int64(row.MatchTimeOutSec) {
+			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
 			changeTableStatus(table, MATCH_TIMEOUT)
 			return
 		}
@@ -264,32 +264,32 @@ func (table *Table) update(now *time.Time) {
 			changeTableStatus(table, MATCH_EMPTY)
 		}
 	} else if (*table).status == MATCH_CONFIRM {
-		if (*now).Unix()-(*table).checktime > int64(row.ConfirmTimeOutSec) {
-			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
-			(*table).checktime = (*now).Unix()
+		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ConfirmTimeOutSec) {
+			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_CLEAR_BADGUY)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_CHOOSING {
-		if (*now).Unix()-(*table).checktime > int64(row.ChooseTimeOutSec) {
-			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
-			(*table).checktime = (*now).Unix()
+		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ChooseTimeOutSec) {
+			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_CHARTYPE_FIXED)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
-		if (*now).Unix()-(*table).checktime > int64(row.FixedWaitTimeSec) {
-			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
-			(*table).checktime = (*now).Unix()
+		if (*now).Unix()-(*table).checktime.Unix() > int64(row.FixedWaitTimeSec) {
+			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_BEGIN_ALLOCROOM)
 		}
 	} else if (*table).status == MATCH_ALLOCROOM {
-		if (*now).Unix()-(*table).checktime > 5 { //申请房间超时，解散队伍
-			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
-			(*table).checktime = (*now).Unix()
+		if (*now).Unix()-(*table).checktime.Unix() > 5 { //申请房间超时，解散队伍
+			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_ERROR)
 		}
 	} else if (*table).status == MATCH_FINISH {
-		if (*now).Unix()-(*table).checktime > 5 { //房间超时，解散
-			log.Debug("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime, (*now).Unix())
+		if (*now).Unix()-(*table).checktime.Unix() > 5 { //房间超时，解散
+			log.Debug("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
 			changeTableStatus(table, MATCH_END)
 		}
 	}
@@ -364,12 +364,12 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 					allready = false
 				}
 			}
-			//log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
+			log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
 			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE, req)
 
 			//都准备好了就进入锁定倒计时阶段
 			if allready {
-				(*table).checktime = time.Now().Unix()
+				(*table).checktime = time.Now()
 				changeTableStatus(table, MATCH_CHARTYPE_FIXED)
 			}
 		} else {
@@ -391,7 +391,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 		if len((*table).seats) < int((*table).modeplayercnt) {
 			seat := &Seat{
 				charid:     charid,
-				jointime:   time.Now().Unix(),
+				jointime:   time.Now(),
 				serverid:   serverid,
 				servertype: servertype,
 				chartype:   0,
@@ -421,14 +421,14 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 
 		table := &Table{
 			tableid:    g_tableid,
-			createtime: time.Now().Unix(),
-			checktime:  time.Now().Unix(),
+			createtime: time.Now(),
+			checktime:  time.Now(),
 			matchmode:  matchmode,
 			mapid:      mapid,
 			seats: []*Seat{
 				&Seat{
 					charid:     charid,
-					jointime:   time.Now().Unix(),
+					jointime:   time.Now(),
 					serverid:   serverid,
 					servertype: servertype,
 					chartype:   0,
@@ -514,9 +514,9 @@ func ConfirmTable(charid uint32, matchmode int32) {
 			}
 
 			if allconfirmed {
-				table.checktime = time.Now().Unix()
-				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
 				log.Debug("AllConfirmTable TableID %v", tableid)
+				table.checktime = time.Now()
+				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
 
 				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED
 			} else {
@@ -544,7 +544,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 		}
 
 		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)
-		table.checktime = time.Now().Unix()
+		table.checktime = time.Now()
 		changeTableStatus(table, MATCH_FINISH)
 	} else {
 		log.Error("ClearTable TableID %v Not Found , TableCount %v", rlt.Matchtableid, len(TableManager))
@@ -554,7 +554,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 func FormatTableInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
-		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime, (*table).status, len((*table).seats))
+		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format("2006-01-02 15:04:05"), (*table).status, len((*table).seats))
 	}
 	return ""
 }
@@ -564,7 +564,7 @@ func FormatSeatInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v", (*seat).charid, (*seat).charname, (*seat).jointime, (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v", (*seat).charid, (*seat).charname, (*seat).jointime.Format("2006-01-02 15:04:05"), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid)}, "\r\n")
 		}
 	}
 	return output

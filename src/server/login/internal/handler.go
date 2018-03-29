@@ -12,12 +12,10 @@ import (
 
 	"github.com/ciaos/leaf/gate"
 	"github.com/ciaos/leaf/log"
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
 type Account struct {
-	Id         bson.ObjectId `json:"id"        bson:"_id"`
 	UserID     uint32
 	UserName   string
 	PassWord   string
@@ -35,26 +33,8 @@ func handler(m interface{}, h interface{}) {
 	skeleton.RegisterChanRPC(reflect.TypeOf(m), h)
 }
 
-func getNextSeq() uint32 {
-	s := Pmongo.Ref()
-	defer Pmongo.UnRef(s)
-
-	c := s.DB(g.DB_NAME_LOGIN).C(g.TB_NAME_COUNTER)
-
-	doc := struct{ Seq uint32 }{}
-	cid := "counterid"
-
-	change := mgo.Change{
-		Update:    bson.M{"$inc": bson.M{"seq": 1}},
-		Upsert:    true,
-		ReturnNew: true,
-	}
-	if _, err := c.Find(bson.M{"_id": cid}).Apply(change, &doc); err != nil {
-		log.Error("getNextSeq counter failed:", err.Error())
-		return 0
-	}
-
-	return doc.Seq
+func getNextSeq() (int, error) {
+	return Pmongo.NextSeq(g.DB_NAME_LOGIN, g.TB_NAME_COUNTER, "counterid")
 }
 
 func handleRegister(args []interface{}) {
@@ -74,16 +54,15 @@ func handleRegister(args []interface{}) {
 		if m.IsLogin {
 			a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_ACCOUNT_NOT_EXIST})
 		} else {
-
-			userid := getNextSeq()
-			if userid == 0 {
+			userid, err := getNextSeq()
+			if err != nil {
+				log.Error("getNextSeq Error %v", err)
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				return
 			}
 
 			err = c.Insert(&Account{
-				Id:         bson.NewObjectId(),
-				UserID:     userid,
+				UserID:     uint32(userid),
 				UserName:   m.UserName,
 				PassWord:   m.Password,
 				Status:     0,
@@ -95,15 +74,17 @@ func handleRegister(args []interface{}) {
 			} else {
 
 				sessionbuf := make([]byte, 12)
-				binary.BigEndian.PutUint32(sessionbuf, userid)
+				binary.BigEndian.PutUint32(sessionbuf, uint32(userid))
 				binary.BigEndian.PutUint64(sessionbuf[4:], uint64(time.Now().Unix()))
 				sessionkey, err := tool.DesEncrypt(sessionbuf, []byte(tool.CRYPT_KEY))
 
 				if err != nil {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				} else {
-					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: userid, SessionKey: sessionkey})
+					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: uint32(userid), SessionKey: sessionkey})
 				}
+
+				log.Debug("Register Create New Account UserID : %v , UserName : %v", userid, m.UserName)
 			}
 		}
 	} else {
@@ -124,6 +105,8 @@ func handleRegister(args []interface{}) {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OTHER})
 				} else {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: result.UserID, SessionKey: sessionkey})
+
+					log.Debug("Register Use Old Account UserID : %v , UserName : %v", result.UserID, m.UserName)
 				}
 			} else {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR})

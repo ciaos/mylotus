@@ -222,7 +222,7 @@ func GetBattlePlayer(clientid uint32) (*BPlayer, error) {
 func (player *PlayerInfo) update(now *time.Time) {
 	if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_OFFLINE && (time.Now().Unix()-player.player.OfflineTime.Unix() > 600) {
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), true)
-	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && now.Unix()-player.player.PingTime.Unix() > 60 { //心跳超时转为掉线状态
+	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && now.Unix()-player.player.PingTime.Unix() > 600 { //心跳超时转为掉线状态
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), false)
 	}
 }
