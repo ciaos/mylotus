@@ -238,6 +238,8 @@ func deleteRoomMemberInfo(roomid int32) {
 		for charid, member := range room.members {
 			if member.ownerid == 0 {
 				delete(PlayerRoomIDMap, charid)
+
+				RemoveBattlePlayer(member.charid, "", true)
 			}
 			delete(room.members, charid)
 		}
@@ -310,7 +312,7 @@ func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 		room, ok := RoomManager[roomid]
 		if ok {
 			if room.status != ROOM_CONNECTING {
-				log.Error("Invalid Status %v RoomID %v", room.status, room.roomid)
+				log.Error("Invalid Status %v RoomID %v Charid %v Progress %v", room.status, room.roomid, req.CharID, req.Progress)
 				return
 			}
 

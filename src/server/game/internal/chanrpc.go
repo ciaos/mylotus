@@ -186,6 +186,14 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
+	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR { //匹配失败，返回大厅状态
+		player, _ := g.GetPlayer(pmsg.Charid)
+		if player != nil {
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			player.MatchServerID = 0
+		}
+	}
+
 	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
 
@@ -322,7 +330,7 @@ func rpcCloseAgent(args []interface{}) {
 	_ = a
 
 	if clientid != nil {
-		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String())
+		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String(), false)
 		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), false)
 	}
 }

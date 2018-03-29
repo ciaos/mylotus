@@ -73,6 +73,13 @@ func handlePing(args []interface{}) {
 	//log.Error("RecvPing %v From %v ", m.ID, a.RemoteAddr())
 	a.WriteMsg(&clientmsg.Pong{ID: m.ID})
 
+	charid := a.UserData()
+	if charid != nil {
+		player, _ := g.GetPlayer(charid.(uint32))
+		if player != nil {
+			player.PingTime = time.Now()
+		}
+	}
 	//SendMessageTo(int32(conf.Server.ServerID), conf.Server.ServerType, uint64(1), uint32(0), m)
 }
 
@@ -179,10 +186,12 @@ func handleReqLogin(args []interface{}) {
 		if ret == true {
 			if cache != nil {
 				cache.Char.UpdateTime = time.Now()
+				cache.PingTime = time.Now()
 				g.AddCachedGamePlayer(cache, &a)
 				cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			} else {
 				player.Char.UpdateTime = time.Now()
+				player.PingTime = time.Now()
 				g.AddGamePlayer(player, &a)
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			}
@@ -309,16 +318,18 @@ func handleReqMatch(args []interface{}) {
 	var msid int
 	skeleton.Go(func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
-			msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
+				msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
+			}
 		} else {
 			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		}
 	}, func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
-			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
 			player.MatchServerID = msid
 		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
-			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			player.MatchServerID = 0
 		}
 	})

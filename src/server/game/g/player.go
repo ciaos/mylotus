@@ -30,6 +30,7 @@ type Player struct {
 	Asset          PlayerAsset
 	MatchServerID  int
 	BattleServerID int
+	PingTime       time.Time
 	OfflineTime    time.Time
 }
 
@@ -93,6 +94,7 @@ func AddCachedGamePlayer(player *Player, agent *gate.Agent) {
 	exist, ok := GamePlayerManager[player.Char.CharID]
 	if ok {
 		(*exist.agent).Close()
+		_ = exist.agent
 		exist.agent = agent
 	}
 	(*agent).SetUserData(player.Char.CharID)
@@ -104,11 +106,12 @@ func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
 	exist, ok := GamePlayerManager[charid]
 	if ok {
 		(*exist.agent).Close()
+		_ = exist.agent
 		exist.agent = agent
 		(*agent).SetUserData(charid)
 
 		exist.player.Char.UpdateTime = time.Now()
-		exist.player.Char.Status = int32(clientmsg.UserStatus_US_PLAYER_ONLINE)
+		exist.player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 
 		log.Debug("ReconnectGamePlayer %v OK", charid)
 	} else {
@@ -127,7 +130,7 @@ func RemoveGamePlayer(clientid uint32, remoteaddr string, removenow bool) {
 			} else {
 				player.player.OfflineTime = time.Now()
 
-				if player.player.Char.Status == int32(clientmsg.UserStatus_US_PLAYER_MATCH) && player.player.MatchServerID > 0 {
+				if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH && player.player.MatchServerID > 0 {
 					innerReq := &proxymsg.Proxy_GS_MS_Offline{
 						Charid: clientid,
 					}
@@ -163,6 +166,7 @@ func AddBattlePlayer(player *BPlayer, agent *gate.Agent) {
 	exist, ok := BattlePlayerManager[player.CharID]
 	if ok {
 		(*exist.agent).Close()
+		_ = exist.agent
 		delete(BattlePlayerManager, player.CharID)
 	}
 	(*agent).SetUserData(player.CharID)
@@ -184,6 +188,7 @@ func ReconnectBattlePlayer(charid uint32, agent *gate.Agent) {
 	exist, ok := BattlePlayerManager[charid]
 	if ok {
 		(*exist.agent).Close()
+		_ = exist.agent
 		exist.agent = agent
 		exist.player.OnlineTime = time.Now()
 		exist.player.HeartBeatTime = time.Now()
@@ -195,13 +200,13 @@ func ReconnectBattlePlayer(charid uint32, agent *gate.Agent) {
 	}
 }
 
-func RemoveBattlePlayer(clientid uint32, remoteaddr string) {
+func RemoveBattlePlayer(clientid uint32, remoteaddr string, force bool) {
 	player, ok := BattlePlayerManager[clientid]
 	if ok {
-		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
+		if force == true || strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
 			delete(BattlePlayerManager, clientid)
 			LeaveRoom(clientid)
-			log.Debug("RemoveBattlePlayer %v", clientid)
+			log.Debug("RemoveBattlePlayer %v force %v", clientid, force)
 		}
 	}
 }
@@ -215,8 +220,10 @@ func GetBattlePlayer(clientid uint32) (*BPlayer, error) {
 }
 
 func (player *PlayerInfo) update(now *time.Time) {
-	if player.player.Char.Status == int32(clientmsg.UserStatus_US_PLAYER_OFFLINE) && (time.Now().Unix()-player.player.OfflineTime.Unix() > 600) {
+	if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_OFFLINE && (time.Now().Unix()-player.player.OfflineTime.Unix() > 600) {
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), true)
+	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && now.Unix()-player.player.PingTime.Unix() > 60 { //心跳超时转为掉线状态
+		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), false)
 	}
 }
 
@@ -225,6 +232,8 @@ func (player *BPlayerInfo) update(now *time.Time) {
 		player.player.OfflineTime = *now
 		player.player.IsOffline = true
 		LeaveRoom(player.player.CharID)
+	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 86400 {
+		RemoveBattlePlayer(player.player.CharID, "", true)
 	}
 }
 
@@ -253,7 +262,7 @@ func BroadCastMsgToGamePlayers(msgdata interface{}) {
 func FormatGPlayerInfo() string {
 	output := fmt.Sprintf("GamePlayerCnt:%d", len(GamePlayerManager))
 	for _, player := range GamePlayerManager {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.Char.Status, (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
 	}
 	return output
 }
