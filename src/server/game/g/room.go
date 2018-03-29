@@ -58,8 +58,8 @@ type Room struct {
 	messagesbackup []*clientmsg.Transfer_Command
 }
 
-var PlayerRoomIDMap = make(map[uint32]int32)
-var RoomManager = make(map[int32]*Room)
+var PlayerRoomIDMap = make(map[uint32]int32, 1024)
+var RoomManager = make(map[int32]*Room, 128)
 var g_roomid int32
 
 //var mRoomID *sync.Mutex
@@ -178,7 +178,7 @@ func (room *Room) update(now *time.Time) {
 		}
 
 		//bug
-		if now.Unix()-(*room).createtime.Unix() > int64(600) {
+		if now.Unix()-(*room).createtime.Unix() > int64(6000) {
 			room.broadcast(&clientmsg.Rlt_EndBattle{
 				RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 			})
@@ -211,6 +211,16 @@ func changeRoomStatus(room *Room, status string) {
 	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
 
 	if (*room).status == ROOM_END {
+
+		//notify finish
+		rsp := &proxymsg.Proxy_BS_GS_FINISH_BATTLE{}
+		for _, member := range room.members {
+			if member.ownerid == 0 {
+				rsp.CharID = member.charid
+				go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, rsp.CharID, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, rsp)
+			}
+		}
+
 		room.messagesbackup = append([]*clientmsg.Transfer_Command{})
 		deleteRoomMemberInfo((*room).roomid)
 		DeleteRoom((*room).roomid)
@@ -262,7 +272,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		matchmode:      msg.Matchmode,
 		mapid:          msg.Mapid,
 		battlekey:      battlekey,
-		members:        make(map[uint32]*Member),
+		members:        make(map[uint32]*Member, 10),
 		messages:       append([]*clientmsg.Transfer_Command_CommandData{}),
 		messagesbackup: append([]*clientmsg.Transfer_Command{}),
 		memberok:       0,

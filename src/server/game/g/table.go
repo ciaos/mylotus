@@ -59,8 +59,8 @@ type Table struct {
 	modeplayercnt int32
 }
 
-var TableManager = make(map[int32]*Table)
-var PlayerTableIDMap = make(map[uint32]int32)
+var TableManager = make(map[int32]*Table, 128)
+var PlayerTableIDMap = make(map[uint32]int32, 1024)
 var g_tableid int32
 
 //var mTableID *sync.Mutex

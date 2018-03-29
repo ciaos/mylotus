@@ -53,8 +53,8 @@ type BPlayerInfo struct {
 	player *BPlayer
 }
 
-var GamePlayerManager = make(map[uint32]*PlayerInfo)
-var BattlePlayerManager = make(map[uint32]*BPlayerInfo)
+var GamePlayerManager = make(map[uint32]*PlayerInfo, 1024)
+var BattlePlayerManager = make(map[uint32]*BPlayerInfo, 1024)
 
 func (player *Player) ChangeGamePlayerStatus(status clientmsg.UserStatus) {
 	player.Char.Status = int32(status)

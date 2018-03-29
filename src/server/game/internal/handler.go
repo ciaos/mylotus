@@ -67,8 +67,15 @@ func handlePing(args []interface{}) {
 func handleReqServerTime(args []interface{}) {
 	//	m := args[0].(*clientmsg.Req_ServerTime)
 	a := args[1].(gate.Agent)
-
 	a.WriteMsg(&clientmsg.Rlt_ServerTime{Time: uint32(time.Now().Unix())})
+
+	charid := a.UserData()
+	if charid != nil {
+		player, _ := g.GetPlayer(charid.(uint32))
+		if player != nil {
+			player.PingTime = time.Now()
+		}
+	}
 }
 
 func handleReqLogin(args []interface{}) {
