@@ -213,10 +213,11 @@ func changeRoomStatus(room *Room, status string) {
 	if (*room).status == ROOM_END {
 
 		//notify finish
-		rsp := &proxymsg.Proxy_BS_GS_FINISH_BATTLE{}
 		for _, member := range room.members {
 			if member.ownerid == 0 {
-				rsp.CharID = member.charid
+				rsp := &proxymsg.Proxy_BS_GS_FINISH_BATTLE{
+					CharID: member.charid,
+				}
 				go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, rsp.CharID, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, rsp)
 			}
 		}
@@ -273,8 +274,8 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		mapid:          msg.Mapid,
 		battlekey:      battlekey,
 		members:        make(map[uint32]*Member, 10),
-		messages:       append([]*clientmsg.Transfer_Command_CommandData{}),
-		messagesbackup: append([]*clientmsg.Transfer_Command{}),
+		messages:       make([]*clientmsg.Transfer_Command_CommandData, 0, 10),
+		messagesbackup: make([]*clientmsg.Transfer_Command, 0, 1000),
 		memberok:       0,
 		frameid:        0,
 		seed:           int32(rand.Intn(100000)),

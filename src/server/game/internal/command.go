@@ -8,10 +8,10 @@ import (
 )
 
 func init() {
-	skeleton.RegisterCommand("lroom", "list room info", commandRoom)
-	skeleton.RegisterCommand("ltable", "list table info", commandTable)
-	skeleton.RegisterCommand("lgplayer", "list gameserver online member count", commandGPlayer)
-	skeleton.RegisterCommand("lbplayer", "list battleserver online member count", commandBPlayer)
+	skeleton.RegisterCommand("lr", "list room info", commandRoom)
+	skeleton.RegisterCommand("lt", "list table info", commandTable)
+	skeleton.RegisterCommand("lg", "list gameserver online member count", commandGPlayer)
+	skeleton.RegisterCommand("lb", "list battleserver online member count", commandBPlayer)
 }
 
 func commandRoom(args []interface{}) interface{} {
