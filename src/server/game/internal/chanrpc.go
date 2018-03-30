@@ -189,7 +189,9 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR { //匹配失败，返回大厅状态
 		player, _ := g.GetPlayer(pmsg.Charid)
 		if player != nil {
-			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			if player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE {
+				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			}
 			player.MatchServerID = 0
 		}
 	}

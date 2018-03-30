@@ -79,6 +79,9 @@ type Client struct {
 	nextpinggstime int64
 	nextpingbstime int64
 
+	lastgsheartbeattime int64
+	lastbsheartbeattime int64
+
 	startbattletime int64
 	maxbattletime   int64
 
@@ -89,13 +92,20 @@ type Client struct {
 
 func (c *Client) ChangeStatus(status string) {
 	c.status = status
-	tlog.Debugf("client %d %s\n", c.id, c.status)
+	tlog.Debugf("client %d CharID %v, Status %s\n", c.id, c.charid, c.status)
 }
 
 func handle_Pong(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Pong{}
 	proto.Unmarshal(msgdata, rsp)
+	c.lastgsheartbeattime = time.Now().Unix()
 	//fmt.Printf("client %d recv pong %d\n", c.id, rsp.GetID())
+}
+
+func handle_Transfer_HeartBeat(c *Client, msgdata []byte) {
+	rsp := &clientmsg.Transfer_Battle_Heartbeat{}
+	proto.Unmarshal(msgdata, rsp)
+	c.lastbsheartbeattime = time.Now().Unix()
 }
 
 func handle_Rlt_Register(c *Client, msgdata []byte) {
@@ -304,6 +314,7 @@ func (c *Client) recvLogin() {
 func (c *Client) updateGame() {
 	if c.status == STATUS_GAME_CONNECT {
 		if c.nextlogintime < time.Now().Unix() {
+			c.lastgsheartbeattime = time.Now().Unix()
 			c.nextlogintime = 0
 			c.gconn, c.err = net.Dial("tcp", c.gameserveraddr)
 			tlog.Debugf("client %d connect game %s\n", c.id, c.gameserveraddr)
@@ -348,6 +359,12 @@ func (c *Client) updateGame() {
 				ID: uint32(rand.Intn(10000)),
 			}
 			go Send(&c.gconn, clientmsg.MessageType_MT_PING, msg)
+
+			if time.Now().Unix()-c.lastgsheartbeattime > 20 {
+
+				tlog.Debugf("client %d gs timeout\n", c.id)
+				c.ChangeStatus(STATUS_GAME_CLOSE)
+			}
 		}
 	}
 }
@@ -369,7 +386,7 @@ func (c *Client) recvGame() {
 
 func (c *Client) updateBattle() {
 	if c.status == STATUS_BATTLE_CONNECT {
-
+		c.lastbsheartbeattime = time.Now().Unix()
 		tlog.Debugf("client %d connect battle %s\n", c.id, c.battleaddr)
 		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
 		if c.err != nil {
@@ -402,6 +419,10 @@ func (c *Client) updateBattle() {
 			msg := &clientmsg.Transfer_Battle_Heartbeat{}
 			go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
 
+			if time.Now().Unix()-c.lastbsheartbeattime > 20 {
+				tlog.Debugf("client %d bs timeout\n", c.id)
+				c.ChangeStatus(STATUS_GAME_CLOSE)
+			}
 		}
 
 		if c.startbattle {
@@ -510,6 +531,7 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_RLT_STARTBATTLE, handle_Rlt_StartBattle)
 	c.book(clientmsg.MessageType_MT_RLT_SERVERLIST, handle_Rlt_ServerList)
 	c.book(clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, handle_Rlt_TeamOperate)
+	c.book(clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, handle_Transfer_HeartBeat)
 }
 
 func (c *Client) Loop(id int32) {

@@ -310,6 +310,8 @@ func handleReqMatch(args []interface{}) {
 			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
 				msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			} else {
+				log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
 			}
 		} else {
 			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
@@ -524,14 +526,13 @@ func handleReqEndBattle(args []interface{}) {
 	m := args[0].(*clientmsg.Req_EndBattle)
 	a := args[1].(gate.Agent)
 
-	g.EndBattle(m.CharID)
-
 	log.Debug("handleReqEndBattle %v", m.CharID)
-
 	a.WriteMsg(&clientmsg.Rlt_EndBattle{
 		RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 		CharID:  m.CharID,
 	})
+
+	g.EndBattle(m.CharID)
 }
 
 func handleTransferCommand(args []interface{}) {

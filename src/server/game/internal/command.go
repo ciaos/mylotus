@@ -28,20 +28,22 @@ func commandRoom(args []interface{}) interface{} {
 		roomid, _ := strconv.Atoi(args[0].(string))
 		return g.FormatMemberInfo(int32(roomid))
 	} else {
-		output := fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))
+		var output string
 		for i, _ := range g.RoomManager {
 			output = strings.Join([]string{output, g.FormatRoomInfo(i)}, "\r\n")
 		}
-		return output
+		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
+		return strings.TrimLeft(output, "\r\n")
 	}
 }
 
 func commandRoomMap(args []interface{}) interface{} {
-	output := fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))
+	var output string
 	for k, v := range g.PlayerRoomIDMap {
 		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tRoomID:%v", k, v)}, "\r\n")
 	}
-	return output
+	output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
+	return strings.TrimLeft(output, "\r\n")
 }
 
 func commandTableMap(args []interface{}) interface{} {
@@ -49,7 +51,7 @@ func commandTableMap(args []interface{}) interface{} {
 	for k, v := range g.PlayerTableIDMap {
 		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tTableID:%v", k, v)}, "\r\n")
 	}
-	return output
+	return strings.TrimLeft(output, "\r\n")
 }
 
 func commandTable(args []interface{}) interface{} {
@@ -61,7 +63,7 @@ func commandTable(args []interface{}) interface{} {
 		for i, _ := range g.TableManager {
 			output = strings.Join([]string{output, g.FormatTableInfo(i)}, "\r\n")
 		}
-		return output
+		return strings.TrimLeft(output, "\r\n")
 	}
 }
 

@@ -123,6 +123,7 @@ func RemoveGamePlayer(clientid uint32, remoteaddr string, removenow bool) {
 	player, ok := GamePlayerManager[clientid]
 	if ok {
 		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
+			(*player.agent).Close()
 			if removenow {
 				player.player.SavePlayerAsset()
 				delete(GamePlayerManager, clientid)
@@ -261,17 +262,19 @@ func BroadCastMsgToGamePlayers(msgdata interface{}) {
 }
 
 func FormatGPlayerInfo() string {
-	output := fmt.Sprintf("GamePlayerCnt:%d", len(GamePlayerManager))
+	var output string
 	for _, player := range GamePlayerManager {
 		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
 	}
-	return output
+	output = strings.Join([]string{output, fmt.Sprintf("GamePlayerCnt:%d", len(GamePlayerManager))}, "\r\n")
+	return strings.TrimLeft(output, "\r\n")
 }
 
 func FormatBPlayerInfo() string {
-	output := fmt.Sprintf("BattlePlayerCnt:%d", len(BattlePlayerManager))
+	var output string
 	for _, player := range BattlePlayerManager {
 		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tAddr:%v\tIsOffline:%v\tOnlineTime:%v\tOfflineTime:%v\tHeartBeatTime:%v\tGSID:%v\t", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.IsOffline, player.player.OnlineTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.HeartBeatTime.Format("2006-01-02 15:04:05"), player.player.GameServerID)}, "\r\n")
 	}
-	return output
+	output = strings.Join([]string{output, fmt.Sprintf("BattlePlayerCnt:%d", len(BattlePlayerManager))}, "\r\n")
+	return strings.TrimLeft(output, "\r\n")
 }

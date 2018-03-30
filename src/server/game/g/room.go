@@ -19,6 +19,7 @@ const (
 	ROOM_CONNECTING  = "room_connecting"
 	ROOM_FIGHTING    = "room_fighting"
 	ROOM_END         = "room_end"
+	ROOM_CLEAR       = "room_clear"
 
 	MEMBER_UNCONNECTED = "member_unconnected"
 	MEMBER_CONNECTED   = "member_connected"
@@ -202,7 +203,12 @@ func (room *Room) update(now *time.Time) {
 			return
 		}
 
-		room.checkOffline()
+		if room.status == ROOM_CLEAR {
+			deleteRoomMemberInfo((*room).roomid)
+			DeleteRoom((*room).roomid)
+		} else {
+			room.checkOffline()
+		}
 	}
 }
 
@@ -223,8 +229,9 @@ func changeRoomStatus(room *Room, status string) {
 		}
 
 		room.messagesbackup = append([]*clientmsg.Transfer_Command{})
-		deleteRoomMemberInfo((*room).roomid)
-		DeleteRoom((*room).roomid)
+
+		room.nextchecktime = time.Now().Add(time.Duration(5 * time.Second))
+		changeRoomStatus(room, ROOM_CLEAR)
 	} else if (*room).status == ROOM_FIGHTING {
 		room.notifyBattleStart()
 	}
