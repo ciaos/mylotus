@@ -204,6 +204,7 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, force bool) {
 	player, ok := BattlePlayerManager[clientid]
 	if ok {
 		if force == true || strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
+			(*player.agent).Close()
 			delete(BattlePlayerManager, clientid)
 			LeaveRoom(clientid)
 			log.Debug("RemoveBattlePlayer %v force %v", clientid, force)
@@ -232,7 +233,7 @@ func (player *BPlayerInfo) update(now *time.Time) {
 		player.player.OfflineTime = *now
 		player.player.IsOffline = true
 		LeaveRoom(player.player.CharID)
-	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 86400 {
+	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 60 {
 		RemoveBattlePlayer(player.player.CharID, "", true)
 	}
 }

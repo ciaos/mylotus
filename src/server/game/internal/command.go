@@ -2,16 +2,25 @@ package internal
 
 import (
 	"fmt"
+	"runtime/debug"
 	"server/game/g"
 	"strconv"
 	"strings"
 )
 
 func init() {
+	skeleton.RegisterCommand("free", "free heap memory", commandFree)
 	skeleton.RegisterCommand("lr", "list room info", commandRoom)
+	skeleton.RegisterCommand("lrm", "list charid roomid map", commandRoomMap)
 	skeleton.RegisterCommand("lt", "list table info", commandTable)
+	skeleton.RegisterCommand("ltm", "list charid tableid map", commandTableMap)
 	skeleton.RegisterCommand("lg", "list gameserver online member count", commandGPlayer)
 	skeleton.RegisterCommand("lb", "list battleserver online member count", commandBPlayer)
+}
+
+func commandFree(args []interface{}) interface{} {
+	debug.FreeOSMemory()
+	return "OK"
 }
 
 func commandRoom(args []interface{}) interface{} {
@@ -25,6 +34,22 @@ func commandRoom(args []interface{}) interface{} {
 		}
 		return output
 	}
+}
+
+func commandRoomMap(args []interface{}) interface{} {
+	output := fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))
+	for k, v := range g.PlayerRoomIDMap {
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tRoomID:%v", k, v)}, "\r\n")
+	}
+	return output
+}
+
+func commandTableMap(args []interface{}) interface{} {
+	output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
+	for k, v := range g.PlayerTableIDMap {
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tTableID:%v", k, v)}, "\r\n")
+	}
+	return output
 }
 
 func commandTable(args []interface{}) interface{} {

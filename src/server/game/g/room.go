@@ -251,9 +251,11 @@ func deleteRoomMemberInfo(roomid int32) {
 	if ok {
 		for charid, member := range room.members {
 			if member.ownerid == 0 {
-				delete(PlayerRoomIDMap, charid)
-
-				RemoveBattlePlayer(member.charid, "", true)
+				rid, exist := PlayerRoomIDMap[charid]
+				if exist && rid == roomid { //玩家已进入另外一场战斗，不删除映射信息和网络连接
+					delete(PlayerRoomIDMap, charid)
+					RemoveBattlePlayer(member.charid, "", true)
+				}
 			}
 			delete(room.members, charid)
 		}
@@ -295,9 +297,9 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 		}
 
 		//Leave Previous Room
-		roomid, ok := PlayerRoomIDMap[mem.CharID]
+		oldroomid, ok := PlayerRoomIDMap[mem.CharID]
 		if ok {
-			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, roomid)
+			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, oldroomid)
 			LeaveRoom(mem.CharID)
 		}
 
