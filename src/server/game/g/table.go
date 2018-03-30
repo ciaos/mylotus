@@ -554,7 +554,7 @@ func FormatTableInfo(tableid int32) string {
 }
 
 func FormatSeatInfo(tableid int32) string {
-	output := fmt.Sprintf("TableID:%v", tableid)
+	output := FormatTableInfo(tableid)
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {

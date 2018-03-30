@@ -38,6 +38,7 @@ type Member struct {
 	ownerid      uint32 // robot 有控制者
 	progress     int32
 	frameid      uint32
+	remoteaddr   string
 }
 
 type Room struct {
@@ -294,6 +295,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 			ownerid:      mem.OwnerID,
 			progress:     0,
 			frameid:      0,
+			remoteaddr:   "",
 		}
 
 		//Leave Previous Room
@@ -396,7 +398,7 @@ func GenRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
 	return rsp
 }
 
-func ConnectRoom(charid uint32, roomid int32, battlekey []byte) bool {
+func ConnectRoom(charid uint32, roomid int32, battlekey []byte, remoteaddr string) bool {
 	room, ok := RoomManager[roomid]
 	if ok {
 		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
@@ -412,6 +414,7 @@ func ConnectRoom(charid uint32, roomid int32, battlekey []byte) bool {
 
 		member, ok := room.members[charid]
 		if ok {
+			member.remoteaddr = remoteaddr
 			changeMemberStatus(member, MEMBER_CONNECTED)
 			PlayerRoomIDMap[charid] = roomid
 
@@ -437,7 +440,7 @@ func ConnectRoom(charid uint32, roomid int32, battlekey []byte) bool {
 	return false
 }
 
-func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte) bool {
+func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) bool {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
@@ -455,6 +458,7 @@ func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte) bool {
 
 			member, ok := room.members[charid]
 			if ok {
+				member.remoteaddr = remoteaddr
 				changeMemberStatus(member, MEMBER_RECONNECTED)
 				member.frameid = frameid
 				log.Debug("ReConnectRoom RoomID %v CharID %v", roomid, charid)
@@ -481,6 +485,20 @@ func GetMemberGSID(charid uint32) int32 {
 		}
 	}
 	return 0
+}
+
+func GetMemberRemoteAddr(charid uint32) string {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			member, ok := room.members[charid]
+			if ok {
+				return member.remoteaddr
+			}
+		}
+	}
+	return ""
 }
 
 func LeaveRoom(charid uint32) {
@@ -556,7 +574,7 @@ func FormatRoomInfo(roomid int32) string {
 }
 
 func FormatMemberInfo(roomid int32) string {
-	output := fmt.Sprintf("RoomID:%v", roomid)
+	output := FormatRoomInfo(roomid)
 	room, ok := RoomManager[roomid]
 	if ok {
 		for _, member := range (*room).members {

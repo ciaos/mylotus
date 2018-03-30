@@ -368,7 +368,7 @@ func (c *Client) updateGame() {
 
 			if time.Now().Unix()-c.lastgsheartbeattime > 20 {
 
-				tlog.Debugf("client %d gs timeout\n", c.id)
+				tlog.Errorf("client %d gs timeout\n", c.id)
 				c.ChangeStatus(STATUS_GAME_CLOSE)
 			}
 		}
@@ -425,10 +425,9 @@ func (c *Client) updateBattle() {
 
 			msg := &clientmsg.Transfer_Battle_Heartbeat{}
 			go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
-
-			if time.Now().Unix()-c.lastbsheartbeattime > 20 {
-				tlog.Debugf("client %d bs timeout\n", c.id)
-				c.ChangeStatus(STATUS_GAME_CLOSE)
+			if time.Now().Unix()-c.lastbsheartbeattime > 60 {
+				tlog.Errorf("client %d bs timeout\n", c.id)
+				c.ChangeStatus(STATUS_BATTLE_CLOSE)
 			}
 		}
 
@@ -559,8 +558,29 @@ func randInt(min, max int) int64 {
 	return int64(randNum)
 }
 
+var m_client = make(map[int]*Client, ClientNum)
+
+func stat(fin chan int) {
+	for {
+		select {
+		case _ = <-fin:
+			return
+		case <-time.After(time.Second * 2):
+			m_stat := make(map[string]int)
+			for _, m_client := range m_client {
+				m_stat[m_client.status] += 1
+			}
+			for k, v := range m_stat {
+				tlog.Error("Status:\t", k, "\tCount:\t", v)
+			}
+		}
+	}
+}
+
 func main() {
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
+	//	level := logging.AddModuleLevel(backend)
+	//	level.SetLevel(logging.ERROR, "")
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
@@ -572,8 +592,13 @@ func main() {
 	for i <= ClientNum {
 		client := &Client{}
 		go (*client).Loop(int32(i))
+		m_client[i] = client
 		i += 1
 	}
 
+	fin := make(chan int, 1)
+	go stat(fin)
 	w.Wait()
+
+	fin <- 1
 }

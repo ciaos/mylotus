@@ -209,7 +209,9 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, force bool) {
 			(*player.agent).Close()
 			_ = player.agent
 			delete(BattlePlayerManager, clientid)
-			LeaveRoom(clientid)
+			if GetMemberRemoteAddr(clientid) == remoteaddr {
+				LeaveRoom(clientid)
+			}
 			log.Debug("RemoveBattlePlayer %v force %v", clientid, force)
 		}
 	}
