@@ -305,7 +305,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 			LeaveRoom(mem.CharID)
 		}
 
-		changeMemberStatus(member, MEMBER_OFFLINE)
+		changeMemberStatus(member, MEMBER_UNCONNECTED)
 		room.members[member.charid] = member
 		log.Debug("JoinRoom RoomID %v CharID %v OwnerID %v", room.roomid, member.charid, member.ownerid)
 	}

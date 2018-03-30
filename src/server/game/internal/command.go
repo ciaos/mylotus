@@ -10,12 +10,12 @@ import (
 
 func init() {
 	skeleton.RegisterCommand("free", "free heap memory", commandFree)
-	skeleton.RegisterCommand("lr", "list room info", commandRoom)
-	skeleton.RegisterCommand("lrm", "list charid roomid map", commandRoomMap)
-	skeleton.RegisterCommand("lt", "list table info", commandTable)
-	skeleton.RegisterCommand("ltm", "list charid tableid map", commandTableMap)
-	skeleton.RegisterCommand("lg", "list gameserver online member count", commandGPlayer)
-	skeleton.RegisterCommand("lb", "list battleserver online member count", commandBPlayer)
+	skeleton.RegisterCommand("r", "list room info", commandRoom)
+	skeleton.RegisterCommand("rm", "list charid roomid map", commandRoomMap)
+	skeleton.RegisterCommand("t", "list table info", commandTable)
+	skeleton.RegisterCommand("tm", "list charid tableid map", commandTableMap)
+	skeleton.RegisterCommand("g", "list gameserver online member count", commandGPlayer)
+	skeleton.RegisterCommand("b", "list battleserver online member count", commandBPlayer)
 }
 
 func commandFree(args []interface{}) interface{} {

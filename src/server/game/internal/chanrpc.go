@@ -186,17 +186,18 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR { //匹配失败，返回大厅状态
-		player, _ := g.GetPlayer(pmsg.Charid)
-		if player != nil {
-			if player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE {
-				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-			}
+	player, _ := g.GetPlayer(pmsg.Charid)
+	if player == nil {
+		return
+	}
+
+	if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
+		g.SendMsgToPlayer(pmsg.Charid, msg)
+		if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR { //匹配失败，返回大厅状态
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			player.MatchServerID = 0
 		}
 	}
-
-	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
 
 func proxyHandleGSMSTeamOperate(pmsg *proxymsg.InternalMessage) {

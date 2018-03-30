@@ -416,6 +416,10 @@ func (c *Client) updateBattle() {
 		c.bconn.Close()
 		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
 		c.ChangeStatus(STATUS_GAME_MATCH_START)
+	} else if c.status == STATUS_BATTLE_WAITEND {
+		if time.Now().Unix() > c.maxbattletime {
+			c.ChangeStatus(STATUS_BATTLE_CLOSE)
+		}
 	}
 
 	if c.status == STATUS_BATTLE_LOOP {
@@ -425,7 +429,7 @@ func (c *Client) updateBattle() {
 
 			msg := &clientmsg.Transfer_Battle_Heartbeat{}
 			go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
-			if time.Now().Unix()-c.lastbsheartbeattime > 60 {
+			if time.Now().Unix()-c.lastbsheartbeattime > 20 {
 				tlog.Errorf("client %d bs timeout\n", c.id)
 				c.ChangeStatus(STATUS_BATTLE_CLOSE)
 			}
@@ -457,6 +461,8 @@ func (c *Client) updateBattle() {
 				CharID: c.charid,
 			}
 			c.ChangeStatus(STATUS_BATTLE_WAITEND)
+			c.maxbattletime = time.Now().Add(time.Duration(time.Second * 5)).Unix()
+
 			go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 		}
 	}
