@@ -76,6 +76,8 @@ type Client struct {
 	nextregistertime int64
 	nextmatchtime    int64
 
+	frameid uint32
+
 	nextpinggstime int64
 	nextpingbstime int64
 
@@ -260,6 +262,10 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 	} else {
 		//	tlog.Debugf("client %d recv tranfer_cmd from server, frame %d Total %d\n", c.charid, rsp.FrameID, len(rsp.Messages))
 	}
+	if rsp.FrameID != c.frameid+1 {
+		tlog.Errorf("rsp.frameid %v client.frameid %v client.id %v client.charid %v", rsp.FrameID, c.frameid, c.id, c.charid)
+	}
+	c.frameid = rsp.FrameID
 	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
 }
 
@@ -387,6 +393,7 @@ func (c *Client) recvGame() {
 func (c *Client) updateBattle() {
 	if c.status == STATUS_BATTLE_CONNECT {
 		c.lastbsheartbeattime = time.Now().Unix()
+		c.frameid = 0
 		tlog.Debugf("client %d connect battle %s\n", c.id, c.battleaddr)
 		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
 		if c.err != nil {
@@ -509,8 +516,8 @@ func (c *Client) Init(id int32) {
 	c.username = fmt.Sprintf("robot_%d", id)
 	c.password = "123456"
 
-	//	c.username = fmt.Sprintf("%d", id)
-	//	c.password = fmt.Sprintf("%d", id)
+	//	c.username = fmt.Sprintf("%s", "gaojiangshan")
+	//	c.password = fmt.Sprintf("%d", 123456)
 
 	c.nextlogintime = time.Now().Unix()
 	c.nextpingbstime = time.Now().Unix() + 3

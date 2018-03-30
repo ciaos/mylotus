@@ -38,20 +38,33 @@ func commandRoom(args []interface{}) interface{} {
 }
 
 func commandRoomMap(args []interface{}) interface{} {
-	var output string
-	for k, v := range g.PlayerRoomIDMap {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tRoomID:%v", k, v)}, "\r\n")
+	if len(args) == 1 {
+		charid, _ := strconv.Atoi(args[0].(string))
+		output := fmt.Sprintf("CharID:%v\tRoomID:%v", uint32(charid), g.PlayerRoomIDMap[uint32(charid)])
+		return output
+	} else {
+		var output string
+		for k, v := range g.PlayerRoomIDMap {
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tRoomID:%v", k, v)}, "\r\n")
+		}
+		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
+		return strings.TrimLeft(output, "\r\n")
 	}
-	output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
-	return strings.TrimLeft(output, "\r\n")
 }
 
 func commandTableMap(args []interface{}) interface{} {
-	output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
-	for k, v := range g.PlayerTableIDMap {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tTableID:%v", k, v)}, "\r\n")
+	if len(args) == 1 {
+		charid, _ := strconv.Atoi(args[0].(string))
+		output := fmt.Sprintf("CharID:%v\tTableID:%v", uint32(charid), g.PlayerTableIDMap[uint32(charid)])
+		return output
+	} else {
+		var output string
+		for k, v := range g.PlayerTableIDMap {
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tTableID:%v", k, v)}, "\r\n")
+		}
+		output = strings.Join([]string{output, fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))}, "\r\n")
+		return strings.TrimLeft(output, "\r\n")
 	}
-	return strings.TrimLeft(output, "\r\n")
 }
 
 func commandTable(args []interface{}) interface{} {
@@ -68,9 +81,19 @@ func commandTable(args []interface{}) interface{} {
 }
 
 func commandGPlayer(args []interface{}) interface{} {
-	return g.FormatGPlayerInfo()
+	if len(args) == 1 {
+		charid, _ := strconv.Atoi(args[0].(string))
+		return g.FormatOneGPlayerInfo(uint32(charid))
+	} else {
+		return g.FormatGPlayerInfo()
+	}
 }
 
 func commandBPlayer(args []interface{}) interface{} {
-	return g.FormatBPlayerInfo()
+	if len(args) == 1 {
+		charid, _ := strconv.Atoi(args[0].(string))
+		return g.FormatOneBPlayerInfo(uint32(charid))
+	} else {
+		return g.FormatBPlayerInfo()
+	}
 }

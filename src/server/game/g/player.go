@@ -272,6 +272,15 @@ func FormatGPlayerInfo() string {
 	return strings.TrimLeft(output, "\r\n")
 }
 
+func FormatOneGPlayerInfo(charid uint32) string {
+	output := ""
+	player, ok := GamePlayerManager[charid]
+	if ok {
+		output = fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)
+	}
+	return output
+}
+
 func FormatBPlayerInfo() string {
 	var output string
 	for _, player := range BattlePlayerManager {
@@ -279,4 +288,13 @@ func FormatBPlayerInfo() string {
 	}
 	output = strings.Join([]string{output, fmt.Sprintf("BattlePlayerCnt:%d", len(BattlePlayerManager))}, "\r\n")
 	return strings.TrimLeft(output, "\r\n")
+}
+
+func FormatOneBPlayerInfo(charid uint32) string {
+	output := ""
+	player, ok := BattlePlayerManager[charid]
+	if ok {
+		output = fmt.Sprintf("CharID:%v\tAddr:%v\tIsOffline:%v\tOnlineTime:%v\tOfflineTime:%v\tHeartBeatTime:%v\tGSID:%v\t", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.IsOffline, player.player.OnlineTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.HeartBeatTime.Format("2006-01-02 15:04:05"), player.player.GameServerID)
+	}
+	return output
 }
