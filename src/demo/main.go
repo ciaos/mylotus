@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"runtime"
 )
 
 func main() {
 
-	fmt.Println(runtime.CPUProfile())
+	a := []int32{1}
+
+	a = append(a[0:0], a[0+1:]...)
+	fmt.Println(a)
 }

@@ -182,58 +182,47 @@ func ReconnectTable(charid uint32, pmsg *proxymsg.InternalMessage) {
 
 func changeTableStatus(table *Table, status string) {
 	(*table).status = status
+	table.checktime = time.Now()
 	log.Debug("changeTableStatus Table %v Status %v", (*table).tableid, (*table).status)
 
 	if (*table).status == MATCH_ERROR {
 		//notify all member error
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
-		table.checktime = time.Now()
 		changeTableStatus(table, MATCH_FINISH)
 	} else if (*table).status == MATCH_EMPTY {
 		DeleteTable((*table).tableid)
 	} else if (*table).status == MATCH_OK {
 		//notify all member to choose
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-		(*table).checktime = time.Now()
 		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_TIMEOUT {
+		//fill with robot and notify all member to choose
 		fillRobotToTable(table)
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-		(*table).checktime = time.Now()
 		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
+		//auto choose
 		autoChooseToTable(table)
 	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
 		table.allocBattleRoom()
-		(*table).checktime = time.Now()
 		changeTableStatus(table, MATCH_ALLOCROOM)
 	} else if (*table).status == MATCH_END {
 		deleteTableSeatInfo(table.tableid)
 		table.seats = append([]*Seat{}) //clear seats
 		DeleteTable(table.tableid)
 	} else if (*table).status == MATCH_CLEAR_BADGUY {
-
-		badmsg := &clientmsg.Rlt_Match{
-			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
-		}
-		goodmsg := &clientmsg.Rlt_Match{
-			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
-		}
+	reloop:
 		for i, seat := range (*table).seats { //kick badguy and robot
 			if seat.status != SEAT_CONFIRM {
 				if seat.ownerid == 0 {
-					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, badmsg)
+					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR})
 					log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
 					delete(PlayerTableIDMap, seat.charid)
 				}
-				if len((*table).seats) > 1 {
-					(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
-				} else {
-					(*table).seats = append([]*Seat{})
-					break
-				}
+				(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
+				goto reloop
 			} else {
-				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, goodmsg)
+				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE})
 			}
 		}
 
@@ -349,6 +338,11 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 	if ok {
 		table, ok := TableManager[tableid]
 		if ok {
+			if table.status != MATCH_CHARTYPE_CHOOSING {
+				log.Error("TeamOperate CharID %v Table %v Status %v Action %v", charid, tableid, table.status, req.Action)
+				return
+			}
+
 			for _, seat := range table.seats {
 				if (*seat).charid == (*req).CharID {
 					if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
@@ -486,6 +480,7 @@ func ConfirmTable(charid uint32, matchmode int32) {
 		table, ok := TableManager[tableid]
 		if ok {
 			if table.status != MATCH_CONFIRM {
+				log.Error("ConfirmTable CharID %v Table %v Status %v", charid, tableid, table.status)
 				return
 			}
 
@@ -515,10 +510,9 @@ func ConfirmTable(charid uint32, matchmode int32) {
 
 			if allconfirmed {
 				log.Debug("AllConfirmTable TableID %v", tableid)
-				table.checktime = time.Now()
-				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
-
 				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED
+
+				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
 			} else {
 				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 			}

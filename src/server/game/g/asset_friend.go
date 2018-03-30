@@ -49,15 +49,12 @@ func (player *Player) AssetFriend_DelFriend(charid uint32, friendid uint32) {
 			"friends": friendid,
 		}})
 	} else {
+	reloop:
 		for i, friend := range player.Asset.AssetFriend.Friends {
 			if friend == friendid {
-				if len(player.Asset.AssetFriend.Friends) > 1 {
-					player.Asset.AssetFriend.Friends = append(player.Asset.AssetFriend.Friends[0:i], player.Asset.AssetFriend.Friends[i+1:]...)
-				} else {
-					player.Asset.AssetFriend.Friends = append([]uint32{})
-				}
-
+				player.Asset.AssetFriend.Friends = append(player.Asset.AssetFriend.Friends[0:i], player.Asset.AssetFriend.Friends[i+1:]...)
 				player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+				goto reloop
 			}
 		}
 	}
@@ -75,13 +72,11 @@ func (player *Player) AssetFriend_AcceptApplyInfo(charid uint32, friendid uint32
 			}})
 		}
 	} else {
+	reloop:
 		for i, applyinfo := range player.Asset.AssetFriend.ApplyList {
 			if applyinfo.FromID == friendid {
-				if len(player.Asset.AssetFriend.ApplyList) > 1 {
-					player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList[0:i], player.Asset.AssetFriend.ApplyList[i+1:]...)
-				} else {
-					player.Asset.AssetFriend.ApplyList = append([]*clientmsg.Rlt_Asset_Friend_ApplyInfo{})
-				}
+				player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList[0:i], player.Asset.AssetFriend.ApplyList[i+1:]...)
+				goto reloop
 			}
 		}
 
@@ -103,15 +98,12 @@ func (player *Player) AssetFriend_RejectApplyInfo(fromid uint32) {
 		return
 	}
 
+reloop:
 	for i, applyinfo := range player.Asset.AssetFriend.ApplyList {
 		if applyinfo.FromID == fromid {
-			if len(player.Asset.AssetFriend.ApplyList) > 1 {
-				player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList[0:i], player.Asset.AssetFriend.ApplyList[i+1:]...)
-			} else {
-				player.Asset.AssetFriend.ApplyList = append([]*clientmsg.Rlt_Asset_Friend_ApplyInfo{})
-			}
-
+			player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList[0:i], player.Asset.AssetFriend.ApplyList[i+1:]...)
 			player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+			goto reloop
 		}
 	}
 }

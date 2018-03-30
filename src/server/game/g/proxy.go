@@ -61,7 +61,6 @@ func RandSendMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMessa
 }
 
 func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) bool {
-
 	//EncodeMsgData
 	msgbuff, err := proto.Marshal(msgdata.(proto.Message))
 	if err != nil {

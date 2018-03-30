@@ -41,17 +41,17 @@ type Member struct {
 }
 
 type Room struct {
-	createtime    time.Time
-	nextchecktime time.Time
-	status        string
-	roomid        int32
-	matchmode     int32
-	mapid         int32
-	battlekey     []byte
-	frameid       uint32
-	seed          int32
+	createtime time.Time
+	checktime  time.Time
+	status     string
+	roomid     int32
+	matchmode  int32
+	mapid      int32
+	battlekey  []byte
+	frameid    uint32
+	seed       int32
 
-	memberok int
+	memberloadingok int
 
 	members map[uint32]*Member
 
@@ -187,50 +187,43 @@ func (room *Room) update(now *time.Time) {
 			changeRoomStatus(room, ROOM_END)
 			return
 		}
+
+		if (*now).Unix()-(*room).checktime.Unix() > 5 {
+			(*room).checktime = (*now)
+			room.checkOffline()
+		}
 	} else if (*room).status == ROOM_CONNECTING {
+		//loading状态30秒直接切换
 		if (*now).Unix()-(*room).createtime.Unix() > 30 {
 			changeRoomStatus(room, ROOM_FIGHTING)
 			return
 		}
-	}
-
-	if (*room).nextchecktime.Unix() < (*now).Unix() {
-		(*room).nextchecktime = now.Add(time.Duration(5 * time.Second))
-
-		if (*room).status == ROOM_STATUS_NONE {
-			log.Error("ROOM_STATUS_NONE TimeOut %v", (*room).roomid)
-			changeRoomStatus(room, ROOM_END)
-			return
-		}
-
-		if room.status == ROOM_CLEAR {
+	} else if (*room).status == ROOM_CLEAR {
+		if (*now).Unix()-(*room).checktime.Unix() > 3 {
 			deleteRoomMemberInfo((*room).roomid)
 			DeleteRoom((*room).roomid)
-		} else {
-			room.checkOffline()
+		}
+	} else if (*room).status == ROOM_STATUS_NONE {
+		if (*now).Unix()-(*room).checktime.Unix() > 5 {
+			log.Error("ROOM_STATUS_NONE TimeOut %v", (*room).roomid)
+			changeRoomStatus(room, ROOM_END)
 		}
 	}
 }
 
 func changeRoomStatus(room *Room, status string) {
 	(*room).status = status
+	room.checktime = time.Now()
 	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
 
 	if (*room).status == ROOM_END {
-
 		//notify finish
 		for _, member := range room.members {
-			if member.ownerid == 0 {
-				rsp := &proxymsg.Proxy_BS_GS_FINISH_BATTLE{
-					CharID: member.charid,
-				}
-				go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, rsp.CharID, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, rsp)
+			if member.ownerid == 0 && member.status != MEMBER_END {
+				go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, member.charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
 			}
 		}
-
 		room.messagesbackup = append([]*clientmsg.Transfer_Command{})
-
-		room.nextchecktime = time.Now().Add(time.Duration(5 * time.Second))
 		changeRoomStatus(room, ROOM_CLEAR)
 	} else if (*room).status == ROOM_FIGHTING {
 		room.notifyBattleStart()
@@ -275,19 +268,19 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, g_roomid)), []byte(tool.CRYPT_KEY))
 
 	room := &Room{
-		roomid:         g_roomid,
-		createtime:     time.Now(),
-		nextchecktime:  time.Now().Add(time.Duration(5 * time.Second)),
-		status:         ROOM_STATUS_NONE,
-		matchmode:      msg.Matchmode,
-		mapid:          msg.Mapid,
-		battlekey:      battlekey,
-		members:        make(map[uint32]*Member, 10),
-		messages:       make([]*clientmsg.Transfer_Command_CommandData, 0, 10),
-		messagesbackup: make([]*clientmsg.Transfer_Command, 0, 1000),
-		memberok:       0,
-		frameid:        0,
-		seed:           int32(rand.Intn(100000)),
+		roomid:          g_roomid,
+		createtime:      time.Now(),
+		checktime:       time.Now(),
+		status:          ROOM_STATUS_NONE,
+		matchmode:       msg.Matchmode,
+		mapid:           msg.Mapid,
+		battlekey:       battlekey,
+		members:         make(map[uint32]*Member, 10),
+		messages:        make([]*clientmsg.Transfer_Command_CommandData, 0, 10),
+		messagesbackup:  make([]*clientmsg.Transfer_Command, 0, 1000),
+		memberloadingok: 0,
+		frameid:         0,
+		seed:            int32(rand.Intn(100000)),
 	}
 
 	for _, mem := range (*msg).Members {
@@ -310,7 +303,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 			LeaveRoom(mem.CharID)
 		}
 
-		changeMemberStatus(member, MEMBER_UNCONNECTED)
+		changeMemberStatus(member, MEMBER_OFFLINE)
 		room.members[member.charid] = member
 		log.Debug("JoinRoom RoomID %v CharID %v OwnerID %v", room.roomid, member.charid, member.ownerid)
 	}
@@ -347,9 +340,9 @@ func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 				room.broadcast(req)
 
 				if member.progress >= 100 {
-					room.memberok += 1
+					room.memberloadingok += 1
 
-					if room.memberok >= len(room.members) {
+					if room.memberloadingok >= len(room.members) {
 						changeRoomStatus(room, ROOM_FIGHTING)
 					}
 				}
@@ -507,6 +500,9 @@ func setRoomMemberStatus(charid uint32, status string) {
 			if ok {
 				changeMemberStatus(member, status)
 
+				if member.ownerid == 0 {
+					go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
+				}
 				log.Debug("SetRoomMemberStatus RoomID %v CharID %v Status %v", roomid, charid, status)
 				room.checkOffline()
 			}

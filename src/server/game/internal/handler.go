@@ -47,62 +47,71 @@ func getNextSeq() (int, error) {
 	return g.Mongo.NextSeq(g.DB_NAME_GAME, g.TB_NAME_COUNTER, "counterid")
 }
 
+func getGSPlayer(a *gate.Agent) *g.Player {
+	charid := (*a).UserData()
+	if charid != nil {
+		player, err := g.GetPlayer(charid.(uint32))
+		if err == nil {
+			return player
+		}
+	}
+	return nil
+}
+
+func getBSPlayer(a *gate.Agent) *g.BPlayer {
+	charid := (*a).UserData()
+	if charid != nil {
+		player, err := g.GetBattlePlayer(charid.(uint32))
+		if err == nil {
+			return player
+		}
+	}
+	return nil
+}
+
 func handlePing(args []interface{}) {
 	m := args[0].(*clientmsg.Ping)
 	a := args[1].(gate.Agent)
 
-	//log.Error("RecvPing %v From %v ", m.ID, a.RemoteAddr())
-	a.WriteMsg(&clientmsg.Pong{ID: m.ID})
-
-	charid := a.UserData()
-	if charid != nil {
-		player, _ := g.GetPlayer(charid.(uint32))
-		if player != nil {
-			player.PingTime = time.Now()
-		}
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
 	}
-	//SendMessageTo(int32(conf.Server.ServerID), conf.Server.ServerType, uint64(1), uint32(0), m)
+	player.PingTime = time.Now()
+	a.WriteMsg(&clientmsg.Pong{ID: m.ID})
 }
 
 func handleReqServerTime(args []interface{}) {
-	//	m := args[0].(*clientmsg.Req_ServerTime)
 	a := args[1].(gate.Agent)
-	a.WriteMsg(&clientmsg.Rlt_ServerTime{Time: uint32(time.Now().Unix())})
 
-	charid := a.UserData()
-	if charid != nil {
-		player, _ := g.GetPlayer(charid.(uint32))
-		if player != nil {
-			player.PingTime = time.Now()
-		}
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
 	}
+
+	player.PingTime = time.Now()
+	a.WriteMsg(&clientmsg.Rlt_ServerTime{Time: uint32(time.Now().Unix())})
 }
 
 func handleReqLogin(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Login)
 	a := args[1].(gate.Agent)
 
-	if int(m.ServerID) != conf.Server.ServerID {
-		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-		})
-		a.Close()
-		return
-	}
-
 	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
-	if err != nil {
+	if a.UserData() != nil || int(m.ServerID) != conf.Server.ServerID || err != nil {
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
 		a.Close()
-		log.Error("handleReqLogin DesDecrypt Error", err)
+		log.Error("handleReqLogin a.UserData() %v ServerID %v Error %v", a.UserData(), m.ServerID, err)
 		return
 	}
 
 	userid := binary.BigEndian.Uint32(useridBuf)
 	if userid != m.UserID {
-		log.Error("userid != m.UserID ", userid, " ", m.UserID, useridBuf, m.SessionKey)
+		log.Error("userid %v != m.UserID %v ", userid, m.UserID)
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 		})
@@ -116,7 +125,6 @@ func handleReqLogin(args []interface{}) {
 	defer g.Mongo.UnRef(s)
 
 	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-
 	player := &g.Player{}
 	isnew := false
 	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&player.Char)
@@ -204,6 +212,11 @@ func handleReqReConnectGS(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Re_ConnectGS)
 	a := args[1].(gate.Agent)
 
+	if a.UserData() != nil {
+		a.Close()
+		return
+	}
+
 	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		a.WriteMsg(&clientmsg.Rlt_Re_ConnectGS{
@@ -244,23 +257,17 @@ func handleReqSetCharName(args []interface{}) {
 	m := args[0].(*clientmsg.Req_SetCharName)
 	a := args[1].(gate.Agent)
 
-	charid := a.UserData()
-	if charid == nil {
-		log.Error("Player SetCharName Login")
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.WriteMsg(&clientmsg.Rlt_SetCharName{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
 		a.Close()
 		return
 	}
 
-	player, err := g.GetPlayer(charid.(uint32))
-	if err != nil {
-		a.WriteMsg(&clientmsg.Rlt_SetCharName{
-			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-		})
-		return
-	}
-
 	if m.CharName == "" {
-		log.Error("Player %v SetCharName empty", charid)
+		log.Error("Player %v SetCharName empty", player.Char.CharID)
 		a.WriteMsg(&clientmsg.Rlt_SetCharName{
 			RetCode: clientmsg.Type_GameRetCode_GRC_NAME_NOT_VALID,
 		})
@@ -278,9 +285,8 @@ func handleReqMatch(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Match)
 	a := args[1].(gate.Agent)
 
-	charid := a.UserData()
-	if charid == nil {
-		log.Error("Player Match Not Login")
+	player := getGSPlayer(&a)
+	if player == nil {
 		a.WriteMsg(&clientmsg.Rlt_Match{
 			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
 		})
@@ -288,16 +294,8 @@ func handleReqMatch(args []interface{}) {
 		return
 	}
 
-	player, err := g.GetPlayer(charid.(uint32))
-	if err != nil {
-		a.WriteMsg(&clientmsg.Rlt_Match{
-			RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
-		})
-		return
-	}
-
 	innerReq := &proxymsg.Proxy_GS_MS_Match{
-		Charid:    charid.(uint32),
+		Charid:    player.Char.CharID,
 		Charname:  player.Char.CharName,
 		Matchmode: int32(m.Mode),
 		Mapid:     m.MapID,
@@ -309,19 +307,25 @@ func handleReqMatch(args []interface{}) {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
-				msid, _ = g.RandSendMessageTo("matchserver", charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+				msid, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 			} else {
 				log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
 			}
 		} else {
-			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
+				g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			}
 		}
 	}, func() {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 			player.MatchServerID = msid
+
 		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
-			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-			player.MatchServerID = 0
+
+			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
+				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+				player.MatchServerID = 0
+			}
 		}
 	})
 }
@@ -330,21 +334,16 @@ func handleTransferTeamOperate(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Team_Operate)
 	a := args[1].(gate.Agent)
 
-	charid := a.UserData()
-	if charid == nil {
-		log.Error("Player TeamOperate Not Login")
-		return
-	}
-
-	//log.Debug("handleTransferTeamOperate %v %v %v %v", charid, m.Action, m.CharID, m.CharType)
-	player, err := g.GetPlayer(charid.(uint32))
-	if err != nil {
-		log.Error("PlayerInfo Not Found %v", charid.(uint32))
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
 		return
 	}
 
 	if player.MatchServerID > 0 {
-		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE, m)
+		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE, m)
+	} else {
+		log.Error("handleTransferTeamOperate CharID %v Invalid MatchServerID %v", player.Char.CharID, player.MatchServerID)
 	}
 }
 
@@ -352,15 +351,9 @@ func handleReqFriendOperate(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Friend_Operate)
 	a := args[1].(gate.Agent)
 
-	charid := a.UserData()
-	if charid == nil {
-		log.Error("Player ReqFriendOperate Not Login")
-		return
-	}
-
-	player, _ := g.GetPlayer(charid.(uint32))
+	player := getGSPlayer(&a)
 	if player == nil {
-		log.Error("Player ReqFriendOperate Not Exist %v", charid.(uint32))
+		a.Close()
 		return
 	}
 
@@ -387,7 +380,7 @@ func handleReqFriendOperate(args []interface{}) {
 		character := &g.Character{}
 		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
 		if err == nil {
-			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
@@ -397,7 +390,7 @@ func handleReqFriendOperate(args []interface{}) {
 		character := &g.Character{}
 		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
 		if err == nil {
-			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
@@ -407,7 +400,7 @@ func handleReqFriendOperate(args []interface{}) {
 		character := &g.Character{}
 		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
 		if err == nil {
-			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, charid.(uint32), proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_REJECT {
@@ -421,9 +414,9 @@ func handleReqChat(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Chat)
 	a := args[1].(gate.Agent)
 
-	charid := a.UserData()
-	if charid == nil {
-		log.Error("Player ReqChat Not Login")
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
 		return
 	}
 
@@ -433,7 +426,7 @@ func handleReqChat(args []interface{}) {
 			TargetID:    m.TargetID,
 			MessageType: m.MessageType,
 			MessageData: m.MessageData,
-			SenderID:    charid.(uint32),
+			SenderID:    player.Char.CharID,
 		}
 		g.BroadCastMsgToGamePlayers(rsp)
 	}
@@ -443,15 +436,14 @@ func handleReqQueryCharInfo(args []interface{}) {
 	m := args[0].(*clientmsg.Req_QueryCharInfo)
 	a := args[1].(gate.Agent)
 
-	charid := a.UserData()
-	if charid == nil {
-		log.Error("Player ReqQueryCharInfo Not Login")
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
 		return
 	}
 
 	rsp := &clientmsg.Rlt_QueryCharInfo{}
 	if len(m.CharIDs) <= 0 || len(m.CharIDs) > 10 {
-		log.Error("handleReqQueryCharInfo Too Many %v", len(m.CharIDs))
 		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_QUERY_TOO_MANY
 		a.WriteMsg(rsp)
 		return
@@ -497,14 +489,23 @@ func handleTransferLoadingProgress(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Loading_Progress)
 	a := args[1].(gate.Agent)
 
-	if a.UserData() != nil {
-		g.LoadingRoom(a.UserData().(uint32), m)
+	player := getBSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
 	}
+
+	g.LoadingRoom(player.CharID, m)
 }
 
 func handleReqConnectBS(args []interface{}) {
 	m := args[0].(*clientmsg.Req_ConnectBS)
 	a := args[1].(gate.Agent)
+
+	if a.UserData() != nil { //防止多次发送
+		a.Close()
+		return
+	}
 
 	if g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey) {
 		player := &g.BPlayer{
@@ -526,7 +527,13 @@ func handleReqEndBattle(args []interface{}) {
 	m := args[0].(*clientmsg.Req_EndBattle)
 	a := args[1].(gate.Agent)
 
-	log.Debug("handleReqEndBattle %v", m.CharID)
+	player := getBSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
+	}
+
+	log.Debug("handleReqEndBattle CharID %v PlayerID %v", player.CharID, m.CharID)
 	a.WriteMsg(&clientmsg.Rlt_EndBattle{
 		RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 		CharID:  m.CharID,
@@ -539,35 +546,48 @@ func handleTransferCommand(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Command)
 	a := args[1].(gate.Agent)
 
-	if a.UserData() != nil {
-		g.AddMessage(a.UserData().(uint32), m)
+	player := getBSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
 	}
+	g.AddMessage(player.CharID, m)
 }
 
 func handleTransferBattleMessage(args []interface{}) {
 	m := args[0].(*clientmsg.Transfer_Battle_Message)
 	a := args[1].(gate.Agent)
-	if a.UserData() != nil {
-		g.TransferRoomMessage(a.UserData().(uint32), m)
+
+	player := getBSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
 	}
+	g.TransferRoomMessage(player.CharID, m)
 }
 
 func handleReqBattleHeartBeat(args []interface{}) {
 	a := args[1].(gate.Agent)
-	if a.UserData() != nil {
-		player, err := g.GetBattlePlayer(a.UserData().(uint32))
-		if err != nil {
-			a.Close()
-			return
-		}
-		player.HeartBeatTime = time.Now()
-		a.WriteMsg(&clientmsg.Transfer_Battle_Heartbeat{})
+
+	player := getBSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
 	}
+
+	player.HeartBeatTime = time.Now()
+	a.WriteMsg(&clientmsg.Transfer_Battle_Heartbeat{})
 }
 
 func handleReqReConnectBS(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Re_ConnectBS)
 	a := args[1].(gate.Agent)
+
+	if a.UserData() != nil {
+		a.Close()
+		return
+	}
+
 	if g.ReConnectRoom(m.CharID, m.FrameID, m.BattleKey) {
 		g.ReconnectBattlePlayer(m.CharID, &a)
 		rsp := g.GenRoomInfoPB(m.CharID, true)

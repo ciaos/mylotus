@@ -77,6 +77,7 @@ func AddGamePlayer(player *Player, agent *gate.Agent) {
 	exist, ok := GamePlayerManager[player.Char.CharID]
 	if ok {
 		(*exist.agent).Close()
+		_ = exist.agent
 		delete(GamePlayerManager, player.Char.CharID)
 	}
 	(*agent).SetUserData(player.Char.CharID)
@@ -206,6 +207,7 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, force bool) {
 	if ok {
 		if force == true || strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
 			(*player.agent).Close()
+			_ = player.agent
 			delete(BattlePlayerManager, clientid)
 			LeaveRoom(clientid)
 			log.Debug("RemoveBattlePlayer %v force %v", clientid, force)
