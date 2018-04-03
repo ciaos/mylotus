@@ -83,7 +83,10 @@ func commandTable(args []interface{}) interface{} {
 func commandGPlayer(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatOneGPlayerInfo(uint32(charid))
+		return g.FormatOneGPlayerInfo(uint32(charid), "")
+	} else if len(args) == 2 {
+		charid, _ := strconv.Atoi(args[0].(string))
+		return g.FormatOneGPlayerInfo(uint32(charid), args[1].(string))
 	} else {
 		return g.FormatGPlayerInfo()
 	}

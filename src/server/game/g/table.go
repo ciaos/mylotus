@@ -196,10 +196,15 @@ func changeTableStatus(table *Table, status string) {
 		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 		changeTableStatus(table, MATCH_CONFIRM)
 	} else if (*table).status == MATCH_TIMEOUT {
-		//fill with robot and notify all member to choose
-		fillRobotToTable(table)
-		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-		changeTableStatus(table, MATCH_CONFIRM)
+		if table.matchmode == int32(clientmsg.MatchModeType_MMT_AI) {
+			//fill with robot and notify all member to choose
+			fillRobotToTable(table)
+			notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+			changeTableStatus(table, MATCH_CONFIRM)
+		} else {
+			notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
+			changeTableStatus(table, MATCH_FINISH)
+		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		//auto choose
 		autoChooseToTable(table)
@@ -377,30 +382,32 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
 
 	var createnew = true
-	for i, table := range TableManager {
-		if table.mapid != mapid || table.matchmode != matchmode {
-			continue
-		}
-
-		if len((*table).seats) < int((*table).modeplayercnt) {
-			seat := &Seat{
-				charid:     charid,
-				jointime:   time.Now(),
-				serverid:   serverid,
-				servertype: servertype,
-				chartype:   0,
-				ownerid:    0,
-				status:     SEAT_NONE,
-				charname:   charname,
-				teamid:     int32(len((*table).seats)%2 + 1),
+	if matchmode != int32(clientmsg.MatchModeType_MMT_AI) { //打AI都是创建新房间
+		for i, table := range TableManager {
+			if table.mapid != mapid || table.matchmode != matchmode {
+				continue
 			}
-			TableManager[i].seats = append(TableManager[i].seats, seat)
-			PlayerTableIDMap[charid] = i
 
-			log.Debug("JoinTable TableID %v CharID %v CharName %v", i, charid, charname)
+			if len((*table).seats) < int((*table).modeplayercnt) {
+				seat := &Seat{
+					charid:     charid,
+					jointime:   time.Now(),
+					serverid:   serverid,
+					servertype: servertype,
+					chartype:   0,
+					ownerid:    0,
+					status:     SEAT_NONE,
+					charname:   charname,
+					teamid:     int32(len((*table).seats)%2 + 1),
+				}
+				TableManager[i].seats = append(TableManager[i].seats, seat)
+				PlayerTableIDMap[charid] = i
 
-			createnew = false
-			break
+				log.Debug("JoinTable TableID %v CharID %v CharName %v", i, charid, charname)
+
+				createnew = false
+				break
+			}
 		}
 	}
 	if createnew {

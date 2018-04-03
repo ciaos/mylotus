@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"server/conf"
 	"server/game"
 	"server/gate"
@@ -20,7 +19,6 @@ func main() {
 	lconf.ConsolePort = conf.Server.ConsolePort
 	lconf.ProfilePath = conf.Server.ProfilePath
 
-	fmt.Println("Rose Start...")
 	leaf.Run(
 		game.Module,
 		gate.Module,

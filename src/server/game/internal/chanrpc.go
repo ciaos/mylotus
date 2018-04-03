@@ -321,7 +321,7 @@ func rpcNewAgent(args []interface{}) {
 
 	a := args[0].(gate.Agent)
 
-	log.Debug("Connected %v", a.RemoteAddr())
+	log.Debug("Connected %v From %v", a.RemoteAddr(), a.LocalAddr())
 	_ = a
 }
 
@@ -329,11 +329,12 @@ func rpcCloseAgent(args []interface{}) {
 	a := args[0].(gate.Agent)
 
 	clientid := a.UserData()
-	log.Debug("Disconnected %v", a.RemoteAddr())
-	_ = a
-
 	if clientid != nil {
 		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String(), false)
-		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), false)
+		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), g.REASON_DISCONNECT)
 	}
+
+	log.Debug("Disconnected %v From %v", a.RemoteAddr(), a.LocalAddr())
+	_ = a
+
 }

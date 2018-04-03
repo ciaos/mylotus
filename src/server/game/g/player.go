@@ -14,6 +14,12 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+const (
+	REASON_DISCONNECT  = 0
+	REASON_TIMEOUT     = 1
+	REASON_FREE_MEMORY = 2
+)
+
 type Character struct {
 	CharID     uint32
 	UserID     uint32
@@ -120,16 +126,20 @@ func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
 	}
 }
 
-func RemoveGamePlayer(clientid uint32, remoteaddr string, removenow bool) {
+func RemoveGamePlayer(clientid uint32, remoteaddr string, reason int32) {
 	player, ok := GamePlayerManager[clientid]
 	if ok {
 		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
-			(*player.agent).Close()
-			if removenow {
+			if reason == REASON_FREE_MEMORY {
 				player.player.SavePlayerAsset()
 				delete(GamePlayerManager, clientid)
 				log.Debug("RemoveGamePlayer %v", clientid)
 			} else {
+				if player.agent != nil {
+					(*player.agent).Close()
+					_ = player.agent
+				}
+
 				player.player.OfflineTime = time.Now()
 
 				if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH && player.player.MatchServerID > 0 {
@@ -226,10 +236,10 @@ func GetBattlePlayer(clientid uint32) (*BPlayer, error) {
 }
 
 func (player *PlayerInfo) update(now *time.Time) {
-	if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_OFFLINE && (time.Now().Unix()-player.player.OfflineTime.Unix() > 600) {
-		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), true)
-	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && now.Unix()-player.player.PingTime.Unix() > 600 { //心跳超时转为掉线状态
-		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), false)
+	if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.OfflineTime.Unix() > 600) {
+		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), REASON_FREE_MEMORY)
+	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.PingTime.Unix() > 600) { //心跳超时转为掉线状态
+		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), REASON_TIMEOUT)
 	}
 }
 
@@ -268,17 +278,45 @@ func BroadCastMsgToGamePlayers(msgdata interface{}) {
 func FormatGPlayerInfo() string {
 	var output string
 	for _, player := range GamePlayerManager {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.PingTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
 	}
 	output = strings.Join([]string{output, fmt.Sprintf("GamePlayerCnt:%d", len(GamePlayerManager))}, "\r\n")
 	return strings.TrimLeft(output, "\r\n")
 }
 
-func FormatOneGPlayerInfo(charid uint32) string {
+func FormatOneGPlayerInfo(charid uint32, assetname string) string {
 	output := ""
 	player, ok := GamePlayerManager[charid]
 	if ok {
-		output = fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)
+		output = fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.PingTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)
+
+		if assetname == "all" || assetname == "friend" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assetfriend:\t%v", player.player.Asset.AssetFriend.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "cash" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assetcash:\t%v", player.player.Asset.AssetCash.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "item" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assetitem:\t%v", player.player.Asset.AssetItem.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "hero" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assethero:\t%v", player.player.Asset.AssetHero.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "mail" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assetmail:\t%v", player.player.Asset.AssetMail.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "statistic" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assetstatistic:\t%v", player.player.Asset.AssetStatistic.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "tutorial" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assettutorial:\t%v", player.player.Asset.AssetTutorial.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "task" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assettask:\t%v", player.player.Asset.AssetTask.String())}, "\r\n")
+		}
+		if assetname == "all" || assetname == "achievement" {
+			output = strings.Join([]string{output, fmt.Sprintf("Assetachievement:\t%v", player.player.Asset.AssetAchievement.String())}, "\r\n")
+		}
 	}
 	return output
 }

@@ -197,6 +197,7 @@ func handleReqLogin(args []interface{}) {
 				RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
 				CharID:         player.Char.CharID,
 				IsNewCharacter: isnew,
+				CharName:       player.Char.CharName,
 			})
 		} else {
 			a.WriteMsg(&clientmsg.Rlt_Login{
@@ -275,7 +276,8 @@ func handleReqSetCharName(args []interface{}) {
 	}
 
 	a.WriteMsg(&clientmsg.Rlt_SetCharName{
-		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
+		RetCode:  clientmsg.Type_GameRetCode_GRC_OK,
+		CharName: m.CharName,
 	})
 
 	player.Char.CharName = m.CharName
