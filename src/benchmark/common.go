@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	LoginServerAddr = "127.0.0.1:8000"
-	GameServerID    = 2
+	LoginServerAddr = "127.0.0.1:8888"
+	GameServerID    = 1
 	ClientNum       = 100
 	OneBattleTime   = 100
 )

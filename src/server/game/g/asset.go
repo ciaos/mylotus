@@ -110,6 +110,14 @@ func (player *Player) SavePlayerAsset() bool {
 	return ret
 }
 
+func (player *Player) GetPlayerAsset() *PlayerAsset {
+	if player != nil {
+		return &player.Asset
+	} else {
+		return nil
+	}
+}
+
 ////////////////////////////////////////////////////////////////////
 //load
 func (player *Player) loadPlayerAssetFriend() bool {

@@ -7,8 +7,8 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-func (player *Player) AssetFriend_AddApplyInfo(fromid uint32, m *clientmsg.Req_Friend_Operate) {
-	if player == nil { //offline
+func (asset *PlayerAsset) AssetFriend_AddApplyInfo(fromid uint32, m *clientmsg.Req_Friend_Operate) {
+	if asset == nil { //offline
 		s := Mongo.Ref()
 		defer Mongo.UnRef(s)
 		c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
@@ -23,7 +23,7 @@ func (player *Player) AssetFriend_AddApplyInfo(fromid uint32, m *clientmsg.Req_F
 		}
 	} else {
 		exist := false
-		for _, applyinfo := range player.Asset.AssetFriend.ApplyList {
+		for _, applyinfo := range asset.AssetFriend.ApplyList {
 			if applyinfo.FromID == fromid {
 				exist = true
 				break
@@ -34,14 +34,14 @@ func (player *Player) AssetFriend_AddApplyInfo(fromid uint32, m *clientmsg.Req_F
 				FromID: fromid,
 				Msg:    m,
 			}
-			player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList, apply)
-			player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+			asset.AssetFriend.ApplyList = append(asset.AssetFriend.ApplyList, apply)
+			asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
 		}
 	}
 }
 
-func (player *Player) AssetFriend_DelFriend(charid uint32, friendid uint32) {
-	if player == nil { //offline
+func (asset *PlayerAsset) AssetFriend_DelFriend(charid uint32, friendid uint32) {
+	if asset == nil { //offline
 		s := Mongo.Ref()
 		defer Mongo.UnRef(s)
 		c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
@@ -50,18 +50,18 @@ func (player *Player) AssetFriend_DelFriend(charid uint32, friendid uint32) {
 		}})
 	} else {
 	reloop:
-		for i, friend := range player.Asset.AssetFriend.Friends {
+		for i, friend := range asset.AssetFriend.Friends {
 			if friend == friendid {
-				player.Asset.AssetFriend.Friends = append(player.Asset.AssetFriend.Friends[0:i], player.Asset.AssetFriend.Friends[i+1:]...)
-				player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+				asset.AssetFriend.Friends = append(asset.AssetFriend.Friends[0:i], asset.AssetFriend.Friends[i+1:]...)
+				asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
 				goto reloop
 			}
 		}
 	}
 }
 
-func (player *Player) AssetFriend_AcceptApplyInfo(charid uint32, friendid uint32) {
-	if player == nil { //offline
+func (asset *PlayerAsset) AssetFriend_AcceptApplyInfo(charid uint32, friendid uint32) {
+	if asset == nil { //offline
 		s := Mongo.Ref()
 		defer Mongo.UnRef(s)
 		c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
@@ -73,36 +73,36 @@ func (player *Player) AssetFriend_AcceptApplyInfo(charid uint32, friendid uint32
 		}
 	} else {
 	reloop:
-		for i, applyinfo := range player.Asset.AssetFriend.ApplyList {
+		for i, applyinfo := range asset.AssetFriend.ApplyList {
 			if applyinfo.FromID == friendid {
-				player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList[0:i], player.Asset.AssetFriend.ApplyList[i+1:]...)
+				asset.AssetFriend.ApplyList = append(asset.AssetFriend.ApplyList[0:i], asset.AssetFriend.ApplyList[i+1:]...)
 				goto reloop
 			}
 		}
 
 		exist := false
-		for _, friend := range player.Asset.AssetFriend.Friends {
+		for _, friend := range asset.AssetFriend.Friends {
 			if friend == friendid {
 				exist = true
 			}
 		}
 		if exist == false {
-			player.Asset.AssetFriend.Friends = append(player.Asset.AssetFriend.Friends, friendid)
+			asset.AssetFriend.Friends = append(asset.AssetFriend.Friends, friendid)
 		}
-		player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+		asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
 	}
 }
 
-func (player *Player) AssetFriend_RejectApplyInfo(fromid uint32) {
-	if player == nil {
+func (asset *PlayerAsset) AssetFriend_RejectApplyInfo(fromid uint32) {
+	if asset == nil {
 		return
 	}
 
 reloop:
-	for i, applyinfo := range player.Asset.AssetFriend.ApplyList {
+	for i, applyinfo := range asset.AssetFriend.ApplyList {
 		if applyinfo.FromID == fromid {
-			player.Asset.AssetFriend.ApplyList = append(player.Asset.AssetFriend.ApplyList[0:i], player.Asset.AssetFriend.ApplyList[i+1:]...)
-			player.Asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+			asset.AssetFriend.ApplyList = append(asset.AssetFriend.ApplyList[0:i], asset.AssetFriend.ApplyList[i+1:]...)
+			asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
 			goto reloop
 		}
 	}

@@ -180,7 +180,7 @@ func (room *Room) update(now *time.Time) {
 		}
 
 		//bug
-		if now.Unix()-(*room).createtime.Unix() > int64(6000) {
+		if now.Unix()-(*room).createtime.Unix() > int64(300) {
 			room.broadcast(&clientmsg.Rlt_EndBattle{
 				RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
 			})
@@ -568,7 +568,7 @@ func TransferRoomMessage(charid uint32, transcmd *clientmsg.Transfer_Battle_Mess
 func FormatRoomInfo(roomid int32) string {
 	room, ok := RoomManager[roomid]
 	if ok {
-		return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v", (*room).roomid, (*room).createtime.Format("2006-01-02 15:04:05"), (*room).status, len((*room).members))
+		return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v\tMatchMode:%v\tMapID:%v\tFrameID:%v", (*room).roomid, (*room).createtime.Format(TIME_FORMAT), (*room).status, len((*room).members), room.matchmode, room.mapid, room.frameid)
 	}
 	return ""
 }

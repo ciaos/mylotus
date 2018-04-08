@@ -132,6 +132,7 @@ func handlerReqServerList(args []interface{}) {
 		si.ServerName = gscfg.ServerName
 		si.Status = gscfg.ServerTag
 		si.ConnectAddr = gscfg.ConnectAddr
+		si.AreaName = gscfg.AreaName
 
 		resMsg.ServerList = append(resMsg.ServerList, si)
 		i++

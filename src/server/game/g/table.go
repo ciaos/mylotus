@@ -247,7 +247,7 @@ func (table *Table) update(now *time.Time) {
 	if (*table).status == MATCH_CONTINUE {
 		//匹配超时
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.MatchTimeOutSec) {
-			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			changeTableStatus(table, MATCH_TIMEOUT)
 			return
 		}
@@ -259,31 +259,31 @@ func (table *Table) update(now *time.Time) {
 		}
 	} else if (*table).status == MATCH_CONFIRM {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ConfirmTimeOutSec) {
-			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_CLEAR_BADGUY)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_CHOOSING {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ChooseTimeOutSec) {
-			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_CHARTYPE_FIXED)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.FixedWaitTimeSec) {
-			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_BEGIN_ALLOCROOM)
 		}
 	} else if (*table).status == MATCH_ALLOCROOM {
 		if (*now).Unix()-(*table).checktime.Unix() > 5 { //申请房间超时，解散队伍
-			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_ERROR)
 		}
 	} else if (*table).status == MATCH_FINISH {
 		if (*now).Unix()-(*table).checktime.Unix() > 5 { //房间超时，解散
-			log.Debug("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format("2006-01-02 15:04:05"), (*now).Format("2006-01-02 15:04:05"))
+			log.Debug("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			changeTableStatus(table, MATCH_END)
 		}
 	}
@@ -555,7 +555,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 func FormatTableInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
-		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format("2006-01-02 15:04:05"), (*table).status, len((*table).seats))
+		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format(TIME_FORMAT), (*table).status, len((*table).seats))
 	}
 	return ""
 }
@@ -565,7 +565,7 @@ func FormatSeatInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v", (*seat).charid, (*seat).charname, (*seat).jointime.Format("2006-01-02 15:04:05"), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v", (*seat).charid, (*seat).charname, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid)}, "\r\n")
 		}
 	}
 	return output

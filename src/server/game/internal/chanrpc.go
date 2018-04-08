@@ -70,11 +70,11 @@ func proxyHandleGSGSFriendOperate(pmsg *proxymsg.InternalMessage) {
 
 	player, _ := g.GetPlayer(m.OperateCharID)
 	if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
-		player.AssetFriend_AddApplyInfo(pmsg.Charid, m)
+		player.GetPlayerAsset().AssetFriend_AddApplyInfo(pmsg.Charid, m)
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
-		player.AssetFriend_DelFriend(m.OperateCharID, pmsg.Charid)
+		player.GetPlayerAsset().AssetFriend_DelFriend(m.OperateCharID, pmsg.Charid)
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
-		player.AssetFriend_AcceptApplyInfo(m.OperateCharID, pmsg.Charid)
+		player.GetPlayerAsset().AssetFriend_AcceptApplyInfo(m.OperateCharID, pmsg.Charid)
 	} else {
 		log.Error("Invalid Friend Operate Type %v", m.Action)
 	}

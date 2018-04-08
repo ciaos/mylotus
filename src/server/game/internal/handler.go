@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/binary"
+	//"math/rand"
 	"reflect"
 	"server/conf"
 	"server/game/g"
@@ -182,13 +183,9 @@ func handleReqLogin(args []interface{}) {
 	}, func() {
 		if ret == true {
 			if cache != nil {
-				cache.Char.UpdateTime = time.Now()
-				cache.PingTime = time.Now()
 				g.AddCachedGamePlayer(cache, &a)
 				cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			} else {
-				player.Char.UpdateTime = time.Now()
-				player.PingTime = time.Now()
 				g.AddGamePlayer(player, &a)
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			}
@@ -386,7 +383,7 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
-		player.AssetFriend_DelFriend(player.Char.CharID, m.OperateCharID)
+		player.GetPlayerAsset().AssetFriend_DelFriend(player.Char.CharID, m.OperateCharID)
 
 		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 		character := &g.Character{}
@@ -396,7 +393,7 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
-		player.AssetFriend_AcceptApplyInfo(player.Char.CharID, m.OperateCharID)
+		player.GetPlayerAsset().AssetFriend_AcceptApplyInfo(player.Char.CharID, m.OperateCharID)
 
 		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
 		character := &g.Character{}
@@ -406,7 +403,7 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_REJECT {
-		player.AssetFriend_RejectApplyInfo(m.OperateCharID)
+		player.GetPlayerAsset().AssetFriend_RejectApplyInfo(m.OperateCharID)
 		rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 	}
 	a.WriteMsg(rsp)
@@ -505,6 +502,7 @@ func handleReqConnectBS(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	if a.UserData() != nil { //防止多次发送
+		log.Error("handleReqConnectBS Exist Connection")
 		a.Close()
 		return
 	}
@@ -541,7 +539,7 @@ func handleReqEndBattle(args []interface{}) {
 		CharID:  m.CharID,
 	})
 
-	g.EndBattle(m.CharID)
+	g.EndBattle(player.CharID)
 }
 
 func handleTransferCommand(args []interface{}) {
@@ -569,6 +567,7 @@ func handleTransferBattleMessage(args []interface{}) {
 }
 
 func handleReqBattleHeartBeat(args []interface{}) {
+	m := args[0].(*clientmsg.Transfer_Battle_Heartbeat)
 	a := args[1].(gate.Agent)
 
 	player := getBSPlayer(&a)
@@ -578,7 +577,8 @@ func handleReqBattleHeartBeat(args []interface{}) {
 	}
 
 	player.HeartBeatTime = time.Now()
-	a.WriteMsg(&clientmsg.Transfer_Battle_Heartbeat{})
+	//time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
+	a.WriteMsg(m)
 }
 
 func handleReqReConnectBS(args []interface{}) {

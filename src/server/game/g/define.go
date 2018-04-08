@@ -11,4 +11,6 @@ const (
 	TB_NAME_COUNTER   = "counter"
 
 	CRYPTO_PREFIX = "room_%d"
+
+	TIME_FORMAT = "2006-01-02 15:04:05"
 )

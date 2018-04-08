@@ -88,6 +88,10 @@ func AddGamePlayer(player *Player, agent *gate.Agent) {
 	}
 	(*agent).SetUserData(player.Char.CharID)
 
+	player.Char.UpdateTime = time.Now()
+	player.PingTime = time.Now()
+	player.OfflineTime = time.Unix(0, 0)
+
 	playerinfo := &PlayerInfo{
 		agent:  agent,
 		player: player,
@@ -103,6 +107,10 @@ func AddCachedGamePlayer(player *Player, agent *gate.Agent) {
 		(*exist.agent).Close()
 		_ = exist.agent
 		exist.agent = agent
+
+		exist.player.Char.UpdateTime = time.Now()
+		exist.player.PingTime = time.Now()
+		exist.player.OfflineTime = time.Unix(0, 0)
 	}
 	(*agent).SetUserData(player.Char.CharID)
 
@@ -119,6 +127,7 @@ func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
 
 		exist.player.Char.UpdateTime = time.Now()
 		exist.player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+		exist.player.OfflineTime = time.Unix(0, 0)
 
 		log.Debug("ReconnectGamePlayer %v OK", charid)
 	} else {
@@ -186,6 +195,7 @@ func AddBattlePlayer(player *BPlayer, agent *gate.Agent) {
 	player.OnlineTime = time.Now()
 	player.HeartBeatTime = time.Now()
 	player.IsOffline = false
+	player.OfflineTime = time.Unix(0, 0)
 
 	playerinfo := &BPlayerInfo{
 		agent:  agent,
@@ -205,6 +215,7 @@ func ReconnectBattlePlayer(charid uint32, agent *gate.Agent) {
 		exist.player.OnlineTime = time.Now()
 		exist.player.HeartBeatTime = time.Now()
 		exist.player.IsOffline = false
+		exist.player.OfflineTime = time.Unix(0, 0)
 		(*agent).SetUserData(charid)
 		log.Debug("ReconnectBattlePlayer %v OK", charid)
 	} else {
@@ -278,7 +289,7 @@ func BroadCastMsgToGamePlayers(msgdata interface{}) {
 func FormatGPlayerInfo() string {
 	var output string
 	for _, player := range GamePlayerManager {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.PingTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.PingTime.Format(TIME_FORMAT), player.player.MatchServerID, player.player.BattleServerID)}, "\r\n")
 	}
 	output = strings.Join([]string{output, fmt.Sprintf("GamePlayerCnt:%d", len(GamePlayerManager))}, "\r\n")
 	return strings.TrimLeft(output, "\r\n")
@@ -288,7 +299,7 @@ func FormatOneGPlayerInfo(charid uint32, assetname string) string {
 	output := ""
 	player, ok := GamePlayerManager[charid]
 	if ok {
-		output = fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.PingTime.Format("2006-01-02 15:04:05"), player.player.MatchServerID, player.player.BattleServerID)
+		output = fmt.Sprintf("CharID:%v\tCharName:%v\tStatus:%v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tMSID:%v\tBSID:%v\t", player.player.Char.CharID, player.player.Char.CharName, player.player.GetGamePlayerStatus(), (*player.agent).RemoteAddr().String(), player.player.Char.UpdateTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.PingTime.Format(TIME_FORMAT), player.player.MatchServerID, player.player.BattleServerID)
 
 		if assetname == "all" || assetname == "friend" {
 			output = strings.Join([]string{output, fmt.Sprintf("Assetfriend:\t%v", player.player.Asset.AssetFriend.String())}, "\r\n")
@@ -324,7 +335,7 @@ func FormatOneGPlayerInfo(charid uint32, assetname string) string {
 func FormatBPlayerInfo() string {
 	var output string
 	for _, player := range BattlePlayerManager {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tAddr:%v\tIsOffline:%v\tOnlineTime:%v\tOfflineTime:%v\tHeartBeatTime:%v\tGSID:%v\t", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.IsOffline, player.player.OnlineTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.HeartBeatTime.Format("2006-01-02 15:04:05"), player.player.GameServerID)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tAddr:%v\tIsOffline:%v\tOnlineTime:%v\tOfflineTime:%v\tHeartBeatTime:%v\tGSID:%v\t", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.IsOffline, player.player.OnlineTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.HeartBeatTime.Format(TIME_FORMAT), player.player.GameServerID)}, "\r\n")
 	}
 	output = strings.Join([]string{output, fmt.Sprintf("BattlePlayerCnt:%d", len(BattlePlayerManager))}, "\r\n")
 	return strings.TrimLeft(output, "\r\n")
@@ -334,7 +345,7 @@ func FormatOneBPlayerInfo(charid uint32) string {
 	output := ""
 	player, ok := BattlePlayerManager[charid]
 	if ok {
-		output = fmt.Sprintf("CharID:%v\tAddr:%v\tIsOffline:%v\tOnlineTime:%v\tOfflineTime:%v\tHeartBeatTime:%v\tGSID:%v\t", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.IsOffline, player.player.OnlineTime.Format("2006-01-02 15:04:05"), player.player.OfflineTime.Format("2006-01-02 15:04:05"), player.player.HeartBeatTime.Format("2006-01-02 15:04:05"), player.player.GameServerID)
+		output = fmt.Sprintf("CharID:%v\tAddr:%v\tIsOffline:%v\tOnlineTime:%v\tOfflineTime:%v\tHeartBeatTime:%v\tGSID:%v\t", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.IsOffline, player.player.OnlineTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.HeartBeatTime.Format(TIME_FORMAT), player.player.GameServerID)
 	}
 	return output
 }

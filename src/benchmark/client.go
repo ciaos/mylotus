@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"benchmark/testpb"
+
 	"server/msg/clientmsg"
 
 	"github.com/ciaos/leaf/kcp"
@@ -19,33 +21,6 @@ import (
 var tlog = logging.MustGetLogger("example")
 var format = logging.MustStringFormatter(
 	`%{color}%{time:15:04:05.000} %{shortfunc} > %{level:.4s} %{color:reset} %{message}`,
-)
-
-const (
-	STATUS_NONE = "STATUS_NONE"
-
-	STATUS_LOGIN_CONNECT  = "connect_login_server"
-	STATUS_LOGIN          = "start_register"
-	STATUS_LOGIN_LOOP     = "loop_login"
-	STATUS_GAMESERVERLIST = "gameserverlist"
-	STATUS_LOGIN_CLOSE    = "disconnect_login_server"
-
-	STATUS_GAME_CONNECT            = "connect_game_server"
-	STATUS_GAME_LOGIN              = "start_signin"
-	STATUS_GAME_MATCH_START        = "match_start"
-	STATUS_GAME_MATCH_OK           = "match_ok"
-	STATUS_GAME_MATCH_CONFIRM      = "match_confirmed"
-	STATUS_GAME_TEAM_OPERATE_BEGIN = "team_operate_begin"
-	STATUS_GAME_TEAM_OPERATE_FIXED = "team_operate_fixed"
-	STATUS_GAME_LOOP               = "loop_game"
-	STATUS_GAME_CLOSE              = "disconnect_game_server"
-
-	STATUS_BATTLE_CONNECT  = "connect_battle_server"
-	STATUS_BATTLE_PROGRESS = "loading_progress"
-	STATUS_BATTLE          = "join_battle_room"
-	STATUS_BATTLE_WAITEND  = "wait_battle_end_rsp"
-	STATUS_BATTLE_LOOP     = "loop_battle"
-	STATUS_BATTLE_CLOSE    = "disconnect_battle_server"
 )
 
 var w sync.WaitGroup
@@ -64,7 +39,7 @@ type Client struct {
 
 	userid uint32
 	charid uint32
-	status string
+	status testpb.ClientStatusType
 
 	lconn net.Conn
 	gconn net.Conn
@@ -72,9 +47,7 @@ type Client struct {
 
 	err error
 
-	nextlogintime    int64
-	nextregistertime int64
-	nextmatchtime    int64
+	checktimeout time.Time
 
 	frameid uint32
 
@@ -92,9 +65,113 @@ type Client struct {
 	routes map[interface{}]interface{}
 }
 
-func (c *Client) ChangeStatus(status string) {
+func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 	c.status = status
-	tlog.Debugf("client %d CharID %v, Status %s\n", c.id, c.charid, c.status)
+	tlog.Debugf("client %d CharID %v, Status %v\n", c.id, c.charid, c.status)
+
+	switch c.status {
+	case testpb.ClientStatusType_None:
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_LoginServer)
+
+	//login server
+	case testpb.ClientStatusType_Connect_LoginServer:
+		c.lconn, c.err = net.Dial("tcp", LoginServerAddr)
+		if c.err != nil {
+			c.ChangeStatus(testpb.ClientStatusType_None)
+		} else {
+			c.ChangeStatus(testpb.ClientStatusType_Request_Register)
+		}
+	case testpb.ClientStatusType_Request_Register:
+		msg := &clientmsg.Req_Register{
+			UserName:      c.username,
+			Password:      c.password,
+			IsLogin:       true,
+			ClientVersion: 0,
+		}
+		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_LoginServer_Response)
+	case testpb.ClientStatusType_Request_GameServer_List:
+		msg := &clientmsg.Req_ServerList{
+			Channel: 1,
+		}
+		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_SERVERLIST, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_LoginServer_Response)
+	case testpb.ClientStatusType_Wait_LoginServer_Response:
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(5))
+	case testpb.ClientStatusType_Disconnect_LoginServer:
+		c.lconn.Close()
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_GameServer)
+
+	//game server
+	case testpb.ClientStatusType_Connect_GameServer:
+		c.lastgsheartbeattime = time.Now().Unix()
+		c.gconn, c.err = net.Dial("tcp", c.gameserveraddr)
+		if c.err != nil {
+			c.ChangeStatus(testpb.ClientStatusType_None)
+		} else {
+			c.ChangeStatus(testpb.ClientStatusType_Request_Login)
+		}
+	case testpb.ClientStatusType_Request_Login:
+		msg := &clientmsg.Req_Login{
+			UserID:     c.userid,
+			SessionKey: c.sessionkey,
+			ServerID:   GameServerID,
+		}
+		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_GameServer_Response)
+	case testpb.ClientStatusType_Request_Match:
+		msg := &clientmsg.Req_Match{
+			Action: clientmsg.MatchActionType_MAT_JOIN,
+			Mode:   clientmsg.MatchModeType_MMT_NORMAL,
+		}
+		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_GameServer_Response)
+	case testpb.ClientStatusType_Request_TeamOperate:
+		msg := &clientmsg.Transfer_Team_Operate{
+			Action:   clientmsg.TeamOperateActionType_TOA_SETTLE,
+			CharID:   c.charid,
+			CharType: 1001,
+		}
+		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_GameServer_Response)
+	case testpb.ClientStatusType_Disconnect_GameServer:
+		c.gconn.Close()
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_GameServer)
+
+	//battle server
+	case testpb.ClientStatusType_Connect_BattleServer:
+		c.frameid = 0
+		c.lastbsheartbeattime = time.Now().Unix()
+		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
+		if c.err != nil {
+			c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
+		} else {
+			c.ChangeStatus(testpb.ClientStatusType_Request_ConnectBS)
+		}
+	case testpb.ClientStatusType_Request_ConnectBS:
+		msg := &clientmsg.Req_ConnectBS{
+			RoomID:    c.battleroomid,
+			BattleKey: c.battlekey,
+			CharID:    c.charid,
+		}
+		go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_BattleServer_Response)
+	case testpb.ClientStatusType_Request_Progress:
+		msg := &clientmsg.Transfer_Loading_Progress{
+			CharID:   c.charid,
+			Progress: 100,
+		}
+		go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_LOADING_PROGRESS, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Wait_BattleServer_Response)
+	case testpb.ClientStatusType_Disconnect_BattleServer:
+		c.startbattle = false
+		c.bconn.Close()
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Request_Match)
+	}
 }
 
 func handle_Pong(c *Client, msgdata []byte) {
@@ -107,7 +184,9 @@ func handle_Pong(c *Client, msgdata []byte) {
 func handle_Transfer_HeartBeat(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Transfer_Battle_Heartbeat{}
 	proto.Unmarshal(msgdata, rsp)
-	c.lastbsheartbeattime = time.Now().Unix()
+	c.lastbsheartbeattime = time.Now().UnixNano()
+
+	//tlog.Debugf("client %d CharID %v, ping %v\n", c.id, c.charid, (uint64(time.Now().UnixNano())-rsp.TickTime)/(1000*1000))
 }
 
 func handle_Rlt_Register(c *Client, msgdata []byte) {
@@ -124,11 +203,10 @@ func handle_Rlt_Register(c *Client, msgdata []byte) {
 	} else if rsp.RetCode == clientmsg.Type_LoginRetCode_LRC_OK {
 		c.userid = rsp.UserID
 		c.sessionkey = rsp.SessionKey
-		c.ChangeStatus(STATUS_GAMESERVERLIST)
+		c.ChangeStatus(testpb.ClientStatusType_Request_GameServer_List)
 	} else {
-		c.nextlogintime = time.Now().Unix() + 5
-		c.ChangeStatus(STATUS_NONE)
 		c.lconn.Close()
+		c.ChangeStatus(testpb.ClientStatusType_None)
 	}
 }
 
@@ -140,7 +218,7 @@ func handle_Rlt_ServerList(c *Client, msgdata []byte) {
 			c.gameserveraddr = server.ConnectAddr
 		}
 	}
-	c.ChangeStatus(STATUS_LOGIN_CLOSE)
+	c.ChangeStatus(testpb.ClientStatusType_Disconnect_LoginServer)
 }
 
 func handle_Rlt_Login(c *Client, msgdata []byte) {
@@ -156,12 +234,11 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 		}
 
 		c.charid = rsp.CharID
-		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
-		c.ChangeStatus(STATUS_GAME_MATCH_START)
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Request_Match)
 	} else {
-		c.nextlogintime = time.Now().Unix() + 5
-		c.ChangeStatus(STATUS_NONE)
 		c.gconn.Close()
+		c.ChangeStatus(testpb.ClientStatusType_None)
 	}
 }
 
@@ -170,34 +247,17 @@ func handle_Rlt_Match(c *Client, msgdata []byte) {
 	proto.Unmarshal(msgdata, rsp)
 
 	if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR {
-		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
-		c.ChangeStatus(STATUS_GAME_MATCH_START)
+		c.ChangeStatus(testpb.ClientStatusType_Request_Match)
 		return
 	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_OK {
-		c.ChangeStatus(STATUS_GAME_MATCH_OK)
 		msg := &clientmsg.Req_Match{
 			Action: clientmsg.MatchActionType_MAT_CONFIRM,
 			Mode:   clientmsg.MatchModeType_MMT_NORMAL,
 		}
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
 	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED {
-		c.ChangeStatus(STATUS_GAME_MATCH_CONFIRM)
-		c.ChangeStatus(STATUS_GAME_TEAM_OPERATE_BEGIN)
-		msg := &clientmsg.Transfer_Team_Operate{
-			Action:   clientmsg.TeamOperateActionType_TOA_CHOOSE,
-			CharID:   c.charid,
-			CharType: 1001,
-		}
-		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
-		c.ChangeStatus(STATUS_GAME_TEAM_OPERATE_FIXED)
-		msg = &clientmsg.Transfer_Team_Operate{
-			Action:   clientmsg.TeamOperateActionType_TOA_SETTLE,
-			CharID:   c.charid,
-			CharType: 1001,
-		}
-		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
+		c.ChangeStatus(testpb.ClientStatusType_Request_TeamOperate)
 	}
-	c.ChangeStatus(STATUS_GAME_LOOP)
 }
 
 func handle_Rlt_TeamOperate(c *Client, msgdata []byte) {
@@ -212,7 +272,9 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.battlekey = rsp.BattleKey
 	c.battleaddr = rsp.BattleAddr
 	c.battleroomid = rsp.RoomID
-	c.ChangeStatus(STATUS_BATTLE_CONNECT)
+
+	c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+	c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_BattleServer)
 
 	c.maxbattletime = OneBattleTime + randInt(1, 2)
 }
@@ -221,21 +283,17 @@ func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_ConnectBS{}
 	proto.Unmarshal(msgdata, rsp)
 	if rsp.RetCode != clientmsg.Type_BattleRetCode_BRC_OK {
-		c.ChangeStatus(STATUS_BATTLE_CLOSE)
+		c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
+		return
 	}
-	c.ChangeStatus(STATUS_BATTLE_PROGRESS)
-	msg := &clientmsg.Transfer_Loading_Progress{
-		CharID:   c.charid,
-		Progress: 100,
-	}
-	go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_LOADING_PROGRESS, msg)
-	c.ChangeStatus(STATUS_BATTLE_LOOP)
+	c.ChangeStatus(testpb.ClientStatusType_Request_Progress)
 }
 
 func handle_Rlt_StartBattle(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_StartBattle{}
 	proto.Unmarshal(msgdata, rsp)
 	c.startbattle = true
+	c.startbattletime = time.Now().Unix()
 
 	tlog.Debugf("startbattle %d\n", c.charid)
 }
@@ -244,7 +302,7 @@ func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Rlt_EndBattle{}
 	proto.Unmarshal(msgdata, rsp)
 
-	c.ChangeStatus(STATUS_BATTLE_CLOSE)
+	c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
 }
 
 func handle_Transfer_Command(c *Client, msgdata []byte) {
@@ -270,42 +328,21 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 }
 
 func (c *Client) updateLogin() {
-	if c.status == STATUS_LOGIN_CONNECT {
-		if c.nextregistertime < time.Now().Unix() {
-			c.nextregistertime = 0
-			c.lconn, c.err = net.Dial("tcp", LoginServerAddr)
-			tlog.Debugf("client %d connect login %s\n", c.id, LoginServerAddr)
-			if c.err != nil {
-				c.ChangeStatus(STATUS_NONE)
-			} else {
-				c.ChangeStatus(STATUS_LOGIN)
-			}
+	if c.status == testpb.ClientStatusType_Sleep_Before_Connect_LoginServer {
+		if c.checktimeout.Unix() < time.Now().Unix() {
+			c.ChangeStatus(testpb.ClientStatusType_Connect_LoginServer)
 		}
-	} else if c.status == STATUS_LOGIN {
-		msg := &clientmsg.Req_Register{
-			UserName:      c.username,
-			Password:      c.password,
-			IsLogin:       true,
-			ClientVersion: 0,
+	} else if c.status == testpb.ClientStatusType_Wait_LoginServer_Response {
+		if c.checktimeout.Unix() < time.Now().Unix() {
+			c.lconn.Close()
+			c.ChangeStatus(testpb.ClientStatusType_None)
 		}
-		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_REGISTER, msg)
-		c.ChangeStatus(STATUS_LOGIN_LOOP)
-	} else if c.status == STATUS_LOGIN_CLOSE {
-		c.lconn.Close()
-		c.nextlogintime = time.Now().Unix() + randInt(1, 3)
-		c.ChangeStatus(STATUS_GAME_CONNECT)
-	} else if c.status == STATUS_GAMESERVERLIST {
-		msg := &clientmsg.Req_ServerList{
-			Channel: 1,
-		}
-		go Send(&c.lconn, clientmsg.MessageType_MT_REQ_SERVERLIST, msg)
-		c.ChangeStatus(STATUS_LOGIN_LOOP)
 	}
 }
 
 func (c *Client) recvLogin() {
 	for {
-		if c.status == STATUS_LOGIN_LOOP {
+		if c.status == testpb.ClientStatusType_Wait_LoginServer_Response {
 			err, msgid, msgbuf := Recv(&c.lconn)
 			if err != nil {
 				continue
@@ -318,46 +355,15 @@ func (c *Client) recvLogin() {
 }
 
 func (c *Client) updateGame() {
-	if c.status == STATUS_GAME_CONNECT {
-		if c.nextlogintime < time.Now().Unix() {
-			c.lastgsheartbeattime = time.Now().Unix()
-			c.nextlogintime = 0
-			c.gconn, c.err = net.Dial("tcp", c.gameserveraddr)
-			tlog.Debugf("client %d connect game %s\n", c.id, c.gameserveraddr)
-			if c.err != nil {
-				c.ChangeStatus(STATUS_NONE)
-			} else {
-				c.ChangeStatus(STATUS_GAME_LOGIN)
-			}
+	if c.status == testpb.ClientStatusType_Sleep_Before_Connect_GameServer {
+		if c.checktimeout.Unix() < time.Now().Unix() {
+			c.ChangeStatus(testpb.ClientStatusType_Connect_GameServer)
 		}
-	} else if c.status == STATUS_GAME_LOGIN {
-		time.Sleep(time.Duration(1) * time.Second)
-		msg := &clientmsg.Req_Login{
-			UserID:     c.userid,
-			SessionKey: c.sessionkey,
-			ServerID:   GameServerID,
+	} else if c.status == testpb.ClientStatusType_Sleep_Before_Request_Match {
+		if c.checktimeout.Unix() < time.Now().Unix() {
+			c.ChangeStatus(testpb.ClientStatusType_Request_Match)
 		}
-
-		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_LOGIN, msg)
-		c.ChangeStatus(STATUS_GAME_LOOP)
-	} else if c.status == STATUS_GAME_MATCH_START {
-		if c.nextmatchtime < time.Now().Unix() {
-			c.nextmatchtime = 0
-			msg := &clientmsg.Req_Match{
-				Action: clientmsg.MatchActionType_MAT_JOIN,
-				Mode:   clientmsg.MatchModeType_MMT_NORMAL,
-			}
-			go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
-			c.ChangeStatus(STATUS_GAME_LOOP)
-		}
-	} else if c.status == STATUS_GAME_CLOSE {
-		if c.gconn != nil {
-			c.gconn.Close()
-		}
-		c.ChangeStatus(STATUS_GAME_CONNECT)
-	}
-
-	if c.status == STATUS_GAME_LOOP || c.status == STATUS_BATTLE_LOOP {
+	} else if c.status == testpb.ClientStatusType_Wait_GameServer_Response || c.status == testpb.ClientStatusType_Wait_BattleServer_Response {
 		if c.nextpinggstime < time.Now().Unix() {
 			c.nextpinggstime = time.Now().Unix() + 3
 
@@ -369,7 +375,7 @@ func (c *Client) updateGame() {
 			if time.Now().Unix()-c.lastgsheartbeattime > 20 {
 
 				tlog.Errorf("client %d gs timeout\n", c.id)
-				c.ChangeStatus(STATUS_GAME_CLOSE)
+				c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
 			}
 		}
 	}
@@ -377,10 +383,10 @@ func (c *Client) updateGame() {
 
 func (c *Client) recvGame() {
 	for {
-		if c.status == STATUS_GAME_LOOP || c.status == STATUS_BATTLE_LOOP {
+		if c.status == testpb.ClientStatusType_Wait_GameServer_Response || c.status == testpb.ClientStatusType_Wait_BattleServer_Response {
 			err, msgid, msgbuf := Recv(&c.gconn)
 			if err != nil {
-				c.ChangeStatus(STATUS_GAME_CLOSE)
+				c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
 				continue
 			}
 			c.dispatch(msgid, msgbuf)
@@ -391,51 +397,28 @@ func (c *Client) recvGame() {
 }
 
 func (c *Client) updateBattle() {
-	if c.status == STATUS_BATTLE_CONNECT {
-		c.lastbsheartbeattime = time.Now().Unix()
-		c.frameid = 0
-		tlog.Debugf("client %d connect battle %s\n", c.id, c.battleaddr)
-		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
-		if c.err != nil {
-			c.ChangeStatus(STATUS_NONE)
-		} else {
-			c.ChangeStatus(STATUS_BATTLE)
+	if c.status == testpb.ClientStatusType_Sleep_Before_Connect_BattleServer {
+		if c.checktimeout.Unix() < time.Now().Unix() {
+			c.ChangeStatus(testpb.ClientStatusType_Connect_BattleServer)
 		}
-		c.startbattle = false
-	} else if c.status == STATUS_BATTLE {
-		msg := &clientmsg.Req_ConnectBS{
-			RoomID:    c.battleroomid,
-			BattleKey: c.battlekey,
-			CharID:    c.charid,
-		}
-		go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
-
-		c.ChangeStatus(STATUS_BATTLE_LOOP)
-		c.startbattletime = time.Now().Unix()
-	} else if c.status == STATUS_BATTLE_CLOSE {
-		c.bconn.Close()
-		c.nextmatchtime = time.Now().Unix() + randInt(1, 5)
-		c.ChangeStatus(STATUS_GAME_MATCH_START)
-	} else if c.status == STATUS_BATTLE_WAITEND {
-		if time.Now().Unix() > c.maxbattletime {
-			c.ChangeStatus(STATUS_BATTLE_CLOSE)
-		}
-	}
-
-	if c.status == STATUS_BATTLE_LOOP {
+	} else if c.status == testpb.ClientStatusType_Wait_BattleServer_Response {
 		//after battle begin
-		if c.startbattletime != 0 && c.nextpingbstime < time.Now().Unix() {
-			c.nextpingbstime = time.Now().Unix() + 3
+		if c.startbattle {
+			//send heartbeat
+			if c.startbattletime != 0 && c.nextpingbstime < time.Now().Unix() {
+				c.nextpingbstime = time.Now().Unix() + 1
 
-			msg := &clientmsg.Transfer_Battle_Heartbeat{}
-			go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
+				msg := &clientmsg.Transfer_Battle_Heartbeat{}
+				msg.TickTime = uint64(time.Now().UnixNano())
+				go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
+			}
 			if time.Now().Unix()-c.lastbsheartbeattime > 20 {
 				tlog.Errorf("client %d bs timeout\n", c.id)
-				c.ChangeStatus(STATUS_BATTLE_CLOSE)
+				c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
+				return
 			}
-		}
 
-		if c.startbattle {
+			//send transfer cmd
 			i := 0
 			for i < 1 {
 				ping := &clientmsg.Ping{
@@ -460,9 +443,7 @@ func (c *Client) updateBattle() {
 				TypeID: clientmsg.Type_BattleEndTypeID_BEC_FINISH,
 				CharID: c.charid,
 			}
-			c.ChangeStatus(STATUS_BATTLE_WAITEND)
 			c.maxbattletime = time.Now().Add(time.Duration(time.Second * 5)).Unix()
-
 			go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 		}
 	}
@@ -470,10 +451,10 @@ func (c *Client) updateBattle() {
 
 func (c *Client) recvBattle() {
 	for {
-		if c.status == STATUS_BATTLE_LOOP || c.status == STATUS_BATTLE_WAITEND {
+		if c.status == testpb.ClientStatusType_Wait_BattleServer_Response {
 			err, msgid, msgbuf := RecvKCP(c.bconn)
 			if err != nil {
-				c.ChangeStatus(STATUS_BATTLE_CLOSE)
+				c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
 				continue
 			}
 			c.dispatch(msgid, msgbuf)
@@ -515,8 +496,6 @@ func (c *Client) dispatch(msgid interface{}, msgdata []byte) {
 
 func (c *Client) Init(id int32) {
 	c.id = id
-	c.nextregistertime = time.Now().Unix() + randInt(1, 5)
-	c.status = STATUS_LOGIN_CONNECT
 
 	c.username = fmt.Sprintf("robot_%d", id)
 	c.password = "123456"
@@ -524,7 +503,6 @@ func (c *Client) Init(id int32) {
 	//	c.username = fmt.Sprintf("%s", "gaojiangshan")
 	//	c.password = fmt.Sprintf("%d", 123456)
 
-	c.nextlogintime = time.Now().Unix()
 	c.nextpingbstime = time.Now().Unix() + 3
 	c.nextpinggstime = time.Now().Unix() + 3
 	c.startbattletime = 0
@@ -544,6 +522,8 @@ func (c *Client) Init(id int32) {
 	c.book(clientmsg.MessageType_MT_RLT_SERVERLIST, handle_Rlt_ServerList)
 	c.book(clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, handle_Rlt_TeamOperate)
 	c.book(clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, handle_Transfer_HeartBeat)
+
+	c.ChangeStatus(testpb.ClientStatusType_None)
 }
 
 func (c *Client) Loop(id int32) {
@@ -572,7 +552,7 @@ func stat(fin chan int) {
 		case _ = <-fin:
 			return
 		case <-time.After(time.Second * 2):
-			m_stat := make(map[string]int)
+			m_stat := make(map[testpb.ClientStatusType]int)
 			for _, m_client := range m_client {
 				m_stat[m_client.status] += 1
 			}
