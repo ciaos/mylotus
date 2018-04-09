@@ -96,6 +96,8 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 		g.LeaveTable(msg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CONFIRM) {
 		g.ConfirmTable(msg.Charid, msg.Matchmode)
+	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_REJECT) {
+		g.RejectTable(msg.Charid, msg.Matchmode)
 	} else {
 		log.Error("proxyHandleGSMSMatch Invalid Action %v", msg.Action)
 	}

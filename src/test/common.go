@@ -40,6 +40,27 @@ func SendAndRecvUtil(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata 
 	return nil
 }
 
+func RecvUtil(c *C, conn *net.Conn, waitmsgid clientmsg.MessageType) []byte {
+	ch := make(chan []byte, 1)
+	go func() {
+		for {
+			msgid, msgdata := Recv(c, conn)
+			if msgid == waitmsgid {
+				ch <- msgdata
+				break
+			}
+		}
+	}()
+
+	select {
+	case msgdata := <-ch:
+		return msgdata
+	case <-time.After(time.Second * 20):
+		c.Fatal("Wait TimeOut")
+	}
+	return nil
+}
+
 func Send(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}) {
 	data, err := proto.Marshal(msgdata.(proto.Message))
 	if err != nil {
@@ -120,5 +141,7 @@ func QuickMatch(c *C, conn *net.Conn) []byte {
 	}
 
 	msgdata := SendAndRecvUtil(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg, clientmsg.MessageType_MT_RLT_MATCH)
+
+	msgdata = RecvUtil(c, conn, clientmsg.MessageType_MT_RLT_MATCH)
 	return msgdata
 }

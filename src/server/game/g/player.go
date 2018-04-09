@@ -257,15 +257,15 @@ func GetBattlePlayer(clientid uint32) (*BPlayer, error) {
 func (player *PlayerInfo) update(now *time.Time) {
 	if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.OfflineTime.Unix() > 600) {
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), REASON_FREE_MEMORY)
-	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.PingTime.Unix() > 30) { //心跳超时转为掉线状态
+	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.PingTime.Unix() > 120) { //心跳超时转为掉线状态
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), REASON_TIMEOUT)
 	}
 }
 
 func (player *BPlayerInfo) update(now *time.Time) {
-	if player.player.IsOffline == false && now.Unix()-player.player.HeartBeatTime.Unix() > 20 {
+	if player.player.IsOffline == false && now.Unix()-player.player.HeartBeatTime.Unix() > 60 {
 		RemoveBattlePlayer(player.player.CharID, "", REASON_TIMEOUT)
-	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 20 {
+	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 5 {
 		RemoveBattlePlayer(player.player.CharID, "", REASON_FREE_MEMORY)
 	}
 }

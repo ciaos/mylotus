@@ -82,9 +82,7 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 		}
 		c.Assert(operateMsg.CharType, Equals, int32(1001))
 	}
-	var msgid clientmsg.MessageType
-	msgid, msgdata = Recv(c, &s.conn)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	msgdata = RecvUtil(c, &s.conn, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
 	rspAddress := &clientmsg.Rlt_NotifyBattleAddress{}
 	err = proto.Unmarshal(msgdata, rspAddress)
 	if err != nil {

@@ -80,5 +80,5 @@ func (s *MatchSuite) TestMatch(c *C) {
 	if err != nil {
 		c.Fatal("Rlt_Match Decode Error")
 	}
-	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE)
 }

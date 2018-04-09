@@ -1,4 +1,4 @@
-ID,Num,MatchTimeOut,ConfirmTimeOut,ChooseTimeOut,FixedWaitTime
-0,2,60,10,10,5
-1,10,60,10,10,5
-2,2,1,10,10,1
+ID,Num,MatchTimeOut,ConfirmTimeOut,RejectWaitTime,ChooseTimeOut,FixedWaitTime
+0,2,60,10,3,10,5
+1,10,60,10,3,10,5
+2,2,1,10,3,10,1

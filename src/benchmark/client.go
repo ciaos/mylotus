@@ -188,7 +188,7 @@ func handle_Pong(c *Client, msgdata []byte) {
 	rsp := &clientmsg.Pong{}
 	proto.Unmarshal(msgdata, rsp)
 	c.lastgsheartbeattime = time.Now().Unix()
-	//fmt.Printf("client %d recv pong %d\n", c.id, rsp.GetID())
+	//tlog.Debugf("client %d recv pong %d\n", c.id, rsp.GetID())
 }
 
 func handle_Transfer_HeartBeat(c *Client, msgdata []byte) {
@@ -304,8 +304,6 @@ func handle_Rlt_StartBattle(c *Client, msgdata []byte) {
 	proto.Unmarshal(msgdata, rsp)
 	c.startbattle = true
 	c.startbattletime = time.Now().Unix()
-
-	tlog.Debugf("startbattle %d\n", c.charid)
 }
 
 func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
@@ -331,7 +329,7 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 		//	tlog.Debugf("client %d recv tranfer_cmd from server, frame %d Total %d\n", c.charid, rsp.FrameID, len(rsp.Messages))
 	}
 	if rsp.FrameID != c.frameid+1 {
-		tlog.Errorf("rsp.frameid %v client.frameid %v client.id %v client.charid %v", rsp.FrameID, c.frameid, c.id, c.charid)
+		tlog.Fatalf("rsp.frameid %v client.frameid %v client.id %v client.charid %v", rsp.FrameID, c.frameid, c.id, c.charid)
 	}
 	c.frameid = rsp.FrameID
 	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
@@ -494,6 +492,8 @@ func (c *Client) Update() {
 		if c.bconn != nil {
 			c.bconn.Close()
 		}
+
+		tlog.Errorf("client %d status %v timeout\n", c.id, c.status)
 		c.ChangeStatus(testpb.ClientStatusType_None)
 	}
 }
@@ -585,7 +585,7 @@ func stat(fin chan int) {
 				m_stat[m_client.status] += 1
 			}
 			for k, v := range m_stat {
-				tlog.Error("Status:\t", k, "\tCount:\t", v)
+				tlog.Infof("Status:%v\t Count:%v\t\n", k, v)
 			}
 		}
 	}
@@ -593,10 +593,11 @@ func stat(fin chan int) {
 
 func main() {
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
-	//	level := logging.AddModuleLevel(backend)
-	//	level.SetLevel(logging.ERROR, "")
 	backendFormatter := logging.NewBackendFormatter(backend, format)
-	logging.SetBackend(backendFormatter)
+	backendleveled := logging.AddModuleLevel(backendFormatter)
+	backendleveled.SetLevel(logging.INFO, "")
+
+	logging.SetBackend(backendleveled)
 
 	m = new(sync.Mutex)
 

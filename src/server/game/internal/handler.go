@@ -93,7 +93,7 @@ func handleReqServerTime(args []interface{}) {
 	}
 
 	player.PingTime = time.Now()
-	a.WriteMsg(&clientmsg.Rlt_ServerTime{Time: uint32(time.Now().Unix())})
+	a.WriteMsg(&clientmsg.Rlt_ServerTime{Time: uint64(time.Now().Unix())})
 }
 
 func handleReqLogin(args []interface{}) {
@@ -319,7 +319,7 @@ func handleReqMatch(args []interface{}) {
 		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 			player.MatchServerID = msid
 
-		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
+		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL || m.Action == clientmsg.MatchActionType_MAT_REJECT {
 
 			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)

@@ -22,6 +22,7 @@ const (
 	MATCH_CONFIRM           = "match_confirm"           //匹配确认
 	MATCH_CLEAR_BADGUY      = "match_clear_badguy"      //清空未点击确认的玩家继续匹配
 	MATCH_CHARTYPE_CHOOSING = "match_chartype_choosing" //选择角色中
+	MATCH_SOMEBODY_REJECT   = "match_somebody_reject"   //有人拒绝了
 	MATCH_CHARTYPE_FIXED    = "match_chartype_fixed"    //角色确定
 	MATCH_BEGIN_ALLOCROOM   = "match_begin_allocroom"   //开始申请房间
 	MATCH_ALLOCROOM         = "match_allocroom"         //申请房间中
@@ -33,6 +34,7 @@ const (
 	SEAT_NONE    = 0
 	SEAT_CONFIRM = 1
 	SEAT_READY   = 2
+	SEAT_REJECT  = 3
 )
 
 type Seat struct {
@@ -137,6 +139,14 @@ func autoChooseToTable(table *Table) {
 			log.Debug("autoChooseToTable Table %v CharID %v CharName %v CharType %v", table.tableid, seat.charid, seat.charname, seat.chartype)
 		}
 	}
+
+	r := gamedata.CSVMatchMode.Index((*table).matchmode)
+	row := r.(*cfg.MatchMode)
+	rsp := &clientmsg.Rlt_Match{
+		RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_ALL_FIXED,
+		WaitUntilTime: time.Now().Unix() + int64(row.FixedWaitTimeSec),
+	}
+	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 }
 
 func (table *Table) broadcast(msgid proxymsg.ProxyMessageType, msgdata interface{}) {
@@ -168,7 +178,12 @@ func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) 
 
 			msg.Members = append(msg.Members, member)
 		}
+
+		r := gamedata.CSVMatchMode.Index((*table).matchmode)
+		row := r.(*cfg.MatchMode)
+		msg.WaitUntilTime = time.Now().Unix() + int64(row.ConfirmTimeOutSec)
 	}
+
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
@@ -206,6 +221,8 @@ func changeTableStatus(table *Table, status string) {
 			changeTableStatus(table, MATCH_FINISH)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
+		//notify fixed time
+
 		//auto choose
 		autoChooseToTable(table)
 	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
@@ -227,7 +244,13 @@ func changeTableStatus(table *Table, status string) {
 				(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
 				goto reloop
 			} else {
-				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE})
+				r := gamedata.CSVMatchMode.Index((*table).matchmode)
+				row := r.(*cfg.MatchMode)
+				rsp := &clientmsg.Rlt_Match{
+					RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
+					WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
+				}
+				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 			}
 		}
 
@@ -260,25 +283,26 @@ func (table *Table) update(now *time.Time) {
 	} else if (*table).status == MATCH_CONFIRM {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ConfirmTimeOutSec) {
 			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			(*table).checktime = (*now)
+			changeTableStatus(table, MATCH_CLEAR_BADGUY)
+		}
+	} else if (*table).status == MATCH_SOMEBODY_REJECT {
+		if (*now).Unix()-(*table).checktime.Unix() > int64(row.RejectWaitTime) {
+			log.Debug("Tableid %v RejectTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
 			changeTableStatus(table, MATCH_CLEAR_BADGUY)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_CHOOSING {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ChooseTimeOutSec) {
 			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_CHARTYPE_FIXED)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.FixedWaitTimeSec) {
 			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_BEGIN_ALLOCROOM)
 		}
 	} else if (*table).status == MATCH_ALLOCROOM {
 		if (*now).Unix()-(*table).checktime.Unix() > 5 { //申请房间超时，解散队伍
 			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			(*table).checktime = (*now)
 			changeTableStatus(table, MATCH_ERROR)
 		}
 	} else if (*table).status == MATCH_FINISH {
@@ -368,7 +392,6 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 
 			//都准备好了就进入锁定倒计时阶段
 			if allready {
-				(*table).checktime = time.Now()
 				changeTableStatus(table, MATCH_CHARTYPE_FIXED)
 			}
 		} else {
@@ -380,6 +403,13 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 }
 
 func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
+
+	r := gamedata.CSVMatchMode.Index(matchmode)
+	if r == nil {
+		log.Error("JoinTable CSVMatchMode Not Found %v ", matchmode)
+		return
+	}
+	row := r.(*cfg.MatchMode)
 
 	var createnew = true
 	if matchmode != int32(clientmsg.MatchModeType_MMT_AI) { //打AI都是创建新房间
@@ -413,13 +443,6 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 	if createnew {
 		allocTableID()
 
-		r := gamedata.CSVMatchMode.Index(matchmode)
-		if r == nil {
-			log.Error("JoinTable CSVMatchMode Not Found %v ", matchmode)
-			return
-		}
-		row := r.(*cfg.MatchMode)
-
 		table := &Table{
 			tableid:    g_tableid,
 			createtime: time.Now(),
@@ -447,6 +470,12 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 
 		log.Debug("JoinTable CreateTableID %v CharID %v CharName %v", table.tableid, charid, charname)
 	}
+
+	rsp := &clientmsg.Rlt_Match{
+		RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
+		WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
+	}
+	go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 }
 
 func LeaveTable(charid uint32, matchmode int32) {
@@ -518,11 +547,61 @@ func ConfirmTable(charid uint32, matchmode int32) {
 			if allconfirmed {
 				log.Debug("AllConfirmTable TableID %v", tableid)
 				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED
+				r := gamedata.CSVMatchMode.Index((*table).matchmode)
+				row := r.(*cfg.MatchMode)
+				msg.WaitUntilTime = time.Now().Unix() + int64(row.ChooseTimeOutSec)
 
 				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
 			} else {
 				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 			}
+
+			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
+		} else {
+			log.Error("ConfirmTable TableID %v Not Exist CharID %v", tableid, charid)
+			delete(PlayerTableIDMap, charid)
+		}
+	} else {
+		log.Error("ConfirmTable CharID %v Not Exist", charid)
+	}
+}
+
+func RejectTable(charid uint32, matchmode int32) {
+	tableid, ok := PlayerTableIDMap[charid]
+	if ok {
+		table, ok := TableManager[tableid]
+		if ok {
+			if table.status != MATCH_CONFIRM {
+				log.Error("RejectTable CharID %v Table %v Status %v", charid, tableid, table.status)
+				return
+			}
+
+			msg := &clientmsg.Rlt_Match{}
+
+			for _, seat := range table.seats {
+				if (*seat).charid == charid {
+					seat.status = SEAT_REJECT
+					log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", tableid, seat.charid, seat.ownerid)
+
+					member := &clientmsg.Rlt_Match_MemberInfo{}
+					member.CharID = (*seat).charid
+					member.OwnerID = (*seat).ownerid
+					member.TeamID = (*seat).teamid
+					member.CharName = (*seat).charname
+					member.CharType = (*seat).chartype
+					member.Status = clientmsg.MemberStatus(seat.status)
+					msg.Members = append(msg.Members, member)
+
+					break
+				}
+			}
+
+			changeTableStatus(table, MATCH_SOMEBODY_REJECT)
+			msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
+
+			r := gamedata.CSVMatchMode.Index((*table).matchmode)
+			row := r.(*cfg.MatchMode)
+			msg.WaitUntilTime = time.Now().Unix() + int64(row.RejectWaitTime)
 
 			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 		} else {
