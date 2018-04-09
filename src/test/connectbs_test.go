@@ -18,7 +18,7 @@ func TestConnectBS(t *testing.T) { TestingT(t) }
 type ConnectBSSuite struct {
 	conn  net.Conn
 	err   error
-	bconn *kcp.UDPSession
+	bconn net.Conn
 
 	charid uint32
 }
@@ -60,7 +60,7 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 
 	reqMatch := &clientmsg.Req_Match{
 		Action: clientmsg.MatchActionType_MAT_CONFIRM,
-		Mode:   clientmsg.MatchModeType_MMT_NORMAL,
+		Mode:   clientmsg.MatchModeType_MMT_AI,
 	}
 	msgdata = SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_MATCH, reqMatch, clientmsg.MessageType_MT_RLT_MATCH)
 	err = proto.Unmarshal(msgdata, rspMatch)
@@ -91,7 +91,7 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 		c.Fatal("Rlt_NotifyBattleAddress Decode Error")
 	}
 
-	s.bconn, s.err = kcp.Dial(kcp.MODE_FAST, rspAddress.BattleAddr)
+	s.bconn, s.err = kcp.Dial(rspAddress.BattleAddr)
 	if s.err != nil {
 		c.Fatal("Connect BattleServer Error ", s.err)
 	}
@@ -102,8 +102,7 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 		CharID:    s.charid,
 	}
 
-	msgid, msgdata = SendAndRecvKCP(c, s.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, reqMsg)
-	c.Assert(msgid, Equals, clientmsg.MessageType_MT_RLT_CONNECTBS)
+	msgdata = SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, reqMsg, clientmsg.MessageType_MT_RLT_CONNECTBS)
 
 	rMsg := &clientmsg.Rlt_ConnectBS{}
 	err = proto.Unmarshal(msgdata, rMsg)

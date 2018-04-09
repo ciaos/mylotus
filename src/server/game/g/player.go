@@ -18,6 +18,7 @@ const (
 	REASON_DISCONNECT  = 0
 	REASON_TIMEOUT     = 1
 	REASON_FREE_MEMORY = 2
+	REASON_CLEAR       = 3
 )
 
 type Character struct {
@@ -223,17 +224,24 @@ func ReconnectBattlePlayer(charid uint32, agent *gate.Agent) {
 	}
 }
 
-func RemoveBattlePlayer(clientid uint32, remoteaddr string, force bool) {
+func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 	player, ok := BattlePlayerManager[clientid]
 	if ok {
-		if force == true || strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
-			(*player.agent).Close()
-			_ = player.agent
+		if reason == REASON_FREE_MEMORY {
 			delete(BattlePlayerManager, clientid)
+			log.Debug("RemoveBattlePlayer %v", clientid)
+		} else {
+			player.player.IsOffline = true
+			player.player.OfflineTime = time.Now()
+
+			if player.agent != nil {
+				(*player.agent).Close()
+				_ = player.agent
+			}
+
 			if GetMemberRemoteAddr(clientid) == remoteaddr {
 				LeaveRoom(clientid)
 			}
-			log.Debug("RemoveBattlePlayer %v force %v", clientid, force)
 		}
 	}
 }
@@ -249,18 +257,16 @@ func GetBattlePlayer(clientid uint32) (*BPlayer, error) {
 func (player *PlayerInfo) update(now *time.Time) {
 	if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.OfflineTime.Unix() > 600) {
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), REASON_FREE_MEMORY)
-	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.PingTime.Unix() > 600) { //心跳超时转为掉线状态
+	} else if player.player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE && (now.Unix()-player.player.PingTime.Unix() > 30) { //心跳超时转为掉线状态
 		RemoveGamePlayer(player.player.Char.CharID, (*player.agent).RemoteAddr().String(), REASON_TIMEOUT)
 	}
 }
 
 func (player *BPlayerInfo) update(now *time.Time) {
-	if player.player.IsOffline == false && now.Unix()-player.player.HeartBeatTime.Unix() > 60 {
-		player.player.OfflineTime = *now
-		player.player.IsOffline = true
-		LeaveRoom(player.player.CharID)
-	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 60 {
-		RemoveBattlePlayer(player.player.CharID, "", true)
+	if player.player.IsOffline == false && now.Unix()-player.player.HeartBeatTime.Unix() > 20 {
+		RemoveBattlePlayer(player.player.CharID, "", REASON_TIMEOUT)
+	} else if player.player.IsOffline == true && now.Unix()-player.player.OfflineTime.Unix() > 20 {
+		RemoveBattlePlayer(player.player.CharID, "", REASON_FREE_MEMORY)
 	}
 }
 

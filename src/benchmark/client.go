@@ -39,11 +39,13 @@ type Client struct {
 
 	userid uint32
 	charid uint32
-	status testpb.ClientStatusType
+
+	status           testpb.ClientStatusType
+	changeStatusTime time.Time
 
 	lconn net.Conn
 	gconn net.Conn
-	bconn *kcp.UDPSession
+	bconn net.Conn
 
 	err error
 
@@ -51,9 +53,8 @@ type Client struct {
 
 	frameid uint32
 
-	nextpinggstime int64
-	nextpingbstime int64
-
+	nextpinggstime      int64
+	nextpingbstime      int64
 	lastgsheartbeattime int64
 	lastbsheartbeattime int64
 
@@ -67,6 +68,7 @@ type Client struct {
 
 func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 	c.status = status
+	c.changeStatusTime = time.Now()
 	tlog.Debugf("client %d CharID %v, Status %v\n", c.id, c.charid, c.status)
 
 	switch c.status {
@@ -136,6 +138,8 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 		}
 		go Send(&c.gconn, clientmsg.MessageType_MT_TRANSFER_TEAMOPERATE, msg)
 		c.ChangeStatus(testpb.ClientStatusType_Wait_GameServer_Response)
+	case testpb.ClientStatusType_Wait_GameServer_Response:
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(60))
 	case testpb.ClientStatusType_Disconnect_GameServer:
 		c.gconn.Close()
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
@@ -145,7 +149,7 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 	case testpb.ClientStatusType_Connect_BattleServer:
 		c.frameid = 0
 		c.lastbsheartbeattime = time.Now().Unix()
-		c.bconn, c.err = kcp.Dial(kcp.MODE_FAST, c.battleaddr)
+		c.bconn, c.err = kcp.Dial(c.battleaddr)
 		if c.err != nil {
 			c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
 		} else {
@@ -157,15 +161,21 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 			BattleKey: c.battlekey,
 			CharID:    c.charid,
 		}
-		go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
+		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, msg)
 		c.ChangeStatus(testpb.ClientStatusType_Wait_BattleServer_Response)
 	case testpb.ClientStatusType_Request_Progress:
 		msg := &clientmsg.Transfer_Loading_Progress{
 			CharID:   c.charid,
 			Progress: 100,
 		}
-		go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_LOADING_PROGRESS, msg)
+		go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_LOADING_PROGRESS, msg)
 		c.ChangeStatus(testpb.ClientStatusType_Wait_BattleServer_Response)
+	case testpb.ClientStatusType_Request_EndBattle:
+		msg := &clientmsg.Req_EndBattle{
+			TypeID: clientmsg.Type_BattleEndTypeID_BEC_FINISH,
+			CharID: c.charid,
+		}
+		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 	case testpb.ClientStatusType_Disconnect_BattleServer:
 		c.startbattle = false
 		c.bconn.Close()
@@ -364,6 +374,14 @@ func (c *Client) updateGame() {
 			c.ChangeStatus(testpb.ClientStatusType_Request_Match)
 		}
 	} else if c.status == testpb.ClientStatusType_Wait_GameServer_Response || c.status == testpb.ClientStatusType_Wait_BattleServer_Response {
+		if c.status == testpb.ClientStatusType_Wait_GameServer_Response {
+			if c.checktimeout.Unix() < time.Now().Unix() {
+				tlog.Errorf("client %d status %v checktimeout\n", c.id, c.status)
+				c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
+				return
+			}
+		}
+
 		if c.nextpinggstime < time.Now().Unix() {
 			c.nextpinggstime = time.Now().Unix() + 3
 
@@ -374,7 +392,7 @@ func (c *Client) updateGame() {
 
 			if time.Now().Unix()-c.lastgsheartbeattime > 20 {
 
-				tlog.Errorf("client %d gs timeout\n", c.id)
+				tlog.Errorf("client %d gs ping timeout\n", c.id)
 				c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
 			}
 		}
@@ -410,10 +428,10 @@ func (c *Client) updateBattle() {
 
 				msg := &clientmsg.Transfer_Battle_Heartbeat{}
 				msg.TickTime = uint64(time.Now().UnixNano())
-				go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
+				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
 			}
 			if time.Now().Unix()-c.lastbsheartbeattime > 20 {
-				tlog.Errorf("client %d bs timeout\n", c.id)
+				tlog.Errorf("client %d bs heartbeat timeout\n", c.id)
 				c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
 				return
 			}
@@ -431,7 +449,7 @@ func (c *Client) updateBattle() {
 
 				msg := &clientmsg.Transfer_Command{}
 				msg.Messages = append(msg.Messages, cdata)
-				go SendKCP(c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
 
 				i += 1
 			}
@@ -439,12 +457,8 @@ func (c *Client) updateBattle() {
 
 		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {
 			c.startbattletime = 0
-			msg := &clientmsg.Req_EndBattle{
-				TypeID: clientmsg.Type_BattleEndTypeID_BEC_FINISH,
-				CharID: c.charid,
-			}
-			c.maxbattletime = time.Now().Add(time.Duration(time.Second * 5)).Unix()
-			go SendKCP(c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
+			c.ChangeStatus(testpb.ClientStatusType_Request_EndBattle)
+			c.ChangeStatus(testpb.ClientStatusType_Wait_BattleServer_Response)
 		}
 	}
 }
@@ -452,7 +466,7 @@ func (c *Client) updateBattle() {
 func (c *Client) recvBattle() {
 	for {
 		if c.status == testpb.ClientStatusType_Wait_BattleServer_Response {
-			err, msgid, msgbuf := RecvKCP(c.bconn)
+			err, msgid, msgbuf := Recv(&c.bconn)
 			if err != nil {
 				c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
 				continue
@@ -468,6 +482,20 @@ func (c *Client) Update() {
 	c.updateLogin()
 	c.updateGame()
 	c.updateBattle()
+
+	//战斗状态之外的状态卡60s则重启
+	if c.status != testpb.ClientStatusType_Wait_BattleServer_Response && time.Now().Unix()-c.changeStatusTime.Unix() > 60 {
+		if c.lconn != nil {
+			c.lconn.Close()
+		}
+		if c.gconn != nil {
+			c.gconn.Close()
+		}
+		if c.bconn != nil {
+			c.bconn.Close()
+		}
+		c.ChangeStatus(testpb.ClientStatusType_None)
+	}
 }
 
 func (c *Client) Recv() {

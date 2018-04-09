@@ -148,6 +148,7 @@ func (room *Room) update(now *time.Time) {
 			rsp.Messages = append(rsp.Messages, message)
 		}
 		(*room).broadcast(rsp)
+		//log.Debug("frameid %v", room.frameid)
 
 		//backup
 		(*room).messagesbackup = append((*room).messagesbackup, rsp)
@@ -255,7 +256,7 @@ func deleteRoomMemberInfo(roomid int32) {
 				rid, exist := PlayerRoomIDMap[charid]
 				if exist && rid == roomid { //玩家已进入另外一场战斗，不删除映射信息和网络连接
 					delete(PlayerRoomIDMap, charid)
-					RemoveBattlePlayer(member.charid, "", true)
+					RemoveBattlePlayer(member.charid, "", REASON_CLEAR)
 				}
 			}
 			delete(room.members, charid)

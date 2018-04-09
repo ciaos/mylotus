@@ -330,7 +330,7 @@ func rpcCloseAgent(args []interface{}) {
 
 	clientid := a.UserData()
 	if clientid != nil {
-		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String(), false)
+		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String(), g.REASON_DISCONNECT)
 		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), g.REASON_DISCONNECT)
 	}
 

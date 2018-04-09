@@ -6,7 +6,7 @@
 	"MaxConnNum": 20000,
 	"ConsolePort": 4444,
 	
-	"TickInterval" : 100,
+	"TickInterval" : 66,
 	"SaveAssetStep" : 60,
 	
 	"ServerID" : 2,
