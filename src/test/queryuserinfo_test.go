@@ -23,34 +23,28 @@ type QueryUserInfoSuite struct {
 var _ = Suite(&QueryUserInfoSuite{})
 
 func (s *QueryUserInfoSuite) SetUpSuite(c *C) {
-	s.conn, s.err = net.Dial("tcp", GameServerAddr)
+
+}
+
+func (s *QueryUserInfoSuite) TearDownSuite(c *C) {
+
+}
+
+func (s *QueryUserInfoSuite) SetUpTest(c *C) {
+	s.conn, s.err = net.Dial("tcp", LoginServerAddr)
 	if s.err != nil {
 		c.Fatal("Connect Server Error ", s.err)
 	}
+
 	rand.Seed(time.Now().UnixNano())
 	username := fmt.Sprintf("pengjing%d", rand.Intn(10000))
 	password := "123456"
 
-	retcode, userid, sessionkey := Register(c, &s.conn, username, password, false)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
-
-	code, charid, isnew := Login(c, &s.conn, userid, sessionkey)
-	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_OK)
-	c.Assert(isnew, Equals, true)
-
-	s.charid = charid
-}
-
-func (s *QueryUserInfoSuite) TearDownSuite(c *C) {
-	s.conn.Close()
-}
-
-func (s *QueryUserInfoSuite) SetUpTest(c *C) {
-
+	s.charid = QuickLogin(c, &s.conn, username, password)
 }
 
 func (s *QueryUserInfoSuite) TearDownTest(c *C) {
-
+	s.conn.Close()
 }
 
 func (s *QueryUserInfoSuite) TestQueryUserInfo(c *C) {

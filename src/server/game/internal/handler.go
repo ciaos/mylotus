@@ -320,10 +320,15 @@ func handleReqMatch(args []interface{}) {
 			player.MatchServerID = msid
 
 		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL || m.Action == clientmsg.MatchActionType_MAT_REJECT {
-
 			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 				player.MatchServerID = 0
+
+				if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
+					a.WriteMsg(&clientmsg.Rlt_Match{
+						RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CANCELED,
+					})
+				}
 			}
 		}
 	})

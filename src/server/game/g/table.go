@@ -75,7 +75,7 @@ func InitTableManager() {
 
 func UninitTableManager() {
 	for tableid, table := range TableManager {
-		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
+		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
 		table.seats = append([]*Seat{})
 		delete(TableManager, tableid)
 	}
@@ -93,7 +93,7 @@ func allocTableID() {
 	}
 }
 
-func fillRobotToTable(table *Table) {
+func (table *Table) fillRobotToTable() {
 	r := gamedata.CSVMatchMode.Index((*table).matchmode)
 	if r == nil {
 		return
@@ -124,7 +124,7 @@ func fillRobotToTable(table *Table) {
 	}
 }
 
-func autoChooseToTable(table *Table) {
+func (table *Table) autoChooseToTable() {
 	for _, seat := range table.seats {
 		if (*seat).chartype == 0 {
 
@@ -159,7 +159,7 @@ func (table *Table) broadcast(msgid proxymsg.ProxyMessageType, msgdata interface
 	}()
 }
 
-func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) {
+func (table *Table) notifyMatchResultToTable(retcode clientmsg.Type_GameRetCode) {
 
 	msg := &clientmsg.Rlt_Match{
 		RetCode: retcode,
@@ -187,6 +187,37 @@ func notifyMatchResultToTable(table *Table, retcode clientmsg.Type_GameRetCode) 
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
+func (table *Table) kickBadGuy() {
+	//循环删除没有确定和拒绝的玩家
+reloop:
+	for i, seat := range (*table).seats { //kick badguy and robot
+		if seat.status != SEAT_CONFIRM {
+			if seat.ownerid == 0 {
+				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR})
+				log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
+				delete(PlayerTableIDMap, seat.charid)
+			}
+			(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
+			goto reloop
+		} else {
+			r := gamedata.CSVMatchMode.Index((*table).matchmode)
+			row := r.(*cfg.MatchMode)
+			rsp := &clientmsg.Rlt_Match{
+				RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
+				WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
+			}
+			go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+		}
+	}
+
+	table.changeTableStatus(MATCH_CONTINUE)
+
+	//重置状态
+	for _, seat := range (*table).seats {
+		seat.status = SEAT_NONE
+	}
+}
+
 func ReconnectTable(charid uint32, pmsg *proxymsg.InternalMessage) {
 	rsp := proxymsg.Proxy_MS_GS_Reconnect{
 		Ok: false,
@@ -195,66 +226,45 @@ func ReconnectTable(charid uint32, pmsg *proxymsg.InternalMessage) {
 	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_RECONNECT, rsp)
 }
 
-func changeTableStatus(table *Table, status string) {
+func (table *Table) changeTableStatus(status string) {
 	(*table).status = status
 	table.checktime = time.Now()
 	log.Debug("changeTableStatus Table %v Status %v", (*table).tableid, (*table).status)
 
 	if (*table).status == MATCH_ERROR {
 		//notify all member error
-		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
-		changeTableStatus(table, MATCH_FINISH)
+		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
+		table.changeTableStatus(MATCH_FINISH)
 	} else if (*table).status == MATCH_EMPTY {
 		DeleteTable((*table).tableid)
 	} else if (*table).status == MATCH_OK {
 		//notify all member to choose
-		notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-		changeTableStatus(table, MATCH_CONFIRM)
+		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+		table.changeTableStatus(MATCH_CONFIRM)
 	} else if (*table).status == MATCH_TIMEOUT {
 		if table.matchmode == int32(clientmsg.MatchModeType_MMT_AI) {
 			//fill with robot and notify all member to choose
-			fillRobotToTable(table)
-			notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-			changeTableStatus(table, MATCH_CONFIRM)
+			table.fillRobotToTable()
+			table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+			table.changeTableStatus(MATCH_CONFIRM)
 		} else {
-			notifyMatchResultToTable(table, clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
-			changeTableStatus(table, MATCH_FINISH)
+			table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
+			table.changeTableStatus(MATCH_FINISH)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		//notify fixed time
 
 		//auto choose
-		autoChooseToTable(table)
+		table.autoChooseToTable()
 	} else if (*table).status == MATCH_BEGIN_ALLOCROOM {
 		table.allocBattleRoom()
-		changeTableStatus(table, MATCH_ALLOCROOM)
+		table.changeTableStatus(MATCH_ALLOCROOM)
 	} else if (*table).status == MATCH_END {
-		deleteTableSeatInfo(table.tableid)
+		table.deleteTableSeatInfo()
 		table.seats = append([]*Seat{}) //clear seats
 		DeleteTable(table.tableid)
 	} else if (*table).status == MATCH_CLEAR_BADGUY {
-	reloop:
-		for i, seat := range (*table).seats { //kick badguy and robot
-			if seat.status != SEAT_CONFIRM {
-				if seat.ownerid == 0 {
-					go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR})
-					log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
-					delete(PlayerTableIDMap, seat.charid)
-				}
-				(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
-				goto reloop
-			} else {
-				r := gamedata.CSVMatchMode.Index((*table).matchmode)
-				row := r.(*cfg.MatchMode)
-				rsp := &clientmsg.Rlt_Match{
-					RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
-					WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
-				}
-				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
-			}
-		}
-
-		changeTableStatus(table, MATCH_CONTINUE)
+		table.kickBadGuy()
 	}
 }
 
@@ -262,7 +272,7 @@ func (table *Table) update(now *time.Time) {
 	r := gamedata.CSVMatchMode.Index((*table).matchmode)
 	if r == nil {
 		log.Error("CSVMatchMode ModeID %v Not Found", (*table).matchmode)
-		changeTableStatus(table, MATCH_ERROR)
+		table.changeTableStatus(MATCH_ERROR)
 		return
 	}
 	row := r.(*cfg.MatchMode)
@@ -271,44 +281,44 @@ func (table *Table) update(now *time.Time) {
 		//匹配超时
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.MatchTimeOutSec) {
 			log.Debug("Tableid %v MatchTimeout Createtime %v Now %v", (*table).tableid, (*table).createtime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_TIMEOUT)
+			table.changeTableStatus(MATCH_TIMEOUT)
 			return
 		}
 
 		if len((*table).seats) >= row.PlayerCnt {
-			changeTableStatus(table, MATCH_OK)
+			table.changeTableStatus(MATCH_OK)
 		} else if len((*table).seats) <= 0 {
-			changeTableStatus(table, MATCH_EMPTY)
+			table.changeTableStatus(MATCH_EMPTY)
 		}
 	} else if (*table).status == MATCH_CONFIRM {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ConfirmTimeOutSec) {
 			log.Debug("Tableid %v ConfirmTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_CLEAR_BADGUY)
+			table.changeTableStatus(MATCH_CLEAR_BADGUY)
 		}
 	} else if (*table).status == MATCH_SOMEBODY_REJECT {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.RejectWaitTime) {
 			log.Debug("Tableid %v RejectTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_CLEAR_BADGUY)
+			table.changeTableStatus(MATCH_CLEAR_BADGUY)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_CHOOSING {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.ChooseTimeOutSec) {
 			log.Debug("Tableid %v ChooseTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_CHARTYPE_FIXED)
+			table.changeTableStatus(MATCH_CHARTYPE_FIXED)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		if (*now).Unix()-(*table).checktime.Unix() > int64(row.FixedWaitTimeSec) {
 			log.Debug("Tableid %v FixedWaitTimeout checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_BEGIN_ALLOCROOM)
+			table.changeTableStatus(MATCH_BEGIN_ALLOCROOM)
 		}
 	} else if (*table).status == MATCH_ALLOCROOM {
 		if (*now).Unix()-(*table).checktime.Unix() > 5 { //申请房间超时，解散队伍
 			log.Error("Tableid %v Allocroom TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_ERROR)
+			table.changeTableStatus(MATCH_ERROR)
 		}
 	} else if (*table).status == MATCH_FINISH {
 		if (*now).Unix()-(*table).checktime.Unix() > 5 { //房间超时，解散
 			log.Debug("Tableid %v Finish TimeOut checktime %v Now %v", (*table).tableid, (*table).checktime.Format(TIME_FORMAT), (*now).Format(TIME_FORMAT))
-			changeTableStatus(table, MATCH_END)
+			table.changeTableStatus(MATCH_END)
 		}
 	}
 }
@@ -348,13 +358,10 @@ func DeleteTable(tableid int32) {
 	delete(TableManager, tableid)
 }
 
-func deleteTableSeatInfo(tableid int32) {
-	table, ok := TableManager[tableid]
-	if ok {
-		for _, seat := range table.seats {
-			if seat.ownerid == 0 {
-				delete(PlayerTableIDMap, seat.charid)
-			}
+func (table *Table) deleteTableSeatInfo() {
+	for _, seat := range table.seats {
+		if seat.ownerid == 0 {
+			delete(PlayerTableIDMap, seat.charid)
 		}
 	}
 }
@@ -392,7 +399,7 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 
 			//都准备好了就进入锁定倒计时阶段
 			if allready {
-				changeTableStatus(table, MATCH_CHARTYPE_FIXED)
+				table.changeTableStatus(MATCH_CHARTYPE_FIXED)
 			}
 		} else {
 			log.Error("TeamOperate Table Not Exist", tableid)
@@ -472,7 +479,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 	}
 
 	rsp := &clientmsg.Rlt_Match{
-		RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
+		RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_START,
 		WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
 	}
 	go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
@@ -551,7 +558,7 @@ func ConfirmTable(charid uint32, matchmode int32) {
 				row := r.(*cfg.MatchMode)
 				msg.WaitUntilTime = time.Now().Unix() + int64(row.ChooseTimeOutSec)
 
-				changeTableStatus(table, MATCH_CHARTYPE_CHOOSING)
+				table.changeTableStatus(MATCH_CHARTYPE_CHOOSING)
 			} else {
 				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 			}
@@ -596,7 +603,7 @@ func RejectTable(charid uint32, matchmode int32) {
 				}
 			}
 
-			changeTableStatus(table, MATCH_SOMEBODY_REJECT)
+			table.changeTableStatus(MATCH_SOMEBODY_REJECT)
 			msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 
 			r := gamedata.CSVMatchMode.Index((*table).matchmode)
@@ -625,7 +632,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 
 		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)
 		table.checktime = time.Now()
-		changeTableStatus(table, MATCH_FINISH)
+		table.changeTableStatus(MATCH_FINISH)
 	} else {
 		log.Error("ClearTable TableID %v Not Found , TableCount %v", rlt.Matchtableid, len(TableManager))
 	}

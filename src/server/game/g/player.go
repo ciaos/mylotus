@@ -99,7 +99,7 @@ func AddGamePlayer(player *Player, agent *gate.Agent) {
 	}
 	GamePlayerManager[player.Char.CharID] = playerinfo
 
-	log.Debug("AddGamePlayerFromDB %v", player.Char.CharID)
+	log.Debug("AddGamePlayerFromDB %v From %v", player.Char.CharID, (*agent).RemoteAddr().String())
 }
 
 func AddCachedGamePlayer(player *Player, agent *gate.Agent) {
@@ -115,12 +115,14 @@ func AddCachedGamePlayer(player *Player, agent *gate.Agent) {
 	}
 	(*agent).SetUserData(player.Char.CharID)
 
-	log.Debug("AddGamePlayerFromCache %v", player.Char.CharID)
+	log.Debug("AddGamePlayerFromCache %v From %v", player.Char.CharID, (*agent).RemoteAddr().String())
 }
 
 func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
 	exist, ok := GamePlayerManager[charid]
 	if ok {
+		log.Debug("ReconnectGamePlayer %v OK From %v Exist %v", charid, (*agent).RemoteAddr().String(), (*exist.agent).RemoteAddr().String())
+
 		(*exist.agent).Close()
 		_ = exist.agent
 		exist.agent = agent
@@ -129,10 +131,8 @@ func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
 		exist.player.Char.UpdateTime = time.Now()
 		exist.player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		exist.player.OfflineTime = time.Unix(0, 0)
-
-		log.Debug("ReconnectGamePlayer %v OK", charid)
 	} else {
-		log.Error("ReconnectGamePlayer %v Error", charid)
+		log.Error("ReconnectGamePlayer %v Error From %v", charid, (*agent).RemoteAddr().String())
 	}
 }
 
@@ -142,9 +142,11 @@ func RemoveGamePlayer(clientid uint32, remoteaddr string, reason int32) {
 		if strings.Compare((*player.agent).RemoteAddr().String(), remoteaddr) == 0 {
 			if reason == REASON_FREE_MEMORY {
 				player.player.SavePlayerAsset()
+				log.Debug("RemoveGamePlayer %v From %v", clientid, remoteaddr)
 				delete(GamePlayerManager, clientid)
-				log.Debug("RemoveGamePlayer %v", clientid)
 			} else {
+				log.Debug("PreTagGamePlayer %v Reason %v From %v", clientid, reason, remoteaddr)
+
 				if player.agent != nil {
 					(*player.agent).Close()
 					_ = player.agent
@@ -204,12 +206,14 @@ func AddBattlePlayer(player *BPlayer, agent *gate.Agent) {
 	}
 	BattlePlayerManager[player.CharID] = playerinfo
 
-	log.Debug("AddBattlePlayer %v", player.CharID)
+	log.Debug("AddBattlePlayer %v From %v", player.CharID, (*agent).RemoteAddr().String())
 }
 
 func ReconnectBattlePlayer(charid uint32, agent *gate.Agent) {
 	exist, ok := BattlePlayerManager[charid]
 	if ok {
+		log.Debug("ReconnectBattlePlayer %v OK From %v Exist %v", charid, (*agent).RemoteAddr().String(), (*exist.agent).RemoteAddr().String())
+
 		(*exist.agent).Close()
 		_ = exist.agent
 		exist.agent = agent
@@ -218,9 +222,8 @@ func ReconnectBattlePlayer(charid uint32, agent *gate.Agent) {
 		exist.player.IsOffline = false
 		exist.player.OfflineTime = time.Unix(0, 0)
 		(*agent).SetUserData(charid)
-		log.Debug("ReconnectBattlePlayer %v OK", charid)
 	} else {
-		log.Error("ReconnectBattlePlayer %v Error", charid)
+		log.Error("ReconnectBattlePlayer %v Error From %v", charid, (*agent).RemoteAddr().String())
 	}
 }
 
@@ -228,9 +231,15 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 	player, ok := BattlePlayerManager[clientid]
 	if ok {
 		if reason == REASON_FREE_MEMORY {
-			delete(BattlePlayerManager, clientid)
 			log.Debug("RemoveBattlePlayer %v", clientid)
+			delete(BattlePlayerManager, clientid)
 		} else {
+			log.Debug("PreTagBattlePlayer %v Reason %v From %v Exist %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String())
+			if reason == REASON_DISCONNECT && remoteaddr != (*player.agent).RemoteAddr().String() {
+				log.Error("PreTagBattlePlayer Error %v Reason %v From %v Exist %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String())
+				return
+			}
+
 			player.player.IsOffline = true
 			player.player.OfflineTime = time.Now()
 

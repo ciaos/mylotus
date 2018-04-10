@@ -6,6 +6,7 @@ import (
 	"server/game"
 	"time"
 
+	"github.com/ciaos/leaf/log"
 	"github.com/ciaos/leaf/module"
 )
 
@@ -27,12 +28,15 @@ func (m *Module) OnDestroy() {
 }
 
 func (m *Module) Run(closeSig chan bool) {
+
 	for {
 		select {
 		case <-closeSig:
 			return
 		case <-time.After(time.Duration(conf.Server.TickInterval) * time.Millisecond):
 			game.ChanRPC.Go("TickFrame", time.Now())
+
+			log.Rotate(time.Now())
 		}
 	}
 }

@@ -19,43 +19,41 @@ func TestSetCharName(t *testing.T) { TestingT(t) }
 type SetCharNameSuite struct {
 	conn net.Conn
 	err  error
+
+	charid uint32
 }
 
 var _ = Suite(&SetCharNameSuite{})
 
 func (s *SetCharNameSuite) SetUpSuite(c *C) {
-	s.conn, s.err = net.Dial("tcp", GameServerAddr)
-	if s.err != nil {
-		c.Fatal("Connect Server Error ", s.err)
-	}
+
 }
 
 func (s *SetCharNameSuite) TearDownSuite(c *C) {
-	s.conn.Close()
+
 }
 
 func (s *SetCharNameSuite) SetUpTest(c *C) {
+	s.conn, s.err = net.Dial("tcp", LoginServerAddr)
+	if s.err != nil {
+		c.Fatal("Connect Server Error ", s.err)
+	}
 
-}
-
-func (s *SetCharNameSuite) TearDownTest(c *C) {
-
-}
-
-func (s *SetCharNameSuite) TestSetCharName(c *C) {
 	rand.Seed(time.Now().UnixNano())
 	username := fmt.Sprintf("pengjing%d", rand.Intn(10000))
 	password := "123456"
 
-	retcode, userid, sessionkey := Register(c, &s.conn, username, password, false)
-	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
+	s.charid = QuickLogin(c, &s.conn, username, password)
+}
 
-	code, charid, isnew := Login(c, &s.conn, userid, sessionkey)
-	c.Assert(code, Equals, clientmsg.Type_GameRetCode_GRC_OK)
-	c.Assert(isnew, Equals, true)
+func (s *SetCharNameSuite) TearDownTest(c *C) {
+	s.conn.Close()
+}
+
+func (s *SetCharNameSuite) TestSetCharName(c *C) {
 
 	reqMsg := &clientmsg.Req_SetCharName{
-		CharName: "player_" + strconv.Itoa(int(charid)),
+		CharName: "player_" + strconv.Itoa(int(s.charid)),
 	}
 
 	msgdata := SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_REQ_SETCHARNAME, reqMsg, clientmsg.MessageType_MT_RLT_SETCHARNAME)
