@@ -77,7 +77,7 @@ func (player *Player) saveGamePlayerCharacterInfo() {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 	c := s.DB(DB_NAME_GAME).C(TB_NAME_CHARACTER)
-	c.Update(bson.M{"userid": player.Char.UserID, "gsid": player.Char.GsId}, player.Char)
+	c.Update(bson.M{"charid": player.Char.CharID}, player.Char)
 }
 
 func AddGamePlayer(player *Player, agent *gate.Agent) {

@@ -450,6 +450,16 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 	if createnew {
 		allocTableID()
 
+		_, ok := TableManager[g_tableid]
+		if ok {
+			log.Error("TableID %v Is Using Current TableCnt %v", g_tableid, len(TableManager))
+			rsp := &clientmsg.Rlt_Match{
+				RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
+			}
+			go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+			return
+		}
+
 		table := &Table{
 			tableid:    g_tableid,
 			createtime: time.Now(),
@@ -623,16 +633,20 @@ func RejectTable(charid uint32, matchmode int32) {
 func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 	table, ok := TableManager[rlt.Matchtableid]
 	if ok {
-		msg := &clientmsg.Rlt_NotifyBattleAddress{
-			RoomID:         rlt.Battleroomid,
-			BattleAddr:     rlt.Connectaddr,
-			BattleKey:      rlt.Battleroomkey,
-			BattleServerID: rlt.Battleserverid,
-		}
+		if rlt.Retcode == 0 {
+			msg := &clientmsg.Rlt_NotifyBattleAddress{
+				RoomID:         rlt.Battleroomid,
+				BattleAddr:     rlt.Connectaddr,
+				BattleKey:      rlt.Battleroomkey,
+				BattleServerID: rlt.Battleserverid,
+			}
 
-		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)
-		table.checktime = time.Now()
-		table.changeTableStatus(MATCH_FINISH)
+			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)
+			table.checktime = time.Now()
+			table.changeTableStatus(MATCH_FINISH)
+		} else {
+			table.changeTableStatus(MATCH_ERROR)
+		}
 	} else {
 		log.Error("ClearTable TableID %v Not Found , TableCount %v", rlt.Matchtableid, len(TableManager))
 	}

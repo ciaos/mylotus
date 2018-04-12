@@ -149,15 +149,18 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	roomid, battlekey := g.CreateRoom(msg)
-
-	rsp := &proxymsg.Proxy_BS_MS_AllocBattleRoom{
-		Retcode:        0,
-		Matchtableid:   msg.Matchtableid,
-		Battleroomid:   roomid,
-		Battleroomkey:  battlekey,
-		Connectaddr:    conf.Server.ConnectAddr,
-		Battleserverid: int32(conf.Server.ServerID),
+	rsp := &proxymsg.Proxy_BS_MS_AllocBattleRoom{}
+	err, roomid, battlekey := g.CreateRoom(msg)
+	if err == nil {
+		rsp.Retcode = 0
+		rsp.Matchtableid = msg.Matchtableid
+		rsp.Battleroomid = roomid
+		rsp.Battleroomkey = battlekey
+		rsp.Connectaddr = conf.Server.ConnectAddr
+		rsp.Battleserverid = int32(conf.Server.ServerID)
+	} else {
+		rsp.Retcode = 1
+		rsp.Matchtableid = msg.Matchtableid
 	}
 
 	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.Matchtableid, roomid)

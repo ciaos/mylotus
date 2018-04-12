@@ -1,6 +1,7 @@
 package g
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"server/conf"
@@ -264,8 +265,15 @@ func deleteRoomMemberInfo(roomid int32) {
 	}
 }
 
-func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
+func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte) {
 	allocRoomID()
+
+	//roomid has being used
+	_, ok := RoomManager[g_roomid]
+	if ok {
+		log.Error("RoomID %v is Still Being Using, Current RoomCnt %v", g_roomid, len(RoomManager))
+		return errors.New("roomid is using"), 0, nil
+	}
 
 	battlekey, _ := tool.DesEncrypt([]byte(fmt.Sprintf(CRYPTO_PREFIX, g_roomid)), []byte(tool.CRYPT_KEY))
 
@@ -315,7 +323,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (int32, []byte) {
 	RoomManager[room.roomid] = room
 
 	log.Debug("Create RoomID %v", room.roomid)
-	return room.roomid, room.battlekey
+	return nil, room.roomid, room.battlekey
 }
 
 func (room *Room) notifyBattleStart() {

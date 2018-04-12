@@ -8,6 +8,7 @@ import (
 
 	"github.com/ciaos/leaf/log"
 	"github.com/ciaos/leaf/module"
+	"github.com/ciaos/leaf/timer"
 )
 
 var (
@@ -27,7 +28,27 @@ func (m *Module) OnDestroy() {
 
 }
 
+func (m *Module) rotateLog() {
+	// cron expr
+	d := timer.NewDispatcher(10)
+	cronExpr, err := timer.NewCronExpr("0 0 0 * * *")
+	if err != nil {
+		return
+	}
+	d.CronFunc(cronExpr, func() {
+		log.Rotate()
+	})
+
+	go func(chantimer chan *timer.Timer) {
+		for {
+			(<-chantimer).Cb()
+		}
+	}(d.ChanTimer)
+}
+
 func (m *Module) Run(closeSig chan bool) {
+
+	m.rotateLog()
 
 	for {
 		select {
@@ -35,8 +56,6 @@ func (m *Module) Run(closeSig chan bool) {
 			return
 		case <-time.After(time.Duration(conf.Server.TickInterval) * time.Millisecond):
 			game.ChanRPC.Go("TickFrame", time.Now())
-
-			log.Rotate(time.Now())
 		}
 	}
 }
