@@ -43,7 +43,8 @@ func (player *Player) AssetMail_CheckGlobalMail() {
 
 	c := s.DB(DB_NAME_GAME).C(TB_NAME_MAIL)
 	results := []clientmsg.MailInfo{}
-	err := c.Find(bson.M{"mailtype": 0, "createtime": bson.M{"$gt": player.Char.CreateTime.Unix()}, "expiretime": bson.M{"$lt": time.Now().Unix()}}).All(&results)
+
+	err := c.Find(bson.M{"mailtype": 0, "createtime": bson.M{"$gt": player.Asset.AssetCash_GetLastCheckGlobalMailTs()}, "expiretime": bson.M{"$lt": time.Now().Unix()}}).All(&results)
 	if err == nil {
 		for _, result := range results {
 			player.Asset.AssetMail_AddMail(player.Char.CharID, &result)
@@ -51,6 +52,8 @@ func (player *Player) AssetMail_CheckGlobalMail() {
 	} else {
 		log.Error("AssetMail_CheckGlobalMail charid %v error %v", player.Char.CharID, err)
 	}
+
+	player.Asset.AssetCash_RefreshLastCheckGlobalMailTs()
 }
 
 func (asset *PlayerAsset) AssetMail_AddMail(charid uint32, m *clientmsg.MailInfo) {

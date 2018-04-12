@@ -146,6 +146,8 @@ func (player *Player) loadPlayerAssetCash() bool {
 	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetCash)
 	if err != nil && err.Error() == "not found" {
 		player.Asset.AssetCash.CharID = player.Char.CharID
+		player.Asset.AssetCash.Level = 1
+		player.Asset.AssetCash.LastCheckGlobalMailTs = player.Char.CreateTime.Unix()
 		err = c.Insert(player.Asset.AssetCash)
 	}
 	if err != nil {
