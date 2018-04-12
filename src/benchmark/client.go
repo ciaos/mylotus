@@ -481,8 +481,8 @@ func (c *Client) Update() {
 	c.updateGame()
 	c.updateBattle()
 
-	//战斗状态之外的状态卡60s则重启
-	if c.status != testpb.ClientStatusType_Wait_BattleServer_Response && time.Now().Unix()-c.changeStatusTime.Unix() > 60 {
+	//状态卡60s则重启
+	if time.Now().Unix()-c.changeStatusTime.Unix() > c.maxbattletime+10 {
 		if c.lconn != nil {
 			c.lconn.Close()
 		}

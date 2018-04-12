@@ -182,11 +182,8 @@ func (room *Room) update(now *time.Time) {
 		}
 
 		//bug
-		if now.Unix()-(*room).createtime.Unix() > int64(300) {
-			room.broadcast(&clientmsg.Rlt_EndBattle{
-				RetCode: clientmsg.Type_BattleRetCode_BRC_OK,
-			})
-			log.Debug("room Fight TimeOut Now %v CreateTime %v", now.Unix(), room.createtime)
+		if now.Unix()-(*room).createtime.Unix() > int64(3600) {
+			log.Error("room Fight TimeOut Now %v CreateTime %v", now.Unix(), room.createtime)
 			changeRoomStatus(room, ROOM_END)
 			return
 		}

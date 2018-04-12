@@ -180,6 +180,8 @@ func handleReqLogin(args []interface{}) {
 		} else {
 			ret = player.LoadPlayerAsset()
 		}
+
+		player.AssetMail_CheckGlobalMail()
 	}, func() {
 		if ret == true {
 			if cache != nil {
@@ -487,6 +489,19 @@ func handleReqMakeTeamOperate(args []interface{}) {
 }
 
 func handleReqMailAction(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Mail_Action)
+	a := args[1].(gate.Agent)
+
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
+	}
+
+	rsp := player.GetPlayerAsset().AssetMail_Action(m)
+	if rsp != nil {
+		a.WriteMsg(rsp)
+	}
 }
 
 func handleTransferLoadingProgress(args []interface{}) {

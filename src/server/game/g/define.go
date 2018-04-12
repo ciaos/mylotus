@@ -9,6 +9,7 @@ const (
 	DB_NAME_GAME      = "game"
 	TB_NAME_CHARACTER = "character"
 	TB_NAME_COUNTER   = "counter"
+	TB_NAME_MAIL      = "mail"
 
 	CRYPTO_PREFIX = "room_%d"
 
