@@ -19,6 +19,7 @@ const (
 	REASON_TIMEOUT     = 1
 	REASON_FREE_MEMORY = 2
 	REASON_CLEAR       = 3
+	REASON_REPLACED    = 4
 )
 
 type Character struct {
@@ -232,6 +233,14 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 	if ok {
 		if reason == REASON_FREE_MEMORY {
 			log.Debug("RemoveBattlePlayer %v", clientid)
+			delete(BattlePlayerManager, clientid)
+			LeaveRoom(clientid)
+		} else if reason == REASON_REPLACED {
+			log.Debug("RemoveBattlePlayer %v Reason %v", clientid, reason)
+			if player.agent != nil {
+				(*player.agent).Close()
+				_ = player.agent
+			}
 			delete(BattlePlayerManager, clientid)
 		} else {
 			log.Debug("PreTagBattlePlayer %v Reason %v From %v Exist %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String())

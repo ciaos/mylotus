@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"server/conf"
+	"server/gamedata"
+	"server/gamedata/cfg"
 
 	"github.com/ciaos/leaf/log"
 	"gopkg.in/mgo.v2/bson"
@@ -148,6 +150,21 @@ func (player *Player) loadPlayerAssetCash() bool {
 		player.Asset.AssetCash.CharID = player.Char.CharID
 		player.Asset.AssetCash.Level = 1
 		player.Asset.AssetCash.LastCheckGlobalMailTs = player.Char.CreateTime.Unix()
+		r := gamedata.CSVNewPlayer.Record(0)
+		row := r.(*cfg.NewPlayer)
+		for _, cash := range row.InitCash {
+			if len(cash) == 2 {
+				switch clientmsg.Type_CashType(cash[0]) {
+				case clientmsg.Type_CashType_TCT_GOLD:
+					player.Asset.AssetCash_AddGoldCoin(cash[1])
+				case clientmsg.Type_CashType_TCT_SILVER:
+					player.Asset.AssetCash_AddSilverCoin(cash[1])
+				case clientmsg.Type_CashType_TCT_DIAMOND:
+					player.Asset.AssetCash_AddDiamondCoin(cash[1])
+				}
+			}
+		}
+
 		err = c.Insert(player.Asset.AssetCash)
 	}
 	if err != nil {
@@ -166,6 +183,27 @@ func (player *Player) loadPlayerAssetMail() bool {
 	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetMail)
 	if err != nil && err.Error() == "not found" {
 		player.Asset.AssetMail.CharID = player.Char.CharID
+
+		r := gamedata.CSVNewPlayer.Record(0)
+		row := r.(*cfg.NewPlayer)
+
+		rewards := &clientmsg.Rlt_Give_Reward{}
+		/*
+			for _, re := range row.InitMail.Rewards {
+				reward := &clientmsg.Rlt_Give_Reward_Reward{
+					X: int32(clientmsg.Type_Vec3X_TVX_CASH),
+					Y: int32(re[0]),
+					Z: int32(re[1]),
+				}
+				rewards.Rewardlist = append(rewards.Rewardlist, reward)
+			}*/
+		mail := CreateMail(clientmsg.MailInfo_MT_SYSTEM, player.Char.CharID, row.InitMail.Title, row.InitMail.Content, rewards, row.InitMail.Expirets)
+		if mail == nil {
+			log.Error("create new character %v mail error %v", player.Char.CharID, err)
+			return false
+		}
+		player.Asset.AssetMail_AddMail(player.Char.CharID, mail)
+
 		err = c.Insert(player.Asset.AssetMail)
 	}
 	if err != nil {
@@ -202,6 +240,14 @@ func (player *Player) loadPlayerAssetHero() bool {
 	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.Asset.AssetHero)
 	if err != nil && err.Error() == "not found" {
 		player.Asset.AssetHero.CharID = player.Char.CharID
+
+		r := gamedata.CSVNewPlayer.Record(0)
+		row := r.(*cfg.NewPlayer)
+
+		for _, hero := range row.InitHeros {
+			player.Asset.AssetHero_AddHero(player.Char.CharID, uint32(hero), 0)
+		}
+
 		err = c.Insert(player.Asset.AssetHero)
 	}
 	if err != nil {

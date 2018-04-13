@@ -9,18 +9,29 @@ import (
 )
 
 func init() {
+	InitGM()
+
 	skeleton.RegisterCommand("free", "free heap memory", commandFree)
+	skeleton.RegisterCommand("gm", "gm command", commandGM)
 	skeleton.RegisterCommand("r", "list room info", commandRoom)
+	skeleton.RegisterCommand("rn", "room count", commandRoomCount)
 	skeleton.RegisterCommand("rm", "list charid roomid map", commandRoomMap)
 	skeleton.RegisterCommand("t", "list table info", commandTable)
+	skeleton.RegisterCommand("tn", "table count", commandTableCount)
 	skeleton.RegisterCommand("tm", "list charid tableid map", commandTableMap)
 	skeleton.RegisterCommand("g", "list gameserver online member count", commandGPlayer)
+	skeleton.RegisterCommand("gn", "gameserver online member count", commandGPlayerCount)
 	skeleton.RegisterCommand("b", "list battleserver online member count", commandBPlayer)
+	skeleton.RegisterCommand("bn", "battleserver online member count", commandBPlayerCount)
 }
 
 func commandFree(args []interface{}) interface{} {
 	debug.FreeOSMemory()
 	return "OK"
+}
+
+func commandGM(args []interface{}) interface{} {
+	return RunGMCmd(args)
 }
 
 func commandRoom(args []interface{}) interface{} {
@@ -35,6 +46,10 @@ func commandRoom(args []interface{}) interface{} {
 		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
 	}
+}
+
+func commandRoomCount(args []interface{}) interface{} {
+	return fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))
 }
 
 func commandRoomMap(args []interface{}) interface{} {
@@ -67,6 +82,10 @@ func commandTableMap(args []interface{}) interface{} {
 	}
 }
 
+func commandTableCount(args []interface{}) interface{} {
+	return fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
+}
+
 func commandTable(args []interface{}) interface{} {
 	if len(args) == 1 {
 		tableid, _ := strconv.Atoi(args[0].(string))
@@ -92,6 +111,10 @@ func commandGPlayer(args []interface{}) interface{} {
 	}
 }
 
+func commandGPlayerCount(args []interface{}) interface{} {
+	return fmt.Sprintf("GamePlayerCnt:%d", len(g.GamePlayerManager))
+}
+
 func commandBPlayer(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
@@ -99,4 +122,8 @@ func commandBPlayer(args []interface{}) interface{} {
 	} else {
 		return g.FormatBPlayerInfo()
 	}
+}
+
+func commandBPlayerCount(args []interface{}) interface{} {
+	return fmt.Sprintf("BattlePlayerCnt:%d", len(g.BattlePlayerManager))
 }

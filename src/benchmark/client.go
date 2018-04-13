@@ -102,7 +102,9 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 	case testpb.ClientStatusType_Wait_LoginServer_Response:
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(5))
 	case testpb.ClientStatusType_Disconnect_LoginServer:
-		c.lconn.Close()
+		if c.lconn != nil {
+			c.lconn.Close()
+		}
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_GameServer)
 
@@ -141,7 +143,9 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 	case testpb.ClientStatusType_Wait_GameServer_Response:
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(60))
 	case testpb.ClientStatusType_Disconnect_GameServer:
-		c.gconn.Close()
+		if c.gconn != nil {
+			c.gconn.Close()
+		}
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_GameServer)
 
@@ -178,7 +182,9 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 		go Send(&c.bconn, clientmsg.MessageType_MT_REQ_ENDBATTLE, msg)
 	case testpb.ClientStatusType_Disconnect_BattleServer:
 		c.startbattle = false
-		c.bconn.Close()
+		if c.bconn != nil {
+			c.bconn.Close()
+		}
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Request_Match)
 	}
@@ -314,6 +320,10 @@ func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
 }
 
 func handle_Transfer_Command(c *Client, msgdata []byte) {
+	if c.status != testpb.ClientStatusType_Wait_BattleServer_Response {
+		return
+	}
+
 	rsp := &clientmsg.Transfer_Command{}
 	proto.Unmarshal(msgdata, rsp)
 

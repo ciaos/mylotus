@@ -120,7 +120,7 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
-	log.Debug("GamePlayer Begin Login UserID %v", userid)
+	log.Release("GamePlayer Begin Login UserID %v From %v", userid, a.RemoteAddr().String())
 
 	s := g.Mongo.Ref()
 	defer g.Mongo.UnRef(s)
@@ -180,8 +180,6 @@ func handleReqLogin(args []interface{}) {
 		} else {
 			ret = player.LoadPlayerAsset()
 		}
-
-		player.AssetMail_CheckGlobalMail()
 	}, func() {
 		if ret == true {
 			if cache != nil {
@@ -190,6 +188,7 @@ func handleReqLogin(args []interface{}) {
 			} else {
 				g.AddGamePlayer(player, &a)
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+				player.AssetMail_CheckGlobalMail()
 			}
 
 			a.WriteMsg(&clientmsg.Rlt_Login{

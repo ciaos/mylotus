@@ -309,6 +309,7 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte
 		if ok {
 			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, oldroomid)
 			LeaveRoom(mem.CharID)
+			RemoveBattlePlayer(mem.CharID, "", REASON_REPLACED)
 		}
 
 		changeMemberStatus(member, MEMBER_UNCONNECTED)
@@ -433,6 +434,8 @@ func ConnectRoom(charid uint32, roomid int32, battlekey []byte, remoteaddr strin
 
 			if room.status == ROOM_STATUS_NONE {
 				changeRoomStatus(room, ROOM_CONNECTING)
+			} else if room.status == ROOM_FIGHTING {
+				changeMemberStatus(member, MEMBER_RECONNECTED)
 			}
 
 			log.Debug("ConnectRoom RoomID %v CharID %v", roomid, charid)
