@@ -93,12 +93,16 @@ func allocTableID() {
 	}
 }
 
-func (table *Table) fillRobotToTable() {
+func (table *Table) fillRobotToTable() bool {
 	r := gamedata.CSVMatchMode.Index((*table).matchmode)
 	if r == nil {
-		return
+		return false
 	}
 	row := r.(*cfg.MatchMode)
+
+	if len((*table).seats) == 0 {
+		return false
+	}
 
 	robotnum := row.PlayerCnt - len((*table).seats)
 	ownerid := (*table).seats[0].charid
@@ -122,6 +126,7 @@ func (table *Table) fillRobotToTable() {
 		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
 		i++
 	}
+	return true
 }
 
 func (table *Table) autoChooseToTable() {
@@ -244,9 +249,12 @@ func (table *Table) changeTableStatus(status string) {
 	} else if (*table).status == MATCH_TIMEOUT {
 		if table.matchmode == int32(clientmsg.MatchModeType_MMT_AI) {
 			//fill with robot and notify all member to choose
-			table.fillRobotToTable()
-			table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
-			table.changeTableStatus(MATCH_CONFIRM)
+			if table.fillRobotToTable() {
+				table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
+				table.changeTableStatus(MATCH_CONFIRM)
+			} else {
+				table.changeTableStatus(MATCH_ERROR)
+			}
 		} else {
 			table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
 			table.changeTableStatus(MATCH_FINISH)

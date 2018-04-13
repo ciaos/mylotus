@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	LoginServerAddr = "127.0.0.1:8000"
+	LoginServerAddr = "127.0.0.1:8888"
 	GameServerAddr  = LoginServerAddr
 
-	GameServerID = 2
+	GameServerID = 1
 )
 
 func SendAndRecvUtil(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}, waitmsgid clientmsg.MessageType) []byte {
@@ -126,6 +126,9 @@ func Login(c *C, conn *net.Conn, userid uint32, sessionkey []byte) (clientmsg.Ty
 
 func QuickLogin(c *C, conn *net.Conn, username string, password string) uint32 {
 	retcode, userid, sessionkey := Register(c, conn, username, password, false)
+	if retcode == clientmsg.Type_LoginRetCode_LRC_ACCOUNT_EXIST {
+		retcode, userid, sessionkey = Register(c, conn, username, password, true)
+	}
 	c.Assert(retcode, Equals, clientmsg.Type_LoginRetCode_LRC_OK)
 
 	code, charid, _ := Login(c, conn, userid, sessionkey)

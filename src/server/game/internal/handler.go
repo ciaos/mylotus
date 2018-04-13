@@ -174,37 +174,34 @@ func handleReqLogin(args []interface{}) {
 	}
 
 	var ret bool
-	skeleton.Go(func() {
+	if cache != nil {
+		ret = cache.SyncPlayerAsset()
+	} else {
+		ret = player.LoadPlayerAsset()
+	}
+	if ret == true {
 		if cache != nil {
-			ret = player.SyncPlayerAsset()
+			g.AddCachedGamePlayer(cache, &a)
+			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		} else {
-			ret = player.LoadPlayerAsset()
+			g.AddGamePlayer(player, &a)
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			player.AssetMail_CheckGlobalMail()
 		}
-	}, func() {
-		if ret == true {
-			if cache != nil {
-				g.AddCachedGamePlayer(cache, &a)
-				cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-			} else {
-				g.AddGamePlayer(player, &a)
-				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-				player.AssetMail_CheckGlobalMail()
-			}
 
-			a.WriteMsg(&clientmsg.Rlt_Login{
-				RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-				CharID:         player.Char.CharID,
-				IsNewCharacter: isnew,
-				CharName:       player.Char.CharName,
-			})
-		} else {
-			a.WriteMsg(&clientmsg.Rlt_Login{
-				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-			})
-			a.Close()
-			log.Error("load asset Error %v", player.Char.CharID)
-		}
-	})
+		a.WriteMsg(&clientmsg.Rlt_Login{
+			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
+			CharID:         player.Char.CharID,
+			IsNewCharacter: isnew,
+			CharName:       player.Char.CharName,
+		})
+	} else {
+		a.WriteMsg(&clientmsg.Rlt_Login{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		a.Close()
+		log.Error("load asset Error %v", player.Char.CharID)
+	}
 }
 
 func handleReqReConnectGS(args []interface{}) {
@@ -242,13 +239,10 @@ func handleReqReConnectGS(args []interface{}) {
 	})
 
 	if player.MatchServerID != 0 {
-		skeleton.Go(func() {
-			innerReq := &proxymsg.Proxy_GS_MS_Reconnect{
-				Charid: m.CharID,
-			}
-			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, m.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT, innerReq)
-		}, func() {
-		})
+		innerReq := &proxymsg.Proxy_GS_MS_Reconnect{
+			Charid: m.CharID,
+		}
+		g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, m.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT, innerReq)
 	}
 }
 
@@ -303,36 +297,29 @@ func handleReqMatch(args []interface{}) {
 	}
 
 	var msid int
-	skeleton.Go(func() {
-		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
-			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
-				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
-				msid, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
-			} else {
-				log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
-			}
+	if m.Action == clientmsg.MatchActionType_MAT_JOIN {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
+			msid, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 		} else {
-			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
-				g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
-			}
+			log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
 		}
-	}, func() {
-		if m.Action == clientmsg.MatchActionType_MAT_JOIN {
-			player.MatchServerID = msid
 
-		} else if m.Action == clientmsg.MatchActionType_MAT_CANCEL || m.Action == clientmsg.MatchActionType_MAT_REJECT {
-			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
+		player.MatchServerID = msid
+	} else {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
+			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+
+			if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 				player.MatchServerID = 0
 
-				if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
-					a.WriteMsg(&clientmsg.Rlt_Match{
-						RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CANCELED,
-					})
-				}
+				a.WriteMsg(&clientmsg.Rlt_Match{
+					RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_CANCELED,
+				})
 			}
 		}
-	})
+	}
 }
 
 func handleTransferTeamOperate(args []interface{}) {

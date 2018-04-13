@@ -188,15 +188,14 @@ func (player *Player) loadPlayerAssetMail() bool {
 		row := r.(*cfg.NewPlayer)
 
 		rewards := &clientmsg.Rlt_Give_Reward{}
-		/*
-			for _, re := range row.InitMail.Rewards {
-				reward := &clientmsg.Rlt_Give_Reward_Reward{
-					X: int32(clientmsg.Type_Vec3X_TVX_CASH),
-					Y: int32(re[0]),
-					Z: int32(re[1]),
-				}
-				rewards.Rewardlist = append(rewards.Rewardlist, reward)
-			}*/
+		for _, re := range row.InitMail.Rewards {
+			reward := &clientmsg.Rlt_Give_Reward_Reward{
+				X: int32(clientmsg.Type_Vec3X_TVX_CASH),
+				Y: int32(re[0]),
+				Z: int32(re[1]),
+			}
+			rewards.Rewardlist = append(rewards.Rewardlist, reward)
+		}
 		mail := CreateMail(clientmsg.MailInfo_MT_SYSTEM, player.Char.CharID, row.InitMail.Title, row.InitMail.Content, rewards, row.InitMail.Expirets)
 		if mail == nil {
 			log.Error("create new character %v mail error %v", player.Char.CharID, err)
@@ -363,6 +362,8 @@ func (pinfo *PlayerInfo) syncPlayerAssetHero() {
 	if (pinfo.player.Asset.DirtyFlag_AssetHero & DIRTYFLAG_TO_CLIENT) != 0 {
 		(*pinfo.agent).WriteMsg(pinfo.player.Asset.AssetHero)
 		pinfo.player.Asset.DirtyFlag_AssetHero ^= DIRTYFLAG_TO_CLIENT
+
+		log.Debug("syncPlayerAssetHero to %v", pinfo.player.Char.CharID)
 	}
 }
 

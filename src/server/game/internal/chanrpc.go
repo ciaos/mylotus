@@ -165,9 +165,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 
 	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.Matchtableid, roomid)
 
-	skeleton.Go(func() {
-		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM, rsp)
-	}, func() {})
+	g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM, rsp)
 }
 
 func proxyHandleBSMSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
@@ -259,9 +257,8 @@ func proxyHandleGSBSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 		CharID: msg.Charid,
 	}
 	rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = g.QueryBattleInfo(msg.Charid)
-	skeleton.Go(func() {
-		g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO, rsp)
-	}, func() {})
+
+	g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO, rsp)
 }
 
 func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {

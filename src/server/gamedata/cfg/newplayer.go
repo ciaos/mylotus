@@ -5,8 +5,9 @@ type NewPlayer struct {
 	InitHeros []int
 	InitItems [][]int
 	InitMail  struct {
-		Title    string "title"
-		Content  string "content"
-		Expirets int64  "expirets"
+		Title    string  "title"
+		Content  string  "content"
+		Expirets int64   "expirets"
+		Rewards  [][]int "rewards"
 	}
 }
