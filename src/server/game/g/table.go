@@ -419,6 +419,12 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 
 func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
 
+	//already matching
+	_, ok := PlayerTableIDMap[charid]
+	if ok {
+		return
+	}
+
 	r := gamedata.CSVMatchMode.Index(matchmode)
 	if r == nil {
 		log.Error("JoinTable CSVMatchMode Not Found %v ", matchmode)

@@ -107,6 +107,8 @@ func (room *Room) broadcast(msgdata interface{}) {
 		player, ok := BattlePlayerManager[(*member).charid]
 		if ok {
 			(*player.agent).WriteMsg(msgdata)
+		} else {
+			member.status = MEMBER_OFFLINE
 		}
 	}
 }

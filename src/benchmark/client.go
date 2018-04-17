@@ -40,6 +40,7 @@ type Client struct {
 	userid uint32
 	charid uint32
 
+	prevstatus       testpb.ClientStatusType
 	status           testpb.ClientStatusType
 	changeStatusTime time.Time
 
@@ -67,13 +68,14 @@ type Client struct {
 }
 
 func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
+	c.prevstatus = c.status
 	c.status = status
 	c.changeStatusTime = time.Now()
 	tlog.Debugf("client %d CharID %v, Status %v\n", c.id, c.charid, c.status)
 
 	switch c.status {
 	case testpb.ClientStatusType_None:
-		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 20)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_LoginServer)
 
 	//login server
@@ -105,7 +107,7 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 		if c.lconn != nil {
 			c.lconn.Close()
 		}
-		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(5, 20)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_GameServer)
 
 	//game server
@@ -146,7 +148,7 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 		if c.gconn != nil {
 			c.gconn.Close()
 		}
-		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(5, 20)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_GameServer)
 
 	//battle server
@@ -185,7 +187,7 @@ func (c *Client) ChangeStatus(status testpb.ClientStatusType) {
 		if c.bconn != nil {
 			c.bconn.Close()
 		}
-		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(5, 20)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Request_Match)
 	}
 }
@@ -250,7 +252,7 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 		}
 
 		c.charid = rsp.CharID
-		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(5, 20)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Request_Match)
 	} else {
 		c.gconn.Close()
@@ -268,7 +270,7 @@ func handle_Rlt_Match(c *Client, msgdata []byte) {
 	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_OK {
 		msg := &clientmsg.Req_Match{
 			Action: clientmsg.MatchActionType_MAT_CONFIRM,
-			Mode:   clientmsg.MatchModeType_MMT_NORMAL,
+			Mode:   clientmsg.MatchModeType_MMT_RANK,
 		}
 		go Send(&c.gconn, clientmsg.MessageType_MT_REQ_MATCH, msg)
 	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED {
@@ -320,7 +322,7 @@ func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
 }
 
 func handle_Transfer_Command(c *Client, msgdata []byte) {
-	if c.status != testpb.ClientStatusType_Wait_BattleServer_Response {
+	if c.status != testpb.ClientStatusType_Wait_BattleServer_Response || c.startbattletime == 0 {
 		return
 	}
 
@@ -339,7 +341,7 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 		//	tlog.Debugf("client %d recv tranfer_cmd from server, frame %d Total %d\n", c.charid, rsp.FrameID, len(rsp.Messages))
 	}
 	if rsp.FrameID != c.frameid+1 {
-		tlog.Fatalf("rsp.frameid %v client.frameid %v client.id %v client.charid %v", rsp.FrameID, c.frameid, c.id, c.charid)
+		tlog.Fatalf("rsp.frameid %v client.frameid %v client.id %v client.charid %v startbattletime %v", rsp.FrameID, c.frameid, c.id, c.charid, c.startbattletime)
 	}
 	c.frameid = rsp.FrameID
 	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
@@ -445,22 +447,23 @@ func (c *Client) updateBattle() {
 			}
 
 			//send transfer cmd
-			i := 0
-			for i < 1 {
-				ping := &clientmsg.Ping{
-					ID: c.charid,
-				}
-				msgbuff, _ := proto.Marshal(ping)
-				cdata := &clientmsg.Transfer_Command_CommandData{
-					Msgdata: msgbuff,
-				}
+			/*	i := 0
+				for i < 1 {
 
-				msg := &clientmsg.Transfer_Command{}
-				msg.Messages = append(msg.Messages, cdata)
-				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+					ping := &clientmsg.Ping{
+						ID: c.charid,
+					}
+					msgbuff, _ := proto.Marshal(ping)
+					cdata := &clientmsg.Transfer_Command_CommandData{
+						Msgdata: msgbuff,
+					}
 
-				i += 1
-			}
+					msg := &clientmsg.Transfer_Command{}
+					msg.Messages = append(msg.Messages, cdata)
+					go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+
+					i += 1
+				}*/
 		}
 
 		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {
@@ -492,7 +495,8 @@ func (c *Client) Update() {
 	c.updateBattle()
 
 	//状态卡60s则重启
-	if time.Now().Unix()-c.changeStatusTime.Unix() > c.maxbattletime+10 {
+	if time.Now().Unix()-c.changeStatusTime.Unix() > c.maxbattletime+30 {
+		tlog.Errorf("charid %d status %v timeout prevstatus %v changestatustime %v checktime %v now %v maxbattle %v c.startbattletime %v\n", c.charid, c.status, c.prevstatus, c.changeStatusTime.Unix(), c.checktimeout.Unix(), time.Now().Unix(), c.maxbattletime, c.startbattletime)
 		if c.lconn != nil {
 			c.lconn.Close()
 		}
@@ -503,7 +507,6 @@ func (c *Client) Update() {
 			c.bconn.Close()
 		}
 
-		tlog.Errorf("client %d status %v timeout\n", c.id, c.status)
 		c.ChangeStatus(testpb.ClientStatusType_None)
 	}
 }
@@ -577,7 +580,6 @@ func (c *Client) Loop(id int32) {
 }
 
 func randInt(min, max int) int64 {
-	rand.Seed(time.Now().Unix())
 	randNum := rand.Intn(max-min) + min
 	return int64(randNum)
 }
@@ -602,6 +604,8 @@ func stat(fin chan int) {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	backendleveled := logging.AddModuleLevel(backendFormatter)

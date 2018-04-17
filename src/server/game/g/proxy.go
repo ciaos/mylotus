@@ -76,6 +76,7 @@ func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.Pr
 		Charid:   charid,
 		Msgid:    uint32(msgid),
 		Msgdata:  msgbuff,
+		Time:     time.Now().Unix(),
 	}
 
 	//SendToRedis

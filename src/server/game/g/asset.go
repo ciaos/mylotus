@@ -362,8 +362,6 @@ func (pinfo *PlayerInfo) syncPlayerAssetHero() {
 	if (pinfo.player.Asset.DirtyFlag_AssetHero & DIRTYFLAG_TO_CLIENT) != 0 {
 		(*pinfo.agent).WriteMsg(pinfo.player.Asset.AssetHero)
 		pinfo.player.Asset.DirtyFlag_AssetHero ^= DIRTYFLAG_TO_CLIENT
-
-		log.Debug("syncPlayerAssetHero to %v", pinfo.player.Char.CharID)
 	}
 }
 
