@@ -4,6 +4,7 @@
 	"TCPAddr" : "0.0.0.0:8888",
 	"UDPAddr": "0.0.0.0:9999",
 	"MaxConnNum": 20000,
+	"MaxWaitLoginNum" : 50,
 	"ConsolePort": 3333,
 	
 	"TickInterval" : 66,
@@ -14,7 +15,7 @@
 	"RedisHost": "127.0.0.1:6379",
 	"RedisPassWord" : "",
 	"MongoDBHost": "127.0.0.1:27017",
-	"ConnectAddr" : "192.168.2.137:9999",
+	"ConnectAddr" : "192.168.2.108:9999",
 	
 	"GameServerRename" : "gameserver",
 	"MatchServerRename" : "gameserver",

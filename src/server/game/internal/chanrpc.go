@@ -19,6 +19,10 @@ func init() {
 	skeleton.RegisterChanRPC("QueueMessage", queueMessage)
 }
 
+var (
+	lastTickTime int64
+)
+
 func queueMessage(args []interface{}) {
 	pmsg := &proxymsg.InternalMessage{}
 	err := proto.Unmarshal(args[0].([]byte), pmsg)
@@ -306,21 +310,27 @@ func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	if player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE {
+	if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BATTLE {
 		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+		player.BattleServerID = 0
 	}
-	player.BattleServerID = 0
 }
 
 func updateFrame(args []interface{}) {
 
 	a := args[0].(time.Time)
-	//log.Debug("Tick %v : %v : %v", time.Now().Unix(), time.Now().UnixNano(), a)
+
+	if lastTickTime != 0 && time.Now().UnixNano()-lastTickTime > 100000000 {
+		log.Error("Slow FPS, lastframe cost %v s", float64(time.Now().UnixNano()-lastTickTime)/1000000000)
+	}
+	//log.Debug("Tick %v : Now %v", a, time.Now())
 
 	g.UpdateTableManager(&a)
 	g.UpdateRoomManager(&a)
 	g.UpdateGamePlayerManager(&a)
 	g.UpdateBattlePlayerManager(&a)
+
+	lastTickTime = a.UnixNano()
 }
 
 func rpcNewAgent(args []interface{}) {

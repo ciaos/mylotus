@@ -1,9 +1,10 @@
 {
-	"LogLevel": "debug",
-	"LogPath": "",
+	"LogLevel": "error",
+	"LogPath": "log",
 	"TCPAddr" : "0.0.0.0:8000",
 	"UDPAddr": "0.0.0.0:9000",
 	"MaxConnNum": 20000,
+	"MaxWaitLoginNum" : 100,
 	"ConsolePort": 4444,
 	
 	"TickInterval" : 66,
@@ -14,7 +15,7 @@
 	"RedisHost": "127.0.0.1:6379",
 	"RedisPassWord" : "",
 	"MongoDBHost": "127.0.0.1:27017",
-	"ConnectAddr" : "192.168.2.137:9000",
+	"ConnectAddr" : "192.168.2.108:9000",
 	
 	"GameServerRename" : "gameserver",
 	"MatchServerRename" : "gameserver",

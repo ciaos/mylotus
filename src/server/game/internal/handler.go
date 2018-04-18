@@ -75,11 +75,10 @@ func handlePing(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	player := getGSPlayer(&a)
-	if player == nil {
-		a.Close()
-		return
+	if player != nil {
+		player.PingTime = time.Now()
 	}
-	player.PingTime = time.Now()
+
 	a.WriteMsg(&clientmsg.Pong{ID: m.ID})
 }
 
@@ -87,18 +86,30 @@ func handleReqServerTime(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	player := getGSPlayer(&a)
-	if player == nil {
-		a.Close()
-		return
+	if player != nil {
+		player.PingTime = time.Now()
 	}
 
-	player.PingTime = time.Now()
 	a.WriteMsg(&clientmsg.Rlt_ServerTime{Time: uint64(time.Now().Unix())})
 }
 
 func handleReqLogin(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Login)
 	a := args[1].(gate.Agent)
+
+	if g.WaitLoginQueue.Full() {
+		a.WriteMsg(&clientmsg.Rlt_Login{
+			RetCode: clientmsg.Type_GameRetCode_GRC_LOGIN_TOO_MANY,
+		})
+		a.Close()
+		return
+	} else {
+		if g.WaitLoginQueue.Size() > 0 {
+			a.WriteMsg(&clientmsg.Rlt_Login{
+				RetCode: clientmsg.Type_GameRetCode_GRC_LOGIN_LINE_UP,
+			})
+		}
+	}
 
 	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
 	if a.UserData() != nil || int(m.ServerID) != conf.Server.ServerID || err != nil {
@@ -120,88 +131,45 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
-	log.Release("GamePlayer Begin Login UserID %v From %v", userid, a.RemoteAddr().String())
+	req := &g.WaitInfo{
+		UserID:    userid,
+		UserAgent: &a,
+		LoginTime: time.Now(),
+	}
 
-	s := g.Mongo.Ref()
-	defer g.Mongo.UnRef(s)
+	g.WaitLoginQueue.Append(req)
 
-	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-	player := &g.Player{}
-	isnew := false
-	err = c.Find(bson.M{"userid": m.UserID, "gsid": conf.Server.ServerID}).One(&player.Char)
-	if err != nil && err.Error() == "not found" {
-		//create new character
-		charid, err := getNextSeq()
-		if err != nil {
+	/*
+		if cache != nil {
+			ret = cache.SyncPlayerAsset()
+		} else {
+			ret = player.LoadPlayerAsset()
+		}
+		if ret == true {
+			if cache != nil {
+				g.AddCachedGamePlayer(cache, &a)
+				cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			} else {
+				g.AddGamePlayer(player, &a)
+				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+				player.AssetMail_CheckGlobalMail()
+			}
+
+			a.WriteMsg(&clientmsg.Rlt_Login{
+				RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
+				CharID:         player.Char.CharID,
+				IsNewCharacter: isnew,
+				CharName:       player.Char.CharName,
+			})
+
+			log.Release("GamePlayer End Login UserID %v From %v", userid, a.RemoteAddr().String())
+		} else {
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 			})
 			a.Close()
-			log.Error("handleReqLogin getNextSeq Failed %v", err)
-			return
-		}
-
-		character := &g.Character{
-			CharID:     uint32(charid),
-			UserID:     m.UserID,
-			GsId:       m.ServerID,
-			Status:     int32(clientmsg.UserStatus_US_PLAYER_ONLINE),
-			CharName:   "",
-			CreateTime: time.Now(),
-			UpdateTime: time.Now(),
-		}
-		err = c.Insert(character)
-		if err != nil {
-			log.Error("create new character error %v", err)
-			a.WriteMsg(&clientmsg.Rlt_Login{
-				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-			})
-			return
-		}
-
-		isnew = true
-		player.Char = character
-	}
-
-	//check if in cache
-	cache, _ := g.GetPlayer(player.Char.CharID)
-	if cache != nil {
-		if cache.Char.CharName == "" {
-			isnew = true
-		}
-	} else if player.Char.CharName == "" {
-		isnew = true
-	}
-
-	var ret bool
-	if cache != nil {
-		ret = cache.SyncPlayerAsset()
-	} else {
-		ret = player.LoadPlayerAsset()
-	}
-	if ret == true {
-		if cache != nil {
-			g.AddCachedGamePlayer(cache, &a)
-			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-		} else {
-			g.AddGamePlayer(player, &a)
-			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-			player.AssetMail_CheckGlobalMail()
-		}
-
-		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-			CharID:         player.Char.CharID,
-			IsNewCharacter: isnew,
-			CharName:       player.Char.CharName,
-		})
-	} else {
-		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-		})
-		a.Close()
-		log.Error("load asset Error %v", player.Char.CharID)
-	}
+			log.Error("load asset Error %v", player.Char.CharID)
+		}*/
 }
 
 func handleReqReConnectGS(args []interface{}) {
@@ -303,6 +271,10 @@ func handleReqMatch(args []interface{}) {
 			msid, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 		} else {
 			log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
+			a.WriteMsg(&clientmsg.Rlt_Match{
+				RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
+			})
+			return
 		}
 
 		player.MatchServerID = msid

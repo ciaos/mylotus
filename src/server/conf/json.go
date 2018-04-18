@@ -8,16 +8,17 @@ import (
 )
 
 var Server struct {
-	LogLevel    string
-	LogPath     string
-	WSAddr      string
-	CertFile    string
-	KeyFile     string
-	TCPAddr     string
-	UDPAddr     string
-	MaxConnNum  int
-	ConsolePort int
-	ProfilePath string
+	LogLevel        string
+	LogPath         string
+	WSAddr          string
+	CertFile        string
+	KeyFile         string
+	TCPAddr         string
+	UDPAddr         string
+	MaxConnNum      int
+	MaxWaitLoginNum int
+	ConsolePort     int
+	ProfilePath     string
 
 	TickInterval  int
 	SaveAssetStep int

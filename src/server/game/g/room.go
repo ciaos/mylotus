@@ -201,7 +201,7 @@ func (room *Room) update(now *time.Time) {
 			return
 		}
 	} else if (*room).status == ROOM_CLEAR {
-		if (*now).Unix()-(*room).checktime.Unix() > 3 {
+		if (*now).Unix()-(*room).checktime.Unix() > 5 {
 			deleteRoomMemberInfo((*room).roomid)
 			DeleteRoom((*room).roomid)
 		}

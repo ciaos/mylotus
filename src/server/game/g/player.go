@@ -6,6 +6,7 @@ import (
 	"server/conf"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
+	"server/tool"
 	"strings"
 	"time"
 
@@ -61,8 +62,15 @@ type BPlayerInfo struct {
 	player *BPlayer
 }
 
+type WaitInfo struct {
+	UserID    uint32
+	UserAgent *gate.Agent
+	LoginTime time.Time
+}
+
 var GamePlayerManager = make(map[uint32]*PlayerInfo, 1024)
 var BattlePlayerManager = make(map[uint32]*BPlayerInfo, 1024)
+var WaitLoginQueue = tool.NewCappedDeque(conf.Server.MaxWaitLoginNum)
 
 func (player *Player) ChangeGamePlayerStatus(status clientmsg.UserStatus) {
 	player.Char.Status = int32(status)
@@ -243,9 +251,9 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 			}
 			delete(BattlePlayerManager, clientid)
 		} else {
-			log.Debug("PreTagBattlePlayer %v Reason %v From %v Exist %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String())
+			log.Debug("PreTagBattlePlayer %v Reason %v From %v Exist %v lastheartbeat %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String(), player.player.HeartBeatTime.Format(TIME_FORMAT))
 			if reason == REASON_DISCONNECT && remoteaddr != (*player.agent).RemoteAddr().String() {
-				log.Error("PreTagBattlePlayer Error %v Reason %v From %v Exist %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String())
+				//log.Error("PreTagBattlePlayer Error %v Reason %v From %v Exist %v", clientid, reason, remoteaddr, (*player.agent).RemoteAddr().String())
 				return
 			}
 
@@ -288,11 +296,120 @@ func (player *BPlayerInfo) update(now *time.Time) {
 	}
 }
 
+func login(req *WaitInfo) {
+	log.Release("GamePlayer Begin Login UserID %v From %v", req.UserID, (*req.UserAgent).RemoteAddr().String())
+
+	player := &Player{}
+	var isnew bool
+	var ret bool
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+
+	c := s.DB(DB_NAME_GAME).C(TB_NAME_CHARACTER)
+	isnew = false
+	err := c.Find(bson.M{"userid": req.UserID, "gsid": conf.Server.ServerID}).One(&player.Char)
+	if err != nil && err.Error() == "not found" {
+		//create new character
+		charid, err := Mongo.NextSeq(DB_NAME_GAME, TB_NAME_COUNTER, "counterid")
+		if err != nil {
+			(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
+				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+			})
+			(*req.UserAgent).Close()
+			log.Error("handleReqLogin getNextSeq Failed %v", err)
+			return
+		}
+
+		character := &Character{
+			CharID:     uint32(charid),
+			UserID:     req.UserID,
+			GsId:       int32(conf.Server.ServerID),
+			Status:     int32(clientmsg.UserStatus_US_PLAYER_ONLINE),
+			CharName:   "",
+			CreateTime: time.Now(),
+			UpdateTime: time.Now(),
+		}
+		err = c.Insert(character)
+		if err != nil {
+			log.Error("create new character error %v", err)
+			(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
+				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+			})
+			return
+		}
+
+		isnew = true
+		player.Char = character
+	} else if err != nil {
+		log.Error("query character error %v", err)
+		(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		return
+	}
+
+	//check if in cache
+	cache, _ := GetPlayer(player.Char.CharID)
+	if cache != nil {
+		if cache.Char.CharName == "" {
+			isnew = true
+		}
+	} else if player.Char.CharName == "" {
+		isnew = true
+	}
+
+	if cache != nil {
+		ret = cache.SyncPlayerAsset()
+	} else {
+		ret = player.LoadPlayerAsset()
+	}
+	if ret == true {
+		if cache != nil {
+			AddCachedGamePlayer(cache, req.UserAgent)
+			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+		} else {
+			AddGamePlayer(player, req.UserAgent)
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
+			player.AssetMail_CheckGlobalMail()
+		}
+
+		log.Release("GamePlayer End Login UserID %v From %v", req.UserID, (*req.UserAgent).RemoteAddr().String())
+	}
+
+	if ret == true {
+		(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
+			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
+			CharID:         player.Char.CharID,
+			IsNewCharacter: isnew,
+			CharName:       player.Char.CharName,
+		})
+	} else {
+		(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		(*req.UserAgent).Close()
+		log.Error("load asset Error %v", player.Char.CharID)
+	}
+}
+
+func updateLogin() {
+	for i := 0; i < 1; i++ {
+		if WaitLoginQueue.Empty() {
+			break
+		}
+
+		req := WaitLoginQueue.Shift()
+		login(req.(*WaitInfo))
+	}
+}
+
 func UpdateGamePlayerManager(now *time.Time) {
 	for _, player := range GamePlayerManager {
 		player.update(now)
 		player.UpdatePlayerAsset(now)
 	}
+
+	updateLogin()
 }
 
 func UpdateBattlePlayerManager(now *time.Time) {

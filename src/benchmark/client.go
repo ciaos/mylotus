@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -254,6 +255,8 @@ func handle_Rlt_Login(c *Client, msgdata []byte) {
 		c.charid = rsp.CharID
 		c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(5, 20)))
 		c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Request_Match)
+	} else if rsp.RetCode == clientmsg.Type_GameRetCode_GRC_LOGIN_LINE_UP {
+
 	} else {
 		c.gconn.Close()
 		c.ChangeStatus(testpb.ClientStatusType_None)
@@ -291,7 +294,7 @@ func handle_Rlt_NotifyBattleAddress(c *Client, msgdata []byte) {
 	c.battleaddr = rsp.BattleAddr
 	c.battleroomid = rsp.RoomID
 
-	c.checktimeout = time.Now().Add(time.Second * time.Duration(randInt(1, 5)))
+	c.checktimeout = time.Now()
 	c.ChangeStatus(testpb.ClientStatusType_Sleep_Before_Connect_BattleServer)
 
 	c.maxbattletime = OneBattleTime + randInt(1, 2)
@@ -305,6 +308,8 @@ func handle_Rlt_ConnectBS(c *Client, msgdata []byte) {
 		return
 	}
 	c.ChangeStatus(testpb.ClientStatusType_Request_Progress)
+
+	c.lastgsheartbeattime = time.Now().Unix()
 }
 
 func handle_Rlt_StartBattle(c *Client, msgdata []byte) {
@@ -312,6 +317,8 @@ func handle_Rlt_StartBattle(c *Client, msgdata []byte) {
 	proto.Unmarshal(msgdata, rsp)
 	c.startbattle = true
 	c.startbattletime = time.Now().Unix()
+
+	c.lastgsheartbeattime = time.Now().Unix()
 }
 
 func handle_Rlt_EndBattle(c *Client, msgdata []byte) {
@@ -344,6 +351,8 @@ func handle_Transfer_Command(c *Client, msgdata []byte) {
 		tlog.Fatalf("rsp.frameid %v client.frameid %v client.id %v client.charid %v startbattletime %v", rsp.FrameID, c.frameid, c.id, c.charid, c.startbattletime)
 	}
 	c.frameid = rsp.FrameID
+
+	c.lastgsheartbeattime = time.Now().Unix()
 	//fmt.Printf("client %d frame %v CharID %v recv transfer command from %v\n", c.id, rsp.FrameID, c.charid, rsp.CharID)
 }
 
@@ -400,7 +409,7 @@ func (c *Client) updateGame() {
 			}
 			go Send(&c.gconn, clientmsg.MessageType_MT_PING, msg)
 
-			if time.Now().Unix()-c.lastgsheartbeattime > 20 {
+			if time.Now().Unix()-c.lastgsheartbeattime > 60 {
 
 				tlog.Errorf("client %d gs ping timeout\n", c.id)
 				c.ChangeStatus(testpb.ClientStatusType_Disconnect_GameServer)
@@ -440,8 +449,8 @@ func (c *Client) updateBattle() {
 				msg.TickTime = uint64(time.Now().UnixNano())
 				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_BATTLE_HEARTBEAT, msg)
 			}
-			if time.Now().Unix()-c.lastbsheartbeattime > 20 {
-				tlog.Errorf("client %d bs heartbeat timeout\n", c.id)
+			if time.Now().Unix()-c.lastbsheartbeattime > 40 {
+				tlog.Errorf("charid %d bs heartbeat timeout last status %v\n", c.charid, c.prevstatus)
 				c.ChangeStatus(testpb.ClientStatusType_Disconnect_BattleServer)
 				return
 			}
@@ -596,6 +605,7 @@ func stat(fin chan int) {
 			for _, m_client := range m_client {
 				m_stat[m_client.status] += 1
 			}
+			tlog.Infof("StatusCount:\n")
 			for k, v := range m_stat {
 				tlog.Infof("Status:%v\t Count:%v\t\n", k, v)
 			}
@@ -604,6 +614,9 @@ func stat(fin chan int) {
 }
 
 func main() {
+
+	runtime.GOMAXPROCS(4)
+
 	rand.Seed(time.Now().UnixNano())
 
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
