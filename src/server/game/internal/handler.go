@@ -97,14 +97,24 @@ func handleReqLogin(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Login)
 	a := args[1].(gate.Agent)
 
+	if len(g.GamePlayerManager) >= conf.Server.MaxOnlineNum {
+		log.Error("Server Online Full")
+		a.WriteMsg(&clientmsg.Rlt_Login{
+			RetCode: clientmsg.Type_GameRetCode_GRC_ONLINE_TOO_MANY,
+		})
+		a.Close()
+		return
+	}
+
 	if g.WaitLoginQueue.Full() {
+		log.Error("Server WaitLogin Full")
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_LOGIN_TOO_MANY,
 		})
 		a.Close()
 		return
 	} else {
-		if g.WaitLoginQueue.Size() > 0 {
+		if !g.WaitLoginQueue.Empty() {
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode: clientmsg.Type_GameRetCode_GRC_LOGIN_LINE_UP,
 			})
@@ -138,38 +148,6 @@ func handleReqLogin(args []interface{}) {
 	}
 
 	g.WaitLoginQueue.Append(req)
-
-	/*
-		if cache != nil {
-			ret = cache.SyncPlayerAsset()
-		} else {
-			ret = player.LoadPlayerAsset()
-		}
-		if ret == true {
-			if cache != nil {
-				g.AddCachedGamePlayer(cache, &a)
-				cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-			} else {
-				g.AddGamePlayer(player, &a)
-				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
-				player.AssetMail_CheckGlobalMail()
-			}
-
-			a.WriteMsg(&clientmsg.Rlt_Login{
-				RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-				CharID:         player.Char.CharID,
-				IsNewCharacter: isnew,
-				CharName:       player.Char.CharName,
-			})
-
-			log.Release("GamePlayer End Login UserID %v From %v", userid, a.RemoteAddr().String())
-		} else {
-			a.WriteMsg(&clientmsg.Rlt_Login{
-				RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-			})
-			a.Close()
-			log.Error("load asset Error %v", player.Char.CharID)
-		}*/
 }
 
 func handleReqReConnectGS(args []interface{}) {

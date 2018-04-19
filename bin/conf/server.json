@@ -4,7 +4,8 @@
 	"TCPAddr" : "0.0.0.0:8888",
 	"UDPAddr": "0.0.0.0:9999",
 	"MaxConnNum": 20000,
-	"MaxWaitLoginNum" : 50,
+	"MaxOnlineNum" : 10000,
+	"MaxWaitLoginNum" : 100,
 	"ConsolePort": 3333,
 	
 	"TickInterval" : 66,

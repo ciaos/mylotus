@@ -16,6 +16,7 @@ var Server struct {
 	TCPAddr         string
 	UDPAddr         string
 	MaxConnNum      int
+	MaxOnlineNum    int
 	MaxWaitLoginNum int
 	ConsolePort     int
 	ProfilePath     string

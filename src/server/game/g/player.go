@@ -399,7 +399,9 @@ func updateLogin() {
 		}
 
 		req := WaitLoginQueue.Shift()
-		login(req.(*WaitInfo))
+		if req != nil {
+			login(req.(*WaitInfo))
+		}
 	}
 }
 
