@@ -7,6 +7,52 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+//common interface
+func (player *Player) loadPlayerAssetFriend() bool {
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
+	player.GetPlayerAsset().AssetFriend = &clientmsg.Rlt_Asset_Friend{}
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.GetPlayerAsset().AssetFriend)
+	if err != nil && err.Error() == "not found" {
+		player.GetPlayerAsset().AssetFriend.CharID = player.Char.CharID
+
+		err = c.Insert(player.GetPlayerAsset().AssetFriend)
+	}
+	if err != nil {
+		log.Error("Load Player %v AssetFriend Error %v", player.Char.CharID, err)
+		return false
+	}
+	player.GetPlayerAsset().AssetFriend_DirtyFlag |= DIRTYFLAG_TO_CLIENT
+	return true
+}
+
+func (player *Player) savePlayerAssetFriend() bool {
+	if player.GetPlayerAsset().AssetFriend_DirtyFlag&DIRTYFLAG_TO_DB == 0 {
+		return true
+	}
+
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(AssetName_Friend)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.GetPlayerAsset().AssetFriend)
+	if err != nil {
+		log.Error("Save Player %v AssetFriend Error %v", player.Char.CharID, err)
+		return false
+	}
+
+	player.GetPlayerAsset().AssetFriend_DirtyFlag ^= DIRTYFLAG_TO_DB
+	return true
+}
+
+func (pinfo *PlayerInfo) syncPlayerAssetFriend() {
+	if (pinfo.player.GetPlayerAsset().AssetFriend_DirtyFlag & DIRTYFLAG_TO_CLIENT) != 0 {
+		(*pinfo.agent).WriteMsg(pinfo.player.GetPlayerAsset().AssetFriend)
+		pinfo.player.GetPlayerAsset().AssetFriend_DirtyFlag ^= DIRTYFLAG_TO_CLIENT
+	}
+}
+
+//method
 func (asset *PlayerAsset) AssetFriend_AddApplyInfo(fromid uint32, m *clientmsg.Req_Friend_Operate) {
 	if asset == nil { //offline
 		s := Mongo.Ref()
@@ -35,7 +81,7 @@ func (asset *PlayerAsset) AssetFriend_AddApplyInfo(fromid uint32, m *clientmsg.R
 				Msg:    m,
 			}
 			asset.AssetFriend.ApplyList = append(asset.AssetFriend.ApplyList, apply)
-			asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+			asset.AssetFriend_DirtyFlag |= DIRTYFLAG_TO_ALL
 		}
 	}
 }
@@ -53,7 +99,7 @@ func (asset *PlayerAsset) AssetFriend_DelFriend(charid uint32, friendid uint32) 
 		for i, friend := range asset.AssetFriend.Friends {
 			if friend == friendid {
 				asset.AssetFriend.Friends = append(asset.AssetFriend.Friends[0:i], asset.AssetFriend.Friends[i+1:]...)
-				asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+				asset.AssetFriend_DirtyFlag |= DIRTYFLAG_TO_ALL
 				goto reloop
 			}
 		}
@@ -89,7 +135,7 @@ func (asset *PlayerAsset) AssetFriend_AcceptApplyInfo(charid uint32, friendid ui
 		if exist == false {
 			asset.AssetFriend.Friends = append(asset.AssetFriend.Friends, friendid)
 		}
-		asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+		asset.AssetFriend_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
 }
 
@@ -102,7 +148,7 @@ reloop:
 	for i, applyinfo := range asset.AssetFriend.ApplyList {
 		if applyinfo.FromID == fromid {
 			asset.AssetFriend.ApplyList = append(asset.AssetFriend.ApplyList[0:i], asset.AssetFriend.ApplyList[i+1:]...)
-			asset.DirtyFlag_AssetFriend |= DIRTYFLAG_TO_ALL
+			asset.AssetFriend_DirtyFlag |= DIRTYFLAG_TO_ALL
 			goto reloop
 		}
 	}

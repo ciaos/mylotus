@@ -4,6 +4,9 @@ import (
 	"server/msg/clientmsg"
 	"time"
 
+	"server/gamedata"
+	"server/gamedata/cfg"
+
 	"github.com/ciaos/leaf/log"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -12,6 +15,71 @@ const (
 	MAX_MAIL_CNT = 20
 )
 
+//
+func (player *Player) loadPlayerAssetMail() bool {
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(AssetName_Mail)
+	player.GetPlayerAsset().AssetMail = &clientmsg.Rlt_Asset_Mail{}
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.GetPlayerAsset().AssetMail)
+	if err != nil && err.Error() == "not found" {
+		player.GetPlayerAsset().AssetMail.CharID = player.Char.CharID
+
+		r := gamedata.CSVNewPlayer.Record(0)
+		row := r.(*cfg.NewPlayer)
+
+		rewards := &clientmsg.Rlt_Give_Reward{}
+		for _, re := range row.InitMail.Rewards {
+			reward := &clientmsg.Rlt_Give_Reward_Reward{
+				X: int32(clientmsg.Type_Vec3X_TVX_CASH),
+				Y: int32(re[0]),
+				Z: int32(re[1]),
+			}
+			rewards.Rewardlist = append(rewards.Rewardlist, reward)
+		}
+		mail := CreateMail(clientmsg.MailInfo_MT_SYSTEM, player.Char.CharID, row.InitMail.Title, row.InitMail.Content, rewards, row.InitMail.Expirets)
+		if mail == nil {
+			log.Error("create new character %v mail error %v", player.Char.CharID, err)
+			return false
+		}
+		player.GetPlayerAsset().AssetMail_AddMail(player.Char.CharID, mail)
+
+		err = c.Insert(player.GetPlayerAsset().AssetMail)
+	}
+	if err != nil {
+		log.Error("Load Player %v AssetMail Error %v", player.Char.CharID, err)
+		return false
+	}
+	player.GetPlayerAsset().AssetMail_DirtyFlag |= DIRTYFLAG_TO_CLIENT
+	return true
+}
+
+func (player *Player) savePlayerAssetMail() bool {
+	if player.GetPlayerAsset().AssetMail_DirtyFlag&DIRTYFLAG_TO_DB == 0 {
+		return true
+	}
+
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(AssetName_Mail)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.GetPlayerAsset().AssetMail)
+	if err != nil {
+		log.Error("Save Player %v AssetMail Error %v", player.Char.CharID, err)
+		return false
+	}
+
+	player.GetPlayerAsset().AssetMail_DirtyFlag ^= DIRTYFLAG_TO_DB
+	return true
+}
+
+func (pinfo *PlayerInfo) syncPlayerAssetMail() {
+	if (pinfo.player.GetPlayerAsset().AssetMail_DirtyFlag & DIRTYFLAG_TO_CLIENT) != 0 {
+		(*pinfo.agent).WriteMsg(pinfo.player.GetPlayerAsset().AssetMail)
+		pinfo.player.GetPlayerAsset().AssetMail_DirtyFlag ^= DIRTYFLAG_TO_CLIENT
+	}
+}
+
+//interface
 func CreateMail(mailtype clientmsg.MailInfo_MailType, mailownerid uint32, title string, content string, rewards *clientmsg.Rlt_Give_Reward, expirets int64) *clientmsg.MailInfo {
 	mail := &clientmsg.MailInfo{
 		Mailid:      bson.NewObjectId().Hex(),
@@ -90,7 +158,7 @@ func (asset *PlayerAsset) AssetMail_AddMail(charid uint32, m *clientmsg.MailInfo
 			asset.AssetMail.MailData = append(asset.AssetMail.MailData[1:])
 		}
 		asset.AssetMail.MailData = append(asset.AssetMail.MailData, maildata)
-		asset.DirtyFlag_AssetMail |= DIRTYFLAG_TO_ALL
+		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
 }
 
@@ -128,7 +196,7 @@ func (asset *PlayerAsset) AssetMail_Action(m *clientmsg.Req_Mail_Action) *client
 				if mail.MailID == mailid && mail.MailStatus == clientmsg.Rlt_Asset_Mail_MMS_NONE {
 					mail.MailStatus = clientmsg.Rlt_Asset_Mail_MMS_READ
 
-					asset.DirtyFlag_AssetMail |= DIRTYFLAG_TO_ALL
+					asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 					break
 				}
 			}
@@ -142,7 +210,7 @@ func (asset *PlayerAsset) AssetMail_Action(m *clientmsg.Req_Mail_Action) *client
 
 					//todo send gift
 
-					asset.DirtyFlag_AssetMail |= DIRTYFLAG_TO_ALL
+					asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 					break
 				}
 			}
@@ -165,7 +233,7 @@ func (asset *PlayerAsset) AssetMail_Action(m *clientmsg.Req_Mail_Action) *client
 						}
 					}
 					asset.AssetMail.MailData = append(asset.AssetMail.MailData[0:i], asset.AssetMail.MailData[i+1:]...)
-					asset.DirtyFlag_AssetMail |= DIRTYFLAG_TO_ALL
+					asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 					break
 				}
 			}

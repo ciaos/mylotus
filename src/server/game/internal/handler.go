@@ -214,8 +214,9 @@ func handleReqSetCharName(args []interface{}) {
 	}
 
 	a.WriteMsg(&clientmsg.Rlt_SetCharName{
-		RetCode:  clientmsg.Type_GameRetCode_GRC_OK,
-		CharName: m.CharName,
+		RetCode:     clientmsg.Type_GameRetCode_GRC_OK,
+		CharName:    m.CharName,
+		IsNewCreate: m.IsNewCreate,
 	})
 
 	player.Char.CharName = m.CharName

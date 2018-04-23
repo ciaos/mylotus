@@ -3,11 +3,67 @@ package g
 import (
 	"time"
 
+	"server/gamedata"
+	"server/gamedata/cfg"
 	"server/msg/clientmsg"
+
+	"github.com/ciaos/leaf/log"
 
 	"gopkg.in/mgo.v2/bson"
 )
 
+func (player *Player) loadPlayerAssetHero() bool {
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
+	player.GetPlayerAsset().AssetHero = &clientmsg.Rlt_Asset_Hero{}
+	err := c.Find(bson.M{"charid": player.Char.CharID}).One(&player.GetPlayerAsset().AssetHero)
+	if err != nil && err.Error() == "not found" {
+		player.GetPlayerAsset().AssetHero.CharID = player.Char.CharID
+
+		r := gamedata.CSVNewPlayer.Record(0)
+		row := r.(*cfg.NewPlayer)
+
+		for _, hero := range row.InitHeros {
+			player.GetPlayerAsset().AssetHero_AddHero(player.Char.CharID, uint32(hero), 0)
+		}
+
+		err = c.Insert(player.GetPlayerAsset().AssetHero)
+	}
+	if err != nil {
+		log.Error("Load Player %v AssetHero Error %v", player.Char.CharID, err)
+		return false
+	}
+	player.GetPlayerAsset().AssetHero_DirtyFlag |= DIRTYFLAG_TO_CLIENT
+	return true
+}
+
+func (player *Player) savePlayerAssetHero() bool {
+	if player.GetPlayerAsset().AssetHero_DirtyFlag&DIRTYFLAG_TO_DB == 0 {
+		return true
+	}
+
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
+	err := c.Update(bson.M{"charid": player.Char.CharID}, player.GetPlayerAsset().AssetHero)
+	if err != nil {
+		log.Error("Save Player %v AssetHero Error %v", player.Char.CharID, err)
+		return false
+	}
+
+	player.GetPlayerAsset().AssetHero_DirtyFlag ^= DIRTYFLAG_TO_DB
+	return true
+}
+
+func (pinfo *PlayerInfo) syncPlayerAssetHero() {
+	if (pinfo.player.GetPlayerAsset().AssetHero_DirtyFlag & DIRTYFLAG_TO_CLIENT) != 0 {
+		(*pinfo.agent).WriteMsg(pinfo.player.GetPlayerAsset().AssetHero)
+		pinfo.player.GetPlayerAsset().AssetHero_DirtyFlag ^= DIRTYFLAG_TO_CLIENT
+	}
+}
+
+//method
 func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, deadlinetime int64) {
 	data := &clientmsg.Rlt_Asset_Hero{}
 
@@ -61,6 +117,6 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 
 		c.Update(bson.M{"charid": charid}, data)
 	} else {
-		asset.DirtyFlag_AssetHero |= DIRTYFLAG_TO_ALL
+		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
 }
