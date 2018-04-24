@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/binary"
+	"strings"
 	//"math/rand"
 	"reflect"
 	"server/conf"
@@ -30,6 +31,7 @@ func init() {
 	handler(&clientmsg.Req_MakeTeamOperate{}, handleReqMakeTeamOperate)
 	handler(&clientmsg.Req_Mail_Action{}, handleReqMailAction)
 	handler(&clientmsg.Req_Re_ConnectGS{}, handleReqReConnectGS)
+	handler(&clientmsg.Req_GM_Command{}, handleReqGMCommand)
 
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
@@ -556,4 +558,27 @@ func handleReqReConnectBS(args []interface{}) {
 			RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
 		})
 	}
+}
+
+func handleReqGMCommand(args []interface{}) {
+	m := args[0].(*clientmsg.Req_GM_Command)
+	a := args[1].(gate.Agent)
+
+	if a.UserData() == nil {
+		a.Close()
+		return
+	}
+
+	sCmd := strings.Split(m.Command, " ")
+
+	cmd := make([]interface{}, len(sCmd))
+	for i, c := range sCmd {
+		cmd[i] = c
+	}
+
+	result := RunGMCmd(cmd)
+	rsp := &clientmsg.Rlt_GM_Command{
+		Result: result.(string),
+	}
+	a.WriteMsg(rsp)
 }

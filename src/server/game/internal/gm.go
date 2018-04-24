@@ -33,6 +33,7 @@ func register(name string, help string, f interface{}) {
 }
 
 func InitGM() {
+	register("help", "list gm command", gmHelp)
 	register("echo", "echo [string]", gmEcho)
 	register("addhero", "addhero [charid] [chartypeid] [deadlinetime]", gmAddHero)
 }
@@ -48,10 +49,14 @@ func help() interface{} {
 func run(args []interface{}) interface{} {
 	command, ok := gm_cmd[args[0].(string)]
 	if !ok {
-		return "gm command not found, try `gm` for help"
+		return "gm command not found, try `help` for help"
 	}
 
 	return command.f.(func([]interface{}) interface{})(args[1:])
+}
+
+func gmHelp(args []interface{}) interface{} {
+	return help()
 }
 
 func gmEcho(args []interface{}) interface{} {

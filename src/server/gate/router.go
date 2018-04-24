@@ -26,6 +26,7 @@ func init() {
 	msg.Processor.SetRouter(&clientmsg.Req_MakeTeamOperate{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Mail_Action{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Re_ConnectGS{}, game.ChanRPC)
+	msg.Processor.SetRouter(&clientmsg.Req_GM_Command{}, game.ChanRPC)
 
 	//battle server
 	msg.Processor.SetRouter(&clientmsg.Req_ConnectBS{}, game.ChanRPC)
