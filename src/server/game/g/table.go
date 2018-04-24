@@ -2,6 +2,7 @@ package g
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"server/gamedata"
 	"server/gamedata/cfg"
@@ -93,6 +94,25 @@ func allocTableID() {
 	}
 }
 
+func (table *Table) getTeamID(teamCnt int) int32 {
+
+	teamIDCnt := make([]int, teamCnt)
+	for _, seat := range table.seats {
+		teamIDCnt[seat.teamid-1]++
+	}
+
+	teamid := 1
+	minMemberCnt := math.MaxUint32
+	for i, v := range teamIDCnt {
+		if v < minMemberCnt {
+			teamid = i + 1
+			minMemberCnt = v
+		}
+	}
+
+	return int32(teamid)
+}
+
 func (table *Table) fillRobotToTable() bool {
 	r := gamedata.CSVMatchMode.Index((*table).matchmode)
 	if r == nil {
@@ -120,7 +140,7 @@ func (table *Table) fillRobotToTable() bool {
 			chartype:   0,
 			ownerid:    ownerid,
 			status:     SEAT_NONE,
-			teamid:     int32(len((*table).seats)%2 + 1),
+			teamid:     table.getTeamID(row.TeamCnt),
 		}
 		(*table).seats = append((*table).seats, seat)
 		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
@@ -449,7 +469,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 					ownerid:    0,
 					status:     SEAT_NONE,
 					charname:   charname,
-					teamid:     int32(len((*table).seats)%2 + 1),
+					teamid:     table.getTeamID(row.TeamCnt),
 				}
 				TableManager[i].seats = append(TableManager[i].seats, seat)
 				PlayerTableIDMap[charid] = i
@@ -679,7 +699,7 @@ func FormatSeatInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v", (*seat).charid, (*seat).charname, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
 		}
 	}
 	return output

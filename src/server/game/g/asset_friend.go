@@ -153,3 +153,18 @@ reloop:
 		}
 	}
 }
+
+func (asset *PlayerAsset) AssetFriend_QueryCharIDGSID(charid uint32) (bool, int32) {
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
+	c := s.DB(DB_NAME_GAME).C(TB_NAME_CHARACTER)
+
+	character := &Character{}
+	err := c.Find(bson.M{"charid": charid}).Select(bson.M{"gsid": 1}).One(character)
+	if err == nil {
+		return true, character.GsId
+	}
+
+	log.Error("AssetFriend_QueryCharIDGSID Charid %v error %v", charid, err)
+	return false, 0
+}

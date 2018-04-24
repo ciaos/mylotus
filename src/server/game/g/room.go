@@ -589,7 +589,7 @@ func FormatMemberInfo(roomid int32) string {
 	room, ok := RoomManager[roomid]
 	if ok {
 		for _, member := range (*room).members {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharName:%v\tCharType:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v", member.charid, member.charname, member.chartype, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tCharType:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v\tCharName:%v", member.charid, member.chartype, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid, member.charname)}, "\r\n")
 		}
 	}
 	return output

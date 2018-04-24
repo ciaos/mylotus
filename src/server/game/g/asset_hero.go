@@ -120,3 +120,33 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
 }
+
+func (asset *PlayerAsset) AssetHero_HaveHero(charid uint32, chartypeid uint32) bool {
+	data := &clientmsg.Rlt_Asset_Hero{}
+
+	if asset == nil { //offline
+		s := Mongo.Ref()
+		defer Mongo.UnRef(s)
+
+		c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
+		err := c.Find(bson.M{"charid": charid}).One(data)
+		if err != nil {
+			return false
+		}
+	} else {
+		data = asset.AssetHero
+	}
+
+	for _, role := range data.Roles {
+		if role.CharTypeID == chartypeid {
+			if role.RoleStatus == clientmsg.Rlt_Asset_Hero_RS_OWNED {
+				return true
+			} else {
+				if role.RoleStatus == clientmsg.Rlt_Asset_Hero_RS_LIMITED && role.DeadLineTime > time.Now().Unix() {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

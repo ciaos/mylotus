@@ -66,5 +66,4 @@ func (s *GMCommandSuite) TestGMCommand(c *C) {
 		c.Fatal("Rlt_GM_Command Decode Error ", err)
 	}
 	c.Assert(rspMsg.Result, Equals, "aaa")
-	fmt.Println(rspMsg.Result)
 }

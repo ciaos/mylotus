@@ -285,6 +285,11 @@ func handleTransferTeamOperate(args []interface{}) {
 		return
 	}
 
+	if player.GetPlayerAsset().AssetHero_HaveHero(player.Char.CharID, uint32(m.CharType)) == false {
+		log.Error("Player %v HaveHero %v Error", player.Char.CharID, m.CharType)
+		return
+	}
+
 	if player.MatchServerID > 0 {
 		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE, m)
 	} else {
@@ -321,31 +326,25 @@ func handleReqFriendOperate(args []interface{}) {
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
-		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-		character := &g.Character{}
-		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
-		if err == nil {
-			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+		ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.OperateCharID)
+		if ok {
+			go g.SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
 		player.GetPlayerAsset().AssetFriend_DelFriend(player.Char.CharID, m.OperateCharID)
 
-		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-		character := &g.Character{}
-		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
-		if err == nil {
-			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+		ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.OperateCharID)
+		if ok {
+			go g.SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
 		player.GetPlayerAsset().AssetFriend_AcceptApplyInfo(player.Char.CharID, m.OperateCharID)
 
-		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-		character := &g.Character{}
-		err := c.Find(bson.M{"charid": m.OperateCharID}).Select(bson.M{"gsid": 1}).One(character)
-		if err == nil {
-			go g.SendMessageTo(character.GsId, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+		ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.OperateCharID)
+		if ok {
+			go g.SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_REJECT {
