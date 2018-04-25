@@ -163,7 +163,7 @@ func RemoveGamePlayer(clientid uint32, remoteaddr string, reason int32) {
 
 				player.player.OfflineTime = time.Now()
 
-				if player.player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH && player.player.MatchServerID > 0 {
+				if player.player.MatchServerID > 0 {
 					innerReq := &proxymsg.Proxy_GS_MS_Offline{
 						Charid: clientid,
 					}
@@ -412,6 +412,12 @@ func UpdateGamePlayerManager(now *time.Time) {
 	}
 
 	updateLogin()
+}
+
+func UninitGamePlayerManager() {
+	for _, player := range GamePlayerManager {
+		player.player.SavePlayerAsset()
+	}
 }
 
 func UpdateBattlePlayerManager(now *time.Time) {

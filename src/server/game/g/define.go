@@ -3,6 +3,7 @@ package g
 const (
 	MAX_TABLE_COUNT = 10000
 	MAX_ROOM_COUNT  = 10000
+	MAX_BENCH_COUNT = 100000
 
 	DB_NAME_LOGIN     = "login"
 	TB_NAME_ACCOUNT   = "account"

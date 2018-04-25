@@ -246,11 +246,10 @@ func handleReqMatch(args []interface{}) {
 		Action:    int32(m.Action),
 	}
 
-	var msid int
 	if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
-			msid, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			player.MatchServerID, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 		} else {
 			log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
 			a.WriteMsg(&clientmsg.Rlt_Match{
@@ -258,8 +257,6 @@ func handleReqMatch(args []interface{}) {
 			})
 			return
 		}
-
-		player.MatchServerID = msid
 	} else {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
 			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
@@ -292,7 +289,7 @@ func handleTransferTeamOperate(args []interface{}) {
 	}
 
 	if player.MatchServerID > 0 {
-		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE, m)
+		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_CHOOSE_OPERATE, m)
 	} else {
 		log.Error("handleTransferTeamOperate CharID %v Invalid MatchServerID %v", player.Char.CharID, player.MatchServerID)
 	}
@@ -425,6 +422,70 @@ func handleReqQueryCharInfo(args []interface{}) {
 }
 
 func handleReqMakeTeamOperate(args []interface{}) {
+	m := args[0].(*clientmsg.Req_MakeTeamOperate)
+	a := args[1].(gate.Agent)
+
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.WriteMsg(&clientmsg.Rlt_MakeTeamOperate{
+			RetCode: clientmsg.Type_GameRetCode_GRC_BENCH_ERROR,
+		})
+		a.Close()
+		return
+	}
+
+	log.Debug("CharID %v Requst MakeTeamOperate %v", player.Char.CharID, m)
+	innerReq := &proxymsg.Proxy_GS_MS_MakeTeamOperate{
+		Action : int32(m.Action),
+		Matchmode : int32(m.Mode),
+		Mapid : m.MapID,
+		Targetid : m.TargetID,
+		Benchid : m.BenchID,
+		Matchserverid : m.MatchServerID,
+	}
+
+	if m.Action == clientmsg.MakeTeamOperateType_MTOT_CREATE {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BENCH)
+			innerReq.ActorCharname = player.Char.CharName
+			player.MatchServerID, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+		} else {
+			log.Error("Invalid Status %v When MakeTeamOperate CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
+			a.WriteMsg(&clientmsg.Rlt_MakeTeamOperate{
+				RetCode: clientmsg.Type_GameRetCode_GRC_BENCH_ERROR,
+			})
+			return
+		}
+	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_INVITE {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
+			ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.TargetID)
+			if ok {
+				innerReq.Targetgsid = gsid
+				go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+			}
+		}
+	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_ACCEPT {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE {
+			innerReq.ActorCharname = player.Char.CharName
+			go g.SendMessageTo(m.MatchServerID, conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+		}
+	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_REJECT {
+		//log.Debug("MakeTeamOperateType_MTOT_REJECT From CharID %v", player.Char.CharID)
+	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_START_MATCH {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
+			go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+		}
+	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_LEAVE {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
+			go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+		}
+	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_KICK {
+		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
+			go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+		}
+	} else {
+		log.Error("Invalid MakeTeamOperateType %v CharID %v", m.Action, player.Char.CharID)
+	}
 }
 
 func handleReqMailAction(args []interface{}) {

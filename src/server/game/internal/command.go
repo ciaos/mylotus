@@ -13,16 +13,14 @@ func init() {
 
 	skeleton.RegisterCommand("free", "free heap memory", commandFree)
 	skeleton.RegisterCommand("gm", "gm command", commandGM)
-	skeleton.RegisterCommand("r", "list room info", commandRoom)
-	skeleton.RegisterCommand("rn", "room count", commandRoomCount)
-	skeleton.RegisterCommand("rm", "list charid roomid map", commandRoomMap)
-	skeleton.RegisterCommand("t", "list table info", commandTable)
-	skeleton.RegisterCommand("tn", "table count", commandTableCount)
-	skeleton.RegisterCommand("tm", "list charid tableid map", commandTableMap)
-	skeleton.RegisterCommand("g", "list gameserver online member count", commandGPlayer)
-	skeleton.RegisterCommand("gn", "gameserver online member count", commandGPlayerCount)
-	skeleton.RegisterCommand("b", "list battleserver online member count", commandBPlayer)
-	skeleton.RegisterCommand("bn", "battleserver online member count", commandBPlayerCount)
+	skeleton.RegisterCommand("room", "list room info", commandRoom)
+	skeleton.RegisterCommand("roommap", "list charid roomid map", commandRoomMap)
+	skeleton.RegisterCommand("table", "list table info", commandTable)
+	skeleton.RegisterCommand("tablemap", "list charid tableid map", commandTableMap)
+	skeleton.RegisterCommand("bench", "list bench info", commandBench)
+	skeleton.RegisterCommand("benchmap", "list charid benchid map", commandBenchMap)
+	skeleton.RegisterCommand("gplayer", "list gameserver online member count", commandGPlayer)
+	skeleton.RegisterCommand("bplayer", "list battleserver online member count", commandBPlayer)
 }
 
 func commandFree(args []interface{}) interface{} {
@@ -48,10 +46,6 @@ func commandRoom(args []interface{}) interface{} {
 	}
 }
 
-func commandRoomCount(args []interface{}) interface{} {
-	return fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))
-}
-
 func commandRoomMap(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
@@ -63,6 +57,19 @@ func commandRoomMap(args []interface{}) interface{} {
 			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tRoomID:%v", k, v)}, "\r\n")
 		}
 		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
+		return strings.TrimLeft(output, "\r\n")
+	}
+}
+
+func commandTable(args []interface{}) interface{} {
+	if len(args) == 1 {
+		tableid, _ := strconv.Atoi(args[0].(string))
+		return g.FormatSeatInfo(int32(tableid))
+	} else {
+		output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
+		for i, _ := range g.TableManager {
+			output = strings.Join([]string{output, g.FormatTableInfo(i)}, "\r\n")
+		}
 		return strings.TrimLeft(output, "\r\n")
 	}
 }
@@ -82,19 +89,30 @@ func commandTableMap(args []interface{}) interface{} {
 	}
 }
 
-func commandTableCount(args []interface{}) interface{} {
-	return fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
+func commandBench(args []interface{}) interface{} {
+	if len(args) == 1 {
+		benchid, _ := strconv.Atoi(args[0].(string))
+		return g.FormatUnitInfo(int32(benchid))
+	} else {
+		output := fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(g.BenchManager), len(g.PlayerBenchIDMap))
+		for i, _ := range g.BenchManager {
+			output = strings.Join([]string{output, g.FormatBenchInfo(i)}, "\r\n")
+		}
+		return strings.TrimLeft(output, "\r\n")
+	}
 }
 
-func commandTable(args []interface{}) interface{} {
+func commandBenchMap(args []interface{}) interface{} {
 	if len(args) == 1 {
-		tableid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatSeatInfo(int32(tableid))
+		charid, _ := strconv.Atoi(args[0].(string))
+		output := fmt.Sprintf("CharID:%v\tBenchID:%v", uint32(charid), g.PlayerBenchIDMap[uint32(charid)])
+		return output
 	} else {
-		output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
-		for i, _ := range g.TableManager {
-			output = strings.Join([]string{output, g.FormatTableInfo(i)}, "\r\n")
+		var output string
+		for k, v := range g.PlayerBenchIDMap {
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tBenchID:%v", k, v)}, "\r\n")
 		}
+		output = strings.Join([]string{output, fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(g.BenchManager), len(g.PlayerBenchIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
 	}
 }
@@ -111,10 +129,6 @@ func commandGPlayer(args []interface{}) interface{} {
 	}
 }
 
-func commandGPlayerCount(args []interface{}) interface{} {
-	return fmt.Sprintf("GamePlayerCnt:%d", len(g.GamePlayerManager))
-}
-
 func commandBPlayer(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
@@ -122,8 +136,4 @@ func commandBPlayer(args []interface{}) interface{} {
 	} else {
 		return g.FormatBPlayerInfo()
 	}
-}
-
-func commandBPlayerCount(args []interface{}) interface{} {
-	return fmt.Sprintf("BattlePlayerCnt:%d", len(g.BattlePlayerManager))
 }

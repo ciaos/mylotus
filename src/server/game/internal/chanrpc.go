@@ -45,9 +45,9 @@ func queueMessage(args []interface{}) {
 		proxyHandleMSGSMatchResult(pmsg)
 	case proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE:
 		proxyHandleMSGSBeginBattle(pmsg)
-	case proxymsg.ProxyMessageType_PMT_GS_MS_TEAM_OPERATE:
+	case proxymsg.ProxyMessageType_PMT_GS_MS_CHOOSE_OPERATE:
 		proxyHandleGSMSTeamOperate(pmsg)
-	case proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE:
+	case proxymsg.ProxyMessageType_PMT_MS_GS_CHOOSE_OPERATE:
 		proxyHandleMSGSTeamOperate(pmsg)
 	case proxymsg.ProxyMessageType_PMT_GS_MS_OFFLINE:
 		proxyHandleGSMSOffline(pmsg)
@@ -63,6 +63,12 @@ func queueMessage(args []interface{}) {
 		proxyHandleGSMSReconnect(pmsg)
 	case proxymsg.ProxyMessageType_PMT_MS_GS_RECONNECT:
 		proxyHandleMSGSReconnect(pmsg)
+	case proxymsg.ProxyMessageType_PMT_BS_MS_SYNCBSINFO:
+		proxyHandleBSMSSyncBSInfo(pmsg)
+	case proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE:
+		proxyHandleGSMSMakeTeamOperate(pmsg)
+	case proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE:
+		proxyHandleMSGSMakeTeamOperate(pmsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", pmsg.Msgid)
 	}
@@ -146,7 +152,9 @@ func proxyHandleGSMSOffline(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 	log.Debug("proxyHandleGSMSOffline CharID %v Offline", msg.Charid)
+
 	g.LeaveTable(msg.Charid, 0)
+	g.LeaveBench(msg.Charid, 0)
 }
 
 func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
@@ -218,7 +226,6 @@ func proxyHandleGSMSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		log.Error("proxymsg.Transfer_Team_Operate Error1 %v", err)
 		return
 	}
-	//log.Debug("proxyHandleGSMSTeamOperate %v %v %v %v", pmsg.Charid, msg.Action, msg.CharID, msg.CharType)
 
 	g.TeamOperate(pmsg.Charid, msg)
 }
@@ -231,7 +238,6 @@ func proxyHandleMSGSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	//log.Debug("Transfer_Team_Operate %v %v %v %v", pmsg.Charid, msg.Action, msg.CharID, msg.CharType)
 	g.SendMsgToPlayer(pmsg.Charid, msg)
 }
 
@@ -300,7 +306,7 @@ func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
 	msg := &proxymsg.Proxy_BS_GS_FINISH_BATTLE{}
 	err := proto.Unmarshal(pmsg.Msgdata, msg)
 	if err != nil {
-		log.Error("proxymsg.Proxy_BS_GS_FINISH_BATTLE Decode Error %v", err)
+		log.Error("Message Decode Error %v", err)
 		return
 	}
 
@@ -316,6 +322,57 @@ func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
 	}
 }
 
+func proxyHandleBSMSSyncBSInfo(pmsg *proxymsg.InternalMessage) {
+}
+
+func proxyHandleGSMSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_GS_MS_MakeTeamOperate{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("Message Decode Error %v", err)
+		return
+	}
+
+	if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_CREATE) {
+		g.CreateBench(pmsg.Charid, msg.ActorCharname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
+	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_LEAVE) {
+		g.LeaveBench(pmsg.Charid, msg.Matchmode)
+	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_START_MATCH) {
+		g.StartMatch(pmsg.Charid)
+	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_ACCEPT) {
+		g.AcceptBench(pmsg.Charid, msg.ActorCharname, msg.Benchid, pmsg.Fromid, pmsg.Fromtype)
+	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_INVITE) {
+		g.InviteBench(pmsg.Charid, msg.Targetid, msg.Targetgsid)
+	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_KICK) {
+		g.KickBench(pmsg.Charid, msg.Targetid)
+	} else {
+		log.Error("proxyHandleGSMSMakeTeamOperate Invalid Action %v", msg.Action)
+	}
+}
+
+func proxyHandleMSGSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
+	msg := &clientmsg.Rlt_MakeTeamOperate{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("Message Decode Error %v", err)
+		return
+	}
+	
+	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_OK {
+
+		player, _ := g.GetPlayer(pmsg.Charid)
+		if msg.Action == clientmsg.MakeTeamOperateType_MTOT_INVITE {
+			if player != nil && player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //在线状态才通知邀请
+				g.SendMsgToPlayer(pmsg.Charid, msg)
+			}
+		} else {
+			g.SendMsgToPlayer(pmsg.Charid, msg)
+		}
+	} else { // Error , Full, List
+		g.SendMsgToPlayer(pmsg.Charid, msg)
+	}
+}
+
 func updateFrame(args []interface{}) {
 
 	a := args[0].(time.Time)
@@ -325,6 +382,7 @@ func updateFrame(args []interface{}) {
 	}
 	//log.Debug("Tick %v : Now %v", a, time.Now())
 
+	g.UpdateBenchManager(&a)
 	g.UpdateTableManager(&a)
 	g.UpdateRoomManager(&a)
 	g.UpdateGamePlayerManager(&a)

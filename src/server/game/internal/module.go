@@ -22,14 +22,16 @@ func (m *Module) OnInit() {
 	g.InitMongoConnection()
 	g.InitRedisConnection()
 
+	g.InitBenchManager()
 	g.InitTableManager()
 	g.InitRoomManager()
-
 }
 
 func (m *Module) OnDestroy() {
 	g.UninitRoomManager()
 	g.UninitTableManager()
+	g.UninitBenchManager()
+	g.UninitGamePlayerManager()
 
 	g.UninitRedisConnection()
 	g.UninitMongoConnection()

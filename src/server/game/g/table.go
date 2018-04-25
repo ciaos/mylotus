@@ -94,7 +94,7 @@ func allocTableID() {
 	}
 }
 
-func (table *Table) getTeamID(teamCnt int) int32 {
+func (table *Table) getTeamID(teamCnt int) (int32, int) {
 
 	teamIDCnt := make([]int, teamCnt)
 	for _, seat := range table.seats {
@@ -110,7 +110,7 @@ func (table *Table) getTeamID(teamCnt int) int32 {
 		}
 	}
 
-	return int32(teamid)
+	return int32(teamid), minMemberCnt
 }
 
 func (table *Table) fillRobotToTable() bool {
@@ -124,13 +124,14 @@ func (table *Table) fillRobotToTable() bool {
 		return false
 	}
 
-	robotnum := row.PlayerCnt - len((*table).seats)
+	robotnum := row.PlayerCnt * row.TeamCnt - len((*table).seats)
 	ownerid := (*table).seats[0].charid
 
 	i := 1
 	for i <= robotnum {
 
 		charid := 1000000000 + uint32(rand.Intn(100000000))
+		teamid, _ := table.getTeamID(row.TeamCnt)
 		seat := &Seat{
 			charid:     charid,
 			jointime:   time.Now(),
@@ -140,7 +141,7 @@ func (table *Table) fillRobotToTable() bool {
 			chartype:   0,
 			ownerid:    ownerid,
 			status:     SEAT_NONE,
-			teamid:     table.getTeamID(row.TeamCnt),
+			teamid:     teamid,
 		}
 		(*table).seats = append((*table).seats, seat)
 		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
@@ -160,7 +161,7 @@ func (table *Table) autoChooseToTable() {
 				CharID:   seat.charid,
 				CharType: (*seat).chartype,
 			}
-			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE, msg)
+			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_CHOOSE_OPERATE, msg)
 			log.Debug("autoChooseToTable Table %v CharID %v CharName %v CharType %v", table.tableid, seat.charid, seat.charname, seat.chartype)
 		}
 	}
@@ -313,7 +314,7 @@ func (table *Table) update(now *time.Time) {
 			return
 		}
 
-		if len((*table).seats) >= row.PlayerCnt {
+		if len((*table).seats) >= row.PlayerCnt * row.TeamCnt {
 			table.changeTableStatus(MATCH_OK)
 		} else if len((*table).seats) <= 0 {
 			table.changeTableStatus(MATCH_EMPTY)
@@ -423,7 +424,7 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 				}
 			}
 			log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
-			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_TEAM_OPERATE, req)
+			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_CHOOSE_OPERATE, req)
 
 			//都准备好了就进入锁定倒计时阶段
 			if allready {
@@ -435,6 +436,95 @@ func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 	} else {
 		log.Error("TeamOperate Error CharID %v Not In Table Action %v", charid, req.Action)
 	}
+}
+
+func joinTableFromBench(bench *Bench) bool {
+
+	r := gamedata.CSVMatchMode.Index(bench.matchmode)
+	if r == nil {
+		log.Error("joinTableFromBench CSVMatchMode Not Found %v ", bench.matchmode)
+		return false
+	}
+	row := r.(*cfg.MatchMode)
+
+	var createnew = true
+	if bench.matchmode != int32(clientmsg.MatchModeType_MMT_AI) { //打AI都是创建新房间
+		for i, table := range TableManager {
+			if table.mapid != bench.mapid || table.matchmode != bench.matchmode {
+				continue
+			}
+
+			if int((*table).modeplayercnt) - len((*table).seats) < len(bench.units) {
+				continue
+			}
+
+			teamid, teamcnt := table.getTeamID(row.TeamCnt)
+			if teamcnt + len(bench.units) > row.PlayerCnt {
+				continue
+			}
+
+			for _, unit := range bench.units {
+				seat := &Seat{
+					charid:     unit.charid,
+					jointime:   time.Now(),
+					serverid:   unit.serverid,
+					servertype: unit.servertype,
+					chartype:   0,
+					ownerid:    0,
+					status:     SEAT_NONE,
+					charname:   unit.charname,
+					teamid:     teamid,
+				}
+				table.seats = append(table.seats, seat)
+				PlayerTableIDMap[unit.charid] = i
+
+				log.Debug("joinTableFromBench TableID %v CharID %v CharName %v", i, unit.charid, unit.charname)
+				createnew = false
+			}
+		}
+	}
+
+	if createnew {
+		allocTableID()
+
+		_, ok := TableManager[g_tableid]
+		if ok {
+			log.Error("TableID %v Is Using Current TableCnt %v", g_tableid, len(TableManager))
+			return false
+		}
+
+		table := &Table{
+			tableid:    g_tableid,
+			createtime: time.Now(),
+			checktime:  time.Now(),
+			matchmode:  bench.matchmode,
+			mapid:      bench.mapid,
+			status:        MATCH_CONTINUE,
+			modeplayercnt: int32(row.PlayerCnt * row.TeamCnt),
+		}
+		TableManager[table.tableid] = table
+
+		teamid, _ := table.getTeamID(row.TeamCnt)
+		for _, unit := range bench.units {
+			seat := &Seat{
+				charid:     unit.charid,
+				jointime:   time.Now(),
+				serverid:   unit.serverid,
+				servertype: unit.servertype,
+				chartype:   0,
+				ownerid:    0,
+				status:     SEAT_NONE,
+				charname:   unit.charname,
+				teamid:     teamid,
+			}
+			table.seats = append(table.seats, seat)
+			PlayerTableIDMap[unit.charid] = table.tableid
+
+			log.Debug("joinTableFromBench CreateNew TableID %v CharID %v CharName %v", table.tableid, unit.charid, unit.charname)
+		}
+	}
+	
+	return true
 }
 
 func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
@@ -460,6 +550,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 			}
 
 			if len((*table).seats) < int((*table).modeplayercnt) {
+				teamid, _ := table.getTeamID(row.TeamCnt)
 				seat := &Seat{
 					charid:     charid,
 					jointime:   time.Now(),
@@ -469,9 +560,9 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 					ownerid:    0,
 					status:     SEAT_NONE,
 					charname:   charname,
-					teamid:     table.getTeamID(row.TeamCnt),
+					teamid:     teamid,
 				}
-				TableManager[i].seats = append(TableManager[i].seats, seat)
+				table.seats = append(table.seats, seat)
 				PlayerTableIDMap[charid] = i
 
 				log.Debug("JoinTable TableID %v CharID %v CharName %v", i, charid, charname)
@@ -514,7 +605,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 				},
 			},
 			status:        MATCH_CONTINUE,
-			modeplayercnt: int32(row.PlayerCnt),
+			modeplayercnt: int32(row.PlayerCnt * row.TeamCnt),
 		}
 		TableManager[table.tableid] = table
 		PlayerTableIDMap[charid] = table.tableid
@@ -556,8 +647,6 @@ func LeaveTable(charid uint32, matchmode int32) {
 		}
 
 		delete(PlayerTableIDMap, charid)
-	} else {
-		log.Error("LeaveTable CharID %v Not Exist", charid)
 	}
 }
 
