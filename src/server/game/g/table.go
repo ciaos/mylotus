@@ -699,7 +699,7 @@ func FormatSeatInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
 		for _, seat := range (*table).seats {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
+			output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
 		}
 	}
 	return output

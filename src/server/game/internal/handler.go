@@ -237,6 +237,7 @@ func handleReqMatch(args []interface{}) {
 		return
 	}
 
+	log.Debug("CharID %v Requst Match %v", player.Char.CharID, m)
 	innerReq := &proxymsg.Proxy_GS_MS_Match{
 		Charid:    player.Char.CharID,
 		Charname:  player.Char.CharName,

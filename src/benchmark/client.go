@@ -456,23 +456,23 @@ func (c *Client) updateBattle() {
 			}
 
 			//send transfer cmd
-			/*	i := 0
-				for i < 1 {
+			i := 0
+			for i < 1 {
 
-					ping := &clientmsg.Ping{
-						ID: c.charid,
-					}
-					msgbuff, _ := proto.Marshal(ping)
-					cdata := &clientmsg.Transfer_Command_CommandData{
-						Msgdata: msgbuff,
-					}
+				ping := &clientmsg.Ping{
+					ID: c.charid,
+				}
+				msgbuff, _ := proto.Marshal(ping)
+				cdata := &clientmsg.Transfer_Command_CommandData{
+					Msgdata: msgbuff,
+				}
 
-					msg := &clientmsg.Transfer_Command{}
-					msg.Messages = append(msg.Messages, cdata)
-					go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
+				msg := &clientmsg.Transfer_Command{}
+				msg.Messages = append(msg.Messages, cdata)
+				go Send(&c.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND, msg)
 
-					i += 1
-				}*/
+				i += 1
+			}
 		}
 
 		if c.startbattletime != 0 && (time.Now().Unix()-c.startbattletime > c.maxbattletime) {
