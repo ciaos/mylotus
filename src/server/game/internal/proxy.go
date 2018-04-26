@@ -1,4 +1,4 @@
-package g
+package internal
 
 import (
 	"fmt"
@@ -41,8 +41,8 @@ func RandSendMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMessa
 		if len(conf.Server.MatchServerList) > 0 {
 			idx := int(charid) % len(conf.Server.MatchServerList)
 			matchserver := &conf.Server.MatchServerList[idx]
-			ret := SendMessageTo(int32((*matchserver).ServerID), conf.Server.MatchServerRename, charid, msgid, msgdata)
-			return matchserver.ServerID, ret
+			SendMessageTo(int32((*matchserver).ServerID), conf.Server.MatchServerRename, charid, msgid, msgdata)
+			return matchserver.ServerID, true
 		} else {
 			return 0, false
 		}
@@ -50,8 +50,8 @@ func RandSendMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMessa
 		if len(conf.Server.BattleServerList) > 0 {
 			idx := int(charid) % len(conf.Server.BattleServerList)
 			battleserver := &conf.Server.BattleServerList[idx]
-			ret := SendMessageTo(int32((*battleserver).ServerID), conf.Server.BattleServerRename, charid, msgid, msgdata)
-			return battleserver.ServerID, ret
+			SendMessageTo(int32((*battleserver).ServerID), conf.Server.BattleServerRename, charid, msgid, msgdata)
+			return battleserver.ServerID, true
 		} else {
 			return 0, false
 		}
@@ -70,12 +70,12 @@ func BroadCastMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMess
 	}
 }
 
-func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) bool {
+func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) {
 	//EncodeMsgData
 	msgbuff, err := proto.Marshal(msgdata.(proto.Message))
 	if err != nil {
 		log.Error("protobuf Marsha1 error %v", err)
-		return false
+		return
 	}
 
 	iMsg := &proxymsg.InternalMessage{
@@ -94,16 +94,15 @@ func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.Pr
 	msgbuff, err = proto.Marshal(iMsg)
 	if err != nil {
 		log.Error("SendMessageTo Marshal Error %v %v", msgid, err)
-		return false
+		return
 	}
 
-	m.Lock()
-	defer m.Unlock()
-	_, err = redis.DoWithTimeout(Predis.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
-	if err != nil {
-		log.Error("DoWithTimeout queueName %v Error %v", queueName, err)
-		return false
-	} else {
-		return true
-	}
+	skeleton.Go(func() {
+		m.Lock()
+		defer m.Unlock()
+		_, err = redis.DoWithTimeout(Predis.conn, 1*time.Second, "PUBLISH", queueName, msgbuff)
+		if err != nil {
+			log.Error("DoWithTimeout queueName %v Error %v", queueName, err)
+		}
+	}, nil)
 }

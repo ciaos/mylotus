@@ -1,4 +1,4 @@
-package g
+package internal
 
 const (
 	MAX_TABLE_COUNT = 10000

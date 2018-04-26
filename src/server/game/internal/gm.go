@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"server/game/g"
 )
 
 type gmCommand struct {
@@ -79,7 +77,7 @@ func gmAddHero(args []interface{}) interface{} {
 		return help
 	}
 
-	player, _ := g.GetPlayer(uint32(charid))
+	player, _ := GetPlayer(uint32(charid))
 	player.GetPlayerAsset().AssetHero_AddHero(uint32(charid), uint32(chartypeid), int64(deadlinetime))
 	return "done"
 }

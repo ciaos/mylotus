@@ -1,4 +1,4 @@
-package g
+package internal
 
 import (
 	"errors"
@@ -224,7 +224,7 @@ func changeRoomStatus(room *Room, status string) {
 		//notify finish
 		for _, member := range room.members {
 			if member.ownerid == 0 && member.status != MEMBER_END {
-				go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, member.charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
+				SendMessageTo(member.gameserverid, conf.Server.GameServerRename, member.charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
 			}
 		}
 		room.messagesbackup = append([]*clientmsg.Transfer_Command{})
@@ -245,7 +245,7 @@ func syncBSInfoToMS() {
 		BattleRoomCount : int32(len(RoomManager)),
 		BattleMemberCount : int32(len(PlayerRoomIDMap)),
 	}
-	go BroadCastMessageTo("matchserver", 0, proxymsg.ProxyMessageType_PMT_BS_MS_SYNCBSINFO, msg)
+	BroadCastMessageTo("matchserver", 0, proxymsg.ProxyMessageType_PMT_BS_MS_SYNCBSINFO, msg)
 }
 
 func UpdateRoomManager(now *time.Time) {
@@ -546,7 +546,7 @@ func setRoomMemberStatus(charid uint32, status string) {
 				changeMemberStatus(member, status)
 
 				if member.ownerid == 0 {
-					go SendMessageTo(member.gameserverid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
+					SendMessageTo(member.gameserverid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
 				}
 				log.Debug("SetRoomMemberStatus RoomID %v CharID %v Status %v", roomid, charid, status)
 				room.checkOffline()

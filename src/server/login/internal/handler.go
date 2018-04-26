@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/binary"
 	"reflect"
-	"server/game/g"
 	"server/gamedata"
 	"server/gamedata/cfg"
 	"server/msg/clientmsg"
@@ -13,6 +12,12 @@ import (
 	"github.com/ciaos/leaf/gate"
 	"github.com/ciaos/leaf/log"
 	"gopkg.in/mgo.v2/bson"
+)
+
+const (
+	DB_NAME_LOGIN   = "login"
+	TB_NAME_ACCOUNT = "account"
+	TB_NAME_COUNTER = "counter"
 )
 
 type Account struct {
@@ -34,7 +39,7 @@ func handler(m interface{}, h interface{}) {
 }
 
 func getNextSeq() (int, error) {
-	return Pmongo.NextSeq(g.DB_NAME_LOGIN, g.TB_NAME_COUNTER, "counterid")
+	return Pmongo.NextSeq(DB_NAME_LOGIN, TB_NAME_COUNTER, "counterid")
 }
 
 func handleRegister(args []interface{}) {
@@ -45,7 +50,7 @@ func handleRegister(args []interface{}) {
 	s := Pmongo.Ref()
 	defer Pmongo.UnRef(s)
 
-	c := s.DB(g.DB_NAME_LOGIN).C(g.TB_NAME_ACCOUNT)
+	c := s.DB(DB_NAME_LOGIN).C(TB_NAME_ACCOUNT)
 
 	result := Account{}
 	err := c.Find(bson.M{"username": m.UserName}).Select(bson.M{"userid": 1, "password": 1}).One(&result)

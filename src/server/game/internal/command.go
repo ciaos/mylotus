@@ -3,7 +3,6 @@ package internal
 import (
 	"fmt"
 	"runtime/debug"
-	"server/game/g"
 	"strconv"
 	"strings"
 )
@@ -36,13 +35,13 @@ func commandGM(args []interface{}) interface{} {
 func commandRoom(args []interface{}) interface{} {
 	if len(args) == 1 {
 		roomid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatMemberInfo(int32(roomid))
+		return FormatMemberInfo(int32(roomid))
 	} else {
 		var output string
-		for i, _ := range g.RoomManager {
-			output = strings.Join([]string{output, g.FormatRoomInfo(i)}, "\r\n")
+		for i, _ := range RoomManager {
+			output = strings.Join([]string{output, FormatRoomInfo(i)}, "\r\n")
 		}
-		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(RoomManager), len(PlayerRoomIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
 	}
 }
@@ -50,14 +49,14 @@ func commandRoom(args []interface{}) interface{} {
 func commandRoomMap(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		output := fmt.Sprintf("CharID:%v\tRoomID:%v", uint32(charid), g.PlayerRoomIDMap[uint32(charid)])
+		output := fmt.Sprintf("CharID:%v\tRoomID:%v", uint32(charid), PlayerRoomIDMap[uint32(charid)])
 		return output
 	} else {
 		var output string
-		for k, v := range g.PlayerRoomIDMap {
+		for k, v := range PlayerRoomIDMap {
 			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tRoomID:%v", k, v)}, "\r\n")
 		}
-		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(g.RoomManager), len(g.PlayerRoomIDMap))}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(RoomManager), len(PlayerRoomIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
 	}
 }
@@ -65,11 +64,11 @@ func commandRoomMap(args []interface{}) interface{} {
 func commandTable(args []interface{}) interface{} {
 	if len(args) == 1 {
 		tableid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatSeatInfo(int32(tableid))
+		return FormatSeatInfo(int32(tableid))
 	} else {
-		output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))
-		for i, _ := range g.TableManager {
-			output = strings.Join([]string{output, g.FormatTableInfo(i)}, "\r\n")
+		output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(TableManager), len(PlayerTableIDMap))
+		for i, _ := range TableManager {
+			output = strings.Join([]string{output, FormatTableInfo(i)}, "\r\n")
 		}
 		return strings.TrimLeft(output, "\r\n")
 	}
@@ -78,14 +77,14 @@ func commandTable(args []interface{}) interface{} {
 func commandTableMap(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		output := fmt.Sprintf("CharID:%v\tTableID:%v", uint32(charid), g.PlayerTableIDMap[uint32(charid)])
+		output := fmt.Sprintf("CharID:%v\tTableID:%v", uint32(charid), PlayerTableIDMap[uint32(charid)])
 		return output
 	} else {
 		var output string
-		for k, v := range g.PlayerTableIDMap {
+		for k, v := range PlayerTableIDMap {
 			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tTableID:%v", k, v)}, "\r\n")
 		}
-		output = strings.Join([]string{output, fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(g.TableManager), len(g.PlayerTableIDMap))}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(TableManager), len(PlayerTableIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
 	}
 }
@@ -93,11 +92,11 @@ func commandTableMap(args []interface{}) interface{} {
 func commandBench(args []interface{}) interface{} {
 	if len(args) == 1 {
 		benchid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatUnitInfo(int32(benchid))
+		return FormatUnitInfo(int32(benchid))
 	} else {
-		output := fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(g.BenchManager), len(g.PlayerBenchIDMap))
-		for i, _ := range g.BenchManager {
-			output = strings.Join([]string{output, g.FormatBenchInfo(i)}, "\r\n")
+		output := fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(BenchManager), len(PlayerBenchIDMap))
+		for i, _ := range BenchManager {
+			output = strings.Join([]string{output, FormatBenchInfo(i)}, "\r\n")
 		}
 		return strings.TrimLeft(output, "\r\n")
 	}
@@ -106,14 +105,14 @@ func commandBench(args []interface{}) interface{} {
 func commandBenchMap(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		output := fmt.Sprintf("CharID:%v\tBenchID:%v", uint32(charid), g.PlayerBenchIDMap[uint32(charid)])
+		output := fmt.Sprintf("CharID:%v\tBenchID:%v", uint32(charid), PlayerBenchIDMap[uint32(charid)])
 		return output
 	} else {
 		var output string
-		for k, v := range g.PlayerBenchIDMap {
+		for k, v := range PlayerBenchIDMap {
 			output = strings.Join([]string{output, fmt.Sprintf("CharID:%v\tBenchID:%v", k, v)}, "\r\n")
 		}
-		output = strings.Join([]string{output, fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(g.BenchManager), len(g.PlayerBenchIDMap))}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(BenchManager), len(PlayerBenchIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
 	}
 }
@@ -121,28 +120,28 @@ func commandBenchMap(args []interface{}) interface{} {
 func commandGPlayer(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatOneGPlayerInfo(uint32(charid), "")
+		return FormatOneGPlayerInfo(uint32(charid), "")
 	} else if len(args) == 2 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatOneGPlayerInfo(uint32(charid), args[1].(string))
+		return FormatOneGPlayerInfo(uint32(charid), args[1].(string))
 	} else {
-		return g.FormatGPlayerInfo()
+		return FormatGPlayerInfo()
 	}
 }
 
 func commandBPlayer(args []interface{}) interface{} {
 	if len(args) == 1 {
 		charid, _ := strconv.Atoi(args[0].(string))
-		return g.FormatOneBPlayerInfo(uint32(charid))
+		return FormatOneBPlayerInfo(uint32(charid))
 	} else {
-		return g.FormatBPlayerInfo()
+		return FormatBPlayerInfo()
 	}
 }
 
 func commandBSInfo(args []interface{}) interface{} {
-	output := fmt.Sprintf("BattleServerCnt:%v", len(g.BSOnlineManager))
-	for i, _ := range g.BSOnlineManager {
-		output = strings.Join([]string{output, g.FormatBSOnline(i)}, "\r\n")
+	output := fmt.Sprintf("BattleServerCnt:%v", len(BSOnlineManager))
+	for i, _ := range BSOnlineManager {
+		output = strings.Join([]string{output, FormatBSOnline(i)}, "\r\n")
 	}
 	return strings.TrimLeft(output, "\r\n")
 }

@@ -1,4 +1,4 @@
-package g
+package internal
 
 import (
 	"fmt"
@@ -131,11 +131,9 @@ func (bench *Bench) changeBenchStatus(status string) {
 }
 
 func (bench *Bench) broadcast(msgid proxymsg.ProxyMessageType, msgdata interface{}) {
-	go func() {
-		for _, unit := range bench.units {
-			SendMessageTo(unit.serverid, unit.servertype, unit.charid, msgid, msgdata)
-		}
-	}()
+	for _, unit := range bench.units {
+		SendMessageTo(unit.serverid, unit.servertype, unit.charid, msgid, msgdata)
+	}
 }
 
 func (bench *Bench) notifyResultToBench(retcode clientmsg.Type_GameRetCode) {
@@ -167,7 +165,7 @@ func CreateBench(charid uint32, charname string, matchmode int32, mapid int32, s
 		rsp := &clientmsg.Rlt_MakeTeamOperate{
 			RetCode: clientmsg.Type_GameRetCode_GRC_BENCH_ERROR,
 		}
-		go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+		SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 		return
 	}
 
@@ -177,7 +175,7 @@ func CreateBench(charid uint32, charname string, matchmode int32, mapid int32, s
 		rsp := &clientmsg.Rlt_MakeTeamOperate{
 			RetCode: clientmsg.Type_GameRetCode_GRC_BENCH_ERROR,
 		}
-		go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+		SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 		return
 	}
 	row := r.(*cfg.BenchConfig)
@@ -210,7 +208,7 @@ func CreateBench(charid uint32, charname string, matchmode int32, mapid int32, s
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 		Action : clientmsg.MakeTeamOperateType_MTOT_CREATE,
 	}
-	go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+	SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 }
 
 func InviteBench(charid uint32, targetid uint32, targetgsid int32) {
@@ -228,7 +226,7 @@ func InviteBench(charid uint32, targetid uint32, targetgsid int32) {
 				MatchServerID: int32(conf.Server.ServerID),
 				InviterID:     charid,
 			}
-			go SendMessageTo(targetgsid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+			SendMessageTo(targetgsid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 		}
 	}
 }
@@ -245,13 +243,13 @@ func AcceptBench(charid uint32, charname string, benchid int32, serverid int32, 
 		rsp := &clientmsg.Rlt_MakeTeamOperate{
 			RetCode: clientmsg.Type_GameRetCode_GRC_BENCH_FULL,
 		}
-		go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+		SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 	} else {
 		rsp := &clientmsg.Rlt_MakeTeamOperate{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 			Action: clientmsg.MakeTeamOperateType_MTOT_ACCEPT,
 		}
-		go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+		SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 
 		unit := &Unit{
 			charid:     charid,
@@ -319,7 +317,7 @@ func KickBench(charid uint32, targetid uint32) {
 					msg := &proxymsg.Proxy_MS_GS_Delete{
 						Reason : 2,
 					}
-					go SendMessageTo(unit.serverid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, msg)
+					SendMessageTo(unit.serverid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, msg)
 
 					bench.units = append(bench.units[0:i], bench.units[i+1:]...)
 
@@ -371,7 +369,7 @@ func LeaveBench(charid uint32, matchmode int32) {
 				rsp := &proxymsg.Proxy_MS_GS_Delete{
 					Reason : 3,
 				}
-				go SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
+				SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
 			}
 		} else {
 			log.Error("LeaveBench BenchID %v Not Exist CharID %v", benchid, charid)

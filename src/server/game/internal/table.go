@@ -1,4 +1,4 @@
-package g
+package internal
 
 import (
 	"fmt"
@@ -216,13 +216,11 @@ func (table *Table) autoChooseToTable() {
 }
 
 func (table *Table) broadcast(msgid proxymsg.ProxyMessageType, msgdata interface{}) {
-	go func() {
-		for _, seat := range table.seats {
-			if seat.ownerid == 0 {
-				SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, msgid, msgdata)
-			}
+	for _, seat := range table.seats {
+		if seat.ownerid == 0 {
+			SendMessageTo((*seat).serverid, (*seat).servertype, (*seat).charid, msgid, msgdata)
 		}
-	}()
+	}
 }
 
 func (table *Table) notifyMatchResultToTable(retcode clientmsg.Type_GameRetCode) {
@@ -259,7 +257,7 @@ reloop:
 	for i, seat := range (*table).seats { //kick badguy and robot
 		if seat.status != SEAT_CONFIRM {
 			if seat.ownerid == 0 {
-				go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR})
+				SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR})
 				log.Debug("Kick BadGuy TableID %v CharID %v RestCount %v", (*table).tableid, seat.charid, len((*table).seats))
 				delete(PlayerTableIDMap, seat.charid)
 			}
@@ -272,7 +270,7 @@ reloop:
 				RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONTINUE,
 				WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
 			}
-			go SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+			SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 		}
 	}
 
@@ -415,9 +413,9 @@ func (table *Table) allocBattleRoom() {
 	//todo 固定路由到指定的BattleServer
 	nextbsid := getNextBSID()
 	if nextbsid == 0 {
-		go RandSendMessageTo("battleserver", uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
+		RandSendMessageTo("battleserver", uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
 	} else {
-		go SendMessageTo(nextbsid, conf.Server.BattleServerRename, uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
+		SendMessageTo(nextbsid, conf.Server.BattleServerRename, uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
 	}
 }
 
@@ -626,7 +624,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 			rsp := &clientmsg.Rlt_Match{
 				RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
 			}
-			go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+			SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 			return
 		}
 
@@ -662,7 +660,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 		RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_START,
 		WaitUntilTime: time.Now().Unix() + int64(row.MatchTimeOutSec),
 	}
-	go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+	SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 }
 
 func LeaveTable(charid uint32, matchmode int32) {
@@ -695,7 +693,7 @@ func LeaveTable(charid uint32, matchmode int32) {
 				rsp := &proxymsg.Proxy_MS_GS_Delete{
 					Reason : 1,
 				}
-				go SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
+				SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
 			}
 		} else {
 			log.Error("LeaveTable TableID %v Not Exist CharID %v", tableid, charid)
@@ -833,7 +831,7 @@ func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 func FormatTableInfo(tableid int32) string {
 	table, ok := TableManager[tableid]
 	if ok {
-		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tStatus:%v\tSeatCnt:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format(TIME_FORMAT), (*table).status, len((*table).seats))
+		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tSeatCnt:%v\tStatus:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format(TIME_FORMAT), len((*table).seats), (*table).status)
 	}
 	return ""
 }

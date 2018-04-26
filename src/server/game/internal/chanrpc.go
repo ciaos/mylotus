@@ -2,7 +2,6 @@ package internal
 
 import (
 	"server/conf"
-	"server/game/g"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"time"
@@ -84,7 +83,7 @@ func proxyHandleGSGSFriendOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	player, _ := g.GetPlayer(m.OperateCharID)
+	player, _ := GetPlayer(m.OperateCharID)
 	if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
 		player.GetPlayerAsset().AssetFriend_AddApplyInfo(pmsg.Charid, m)
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
@@ -107,13 +106,13 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 	log.Debug("proxyHandleGSMSMatch CharID %v Action %v", msg.Charid, msg.Action)
 
 	if msg.Action == int32(clientmsg.MatchActionType_MAT_JOIN) {
-		g.JoinTable(msg.Charid, msg.Charname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
+		JoinTable(msg.Charid, msg.Charname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CANCEL) {
-		g.LeaveTable(msg.Charid, msg.Matchmode)
+		LeaveTable(msg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CONFIRM) {
-		g.ConfirmTable(msg.Charid, msg.Matchmode)
+		ConfirmTable(msg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_REJECT) {
-		g.RejectTable(msg.Charid, msg.Matchmode)
+		RejectTable(msg.Charid, msg.Matchmode)
 	} else {
 		log.Error("proxyHandleGSMSMatch Invalid Action %v", msg.Action)
 	}
@@ -127,7 +126,7 @@ func proxyHandleGSMSReconnect(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	g.ReconnectTable(msg.Charid, pmsg)
+	ReconnectTable(msg.Charid, pmsg)
 }
 
 func proxyHandleMSGSReconnect(pmsg *proxymsg.InternalMessage) {
@@ -139,7 +138,7 @@ func proxyHandleMSGSReconnect(pmsg *proxymsg.InternalMessage) {
 	}
 
 	if msg.Ok == false {
-		player, _ := g.GetPlayer(pmsg.Charid)
+		player, _ := GetPlayer(pmsg.Charid)
 		if player != nil {
 			player.MatchServerID = 0
 		}
@@ -155,8 +154,8 @@ func proxyHandleGSMSOffline(pmsg *proxymsg.InternalMessage) {
 	}
 	log.Debug("proxyHandleGSMSOffline CharID %v Offline", msg.Charid)
 
-	g.LeaveTable(msg.Charid, 0)
-	g.LeaveBench(msg.Charid, 0)
+	LeaveTable(msg.Charid, 0)
+	LeaveBench(msg.Charid, 0)
 }
 
 func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
@@ -168,7 +167,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 	}
 
 	rsp := &proxymsg.Proxy_BS_MS_AllocBattleRoom{}
-	err, roomid, battlekey := g.CreateRoom(msg)
+	err, roomid, battlekey := CreateRoom(msg)
 	if err == nil {
 		rsp.Retcode = 0
 		rsp.Matchtableid = msg.Matchtableid
@@ -183,7 +182,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 
 	log.Debug("proxyHandleMSBSAllocBattleRoom TableID %v RoomID %v", msg.Matchtableid, roomid)
 
-	g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM, rsp)
+	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_MS_ALLOCBATTLEROOM, rsp)
 }
 
 func proxyHandleBSMSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
@@ -196,7 +195,7 @@ func proxyHandleBSMSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 
 	log.Debug("proxyHandleBSMSAllocBattleRoom RetCode %v TableID %v RoomID %v BattleServerID %v", msg.Retcode, msg.Matchtableid, msg.Battleroomid, msg.Battleserverid)
 
-	g.ClearTable(msg)
+	ClearTable(msg)
 }
 
 func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
@@ -207,13 +206,13 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	player, _ := g.GetPlayer(pmsg.Charid)
+	player, _ := GetPlayer(pmsg.Charid)
 	if player == nil {
 		return
 	}
 
 	if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
-		g.SendMsgToPlayer(pmsg.Charid, msg)
+		SendMsgToPlayer(pmsg.Charid, msg)
 		if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_ERROR { //匹配失败，返回大厅状态
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			player.MatchServerID = 0
@@ -229,7 +228,7 @@ func proxyHandleGSMSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	g.TeamOperate(pmsg.Charid, msg)
+	TeamOperate(pmsg.Charid, msg)
 }
 
 func proxyHandleMSGSTeamOperate(pmsg *proxymsg.InternalMessage) {
@@ -240,7 +239,7 @@ func proxyHandleMSGSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	g.SendMsgToPlayer(pmsg.Charid, msg)
+	SendMsgToPlayer(pmsg.Charid, msg)
 }
 
 func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
@@ -250,7 +249,7 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 		log.Error("clientmsg.Rlt_NotifyBattleAddress Decode Error %v", err)
 		return
 	}
-	player, err := g.GetPlayer(pmsg.Charid)
+	player, err := GetPlayer(pmsg.Charid)
 	if player != nil {
 		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BATTLE)
 		player.BattleServerID = int(msg.BattleServerID)
@@ -258,7 +257,7 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 	}
 
 	log.Debug("proxyHandleMSGSBeginBattle Rlt_NotifyBattleAddress %v", pmsg.Charid)
-	g.SendMsgToPlayer(pmsg.Charid, msg)
+	SendMsgToPlayer(pmsg.Charid, msg)
 }
 
 func proxyHandleGSBSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
@@ -272,9 +271,9 @@ func proxyHandleGSBSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 	rsp := &proxymsg.Proxy_BS_GS_Query_BattleInfo{
 		CharID: msg.Charid,
 	}
-	rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = g.QueryBattleInfo(msg.Charid)
+	rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = QueryBattleInfo(msg.Charid)
 
-	g.SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO, rsp)
+	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO, rsp)
 }
 
 func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
@@ -285,7 +284,7 @@ func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	player, err := g.GetPlayer(msg.CharID)
+	player, err := GetPlayer(msg.CharID)
 	if err != nil {
 		log.Error("proxyHandleBSGSQueryBattleInfo GetPlayer NULL %v", msg.CharID)
 		return
@@ -297,7 +296,7 @@ func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 			BattleKey:  msg.BattleKey,
 			BattleAddr: msg.BattleAddr,
 		}
-		g.SendMsgToPlayer(msg.CharID, rsp)
+		SendMsgToPlayer(msg.CharID, rsp)
 	} else {
 		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		player.BattleServerID = 0
@@ -312,7 +311,7 @@ func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	player, err := g.GetPlayer(msg.CharID)
+	player, err := GetPlayer(msg.CharID)
 	if err != nil {
 		log.Error("proxyHandleBSGSFinishBattle GetPlayer NULL %v", msg.CharID)
 		return
@@ -334,8 +333,7 @@ func proxyHandleBSMSSyncBSInfo(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	log.Debug("SyncBSInfo From BattleServerID %v RoomCnt %v PlayerCnt %v", msg.BattleServerID, msg.BattleRoomCount, msg.BattleMemberCount)
-	g.UpdateBSOnlineManager(msg)
+	UpdateBSOnlineManager(msg)
 }
 
 func proxyHandleGSMSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
@@ -347,17 +345,17 @@ func proxyHandleGSMSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 	}
 
 	if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_CREATE) {
-		g.CreateBench(pmsg.Charid, msg.ActorCharname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
+		CreateBench(pmsg.Charid, msg.ActorCharname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_LEAVE) {
-		g.LeaveBench(pmsg.Charid, msg.Matchmode)
+		LeaveBench(pmsg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_START_MATCH) {
-		g.StartMatch(pmsg.Charid)
+		StartMatch(pmsg.Charid)
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_ACCEPT) {
-		g.AcceptBench(pmsg.Charid, msg.ActorCharname, msg.Benchid, pmsg.Fromid, pmsg.Fromtype)
+		AcceptBench(pmsg.Charid, msg.ActorCharname, msg.Benchid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_INVITE) {
-		g.InviteBench(pmsg.Charid, msg.Targetid, msg.Targetgsid)
+		InviteBench(pmsg.Charid, msg.Targetid, msg.Targetgsid)
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_KICK) {
-		g.KickBench(pmsg.Charid, msg.Targetid)
+		KickBench(pmsg.Charid, msg.Targetid)
 	} else {
 		log.Error("proxyHandleGSMSMakeTeamOperate Invalid Action %v", msg.Action)
 	}
@@ -371,7 +369,7 @@ func proxyHandleMSGSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 	
-	player, _ := g.GetPlayer(pmsg.Charid)
+	player, _ := GetPlayer(pmsg.Charid)
 	if player == nil {
 		log.Error("MakeTeamOperate CharID %v Not Found", pmsg.Charid)
 		return
@@ -380,7 +378,7 @@ func proxyHandleMSGSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_OK {
 		if msg.Action == clientmsg.MakeTeamOperateType_MTOT_INVITE {
 			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //在线状态才通知邀请
-				g.SendMsgToPlayer(pmsg.Charid, msg)
+				SendMsgToPlayer(pmsg.Charid, msg)
 			}
 		} else if msg.Action == clientmsg.MakeTeamOperateType_MTOT_ACCEPT {
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BENCH)
@@ -390,10 +388,10 @@ func proxyHandleMSGSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
 			}
 
-			g.SendMsgToPlayer(pmsg.Charid, msg)
+			SendMsgToPlayer(pmsg.Charid, msg)
 		}
 	} else { // Error , Full, List
-		g.SendMsgToPlayer(pmsg.Charid, msg)
+		SendMsgToPlayer(pmsg.Charid, msg)
 	}
 }
 
@@ -406,7 +404,7 @@ func proxyHandleMSGSDelete(pmsg *proxymsg.InternalMessage) {
 	}
 
 	log.Debug("Proxy_MS_GS_Delete CharID %v Reason %v", pmsg.Charid, msg.Reason)
-	player, _ := g.GetPlayer(pmsg.Charid)
+	player, _ := GetPlayer(pmsg.Charid)
 	if player == nil {
 		log.Error("Proxy_MS_GS_Delete CharID %v Not Found", pmsg.Charid)
 		return
@@ -424,11 +422,11 @@ func updateFrame(args []interface{}) {
 	}
 	//log.Debug("Tick %v : Now %v", a, time.Now())
 
-	g.UpdateBenchManager(&a)
-	g.UpdateTableManager(&a)
-	g.UpdateRoomManager(&a)
-	g.UpdateGamePlayerManager(&a)
-	g.UpdateBattlePlayerManager(&a)
+	UpdateBenchManager(&a)
+	UpdateTableManager(&a)
+	UpdateRoomManager(&a)
+	UpdateGamePlayerManager(&a)
+	UpdateBattlePlayerManager(&a)
 
 	lastTickTime = a.UnixNano()
 }
@@ -446,8 +444,8 @@ func rpcCloseAgent(args []interface{}) {
 
 	clientid := a.UserData()
 	if clientid != nil {
-		g.RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String(), g.REASON_DISCONNECT)
-		g.RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), g.REASON_DISCONNECT)
+		RemoveBattlePlayer(clientid.(uint32), a.RemoteAddr().String(), REASON_DISCONNECT)
+		RemoveGamePlayer(clientid.(uint32), a.RemoteAddr().String(), REASON_DISCONNECT)
 	}
 
 	log.Debug("Disconnected %v From %v", a.RemoteAddr(), a.LocalAddr())

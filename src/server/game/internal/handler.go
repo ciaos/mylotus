@@ -6,7 +6,6 @@ import (
 	//"math/rand"
 	"reflect"
 	"server/conf"
-	"server/game/g"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"server/tool"
@@ -47,13 +46,13 @@ func handler(m interface{}, h interface{}) {
 }
 
 func getNextSeq() (int, error) {
-	return g.Mongo.NextSeq(g.DB_NAME_GAME, g.TB_NAME_COUNTER, "counterid")
+	return Mongo.NextSeq(DB_NAME_GAME, TB_NAME_COUNTER, "counterid")
 }
 
-func getGSPlayer(a *gate.Agent) *g.Player {
+func getGSPlayer(a *gate.Agent) *Player {
 	charid := (*a).UserData()
 	if charid != nil {
-		player, err := g.GetPlayer(charid.(uint32))
+		player, err := GetPlayer(charid.(uint32))
 		if err == nil {
 			return player
 		}
@@ -61,10 +60,10 @@ func getGSPlayer(a *gate.Agent) *g.Player {
 	return nil
 }
 
-func getBSPlayer(a *gate.Agent) *g.BPlayer {
+func getBSPlayer(a *gate.Agent) *BPlayer {
 	charid := (*a).UserData()
 	if charid != nil {
-		player, err := g.GetBattlePlayer(charid.(uint32))
+		player, err := GetBattlePlayer(charid.(uint32))
 		if err == nil {
 			return player
 		}
@@ -99,7 +98,7 @@ func handleReqLogin(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Login)
 	a := args[1].(gate.Agent)
 
-	if len(g.GamePlayerManager) >= conf.Server.MaxOnlineNum {
+	if len(GamePlayerManager) >= conf.Server.MaxOnlineNum {
 		log.Error("Server Online Full")
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_ONLINE_TOO_MANY,
@@ -108,7 +107,7 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
-	if g.WaitLoginQueue.Full() {
+	if WaitLoginQueue.Full() {
 		log.Error("Server WaitLogin Full")
 		a.WriteMsg(&clientmsg.Rlt_Login{
 			RetCode: clientmsg.Type_GameRetCode_GRC_LOGIN_TOO_MANY,
@@ -116,7 +115,7 @@ func handleReqLogin(args []interface{}) {
 		a.Close()
 		return
 	} else {
-		if !g.WaitLoginQueue.Empty() {
+		if !WaitLoginQueue.Empty() {
 			a.WriteMsg(&clientmsg.Rlt_Login{
 				RetCode: clientmsg.Type_GameRetCode_GRC_LOGIN_LINE_UP,
 			})
@@ -143,13 +142,13 @@ func handleReqLogin(args []interface{}) {
 		return
 	}
 
-	req := &g.WaitInfo{
+	req := &WaitInfo{
 		UserID:    userid,
 		UserAgent: &a,
 		LoginTime: time.Now(),
 	}
 
-	g.WaitLoginQueue.Append(req)
+	WaitLoginQueue.Append(req)
 }
 
 func handleReqReConnectGS(args []interface{}) {
@@ -172,7 +171,7 @@ func handleReqReConnectGS(args []interface{}) {
 	}
 
 	userid := binary.BigEndian.Uint32(useridBuf)
-	player, err := g.GetPlayer(m.CharID)
+	player, err := GetPlayer(m.CharID)
 	if err != nil || player.Char.UserID != userid || player.Char.Status != int32(clientmsg.UserStatus_US_PLAYER_OFFLINE) {
 		a.WriteMsg(&clientmsg.Rlt_Re_ConnectGS{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
@@ -181,8 +180,8 @@ func handleReqReConnectGS(args []interface{}) {
 		return
 	}
 
-	g.ReconnectGamePlayer(m.CharID, &a)
-	g.SendMsgToPlayer(m.CharID, &clientmsg.Rlt_Re_ConnectGS{
+	ReconnectGamePlayer(m.CharID, &a)
+	SendMsgToPlayer(m.CharID, &clientmsg.Rlt_Re_ConnectGS{
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 	})
 
@@ -190,7 +189,7 @@ func handleReqReConnectGS(args []interface{}) {
 		innerReq := &proxymsg.Proxy_GS_MS_Reconnect{
 			Charid: m.CharID,
 		}
-		g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, m.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT, innerReq)
+		SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, m.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT, innerReq)
 	}
 }
 
@@ -249,7 +248,7 @@ func handleReqMatch(args []interface{}) {
 	if m.Action == clientmsg.MatchActionType_MAT_JOIN {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
-			player.MatchServerID, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			player.MatchServerID, _ = RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 		} else {
 			log.Error("Invalid Status %v When Match CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
 			a.WriteMsg(&clientmsg.Rlt_Match{
@@ -259,7 +258,7 @@ func handleReqMatch(args []interface{}) {
 		}
 	} else {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_MATCH {
-			g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
+			SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MATCH, innerReq)
 
 			if m.Action == clientmsg.MatchActionType_MAT_CANCEL {
 				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
@@ -289,7 +288,7 @@ func handleTransferTeamOperate(args []interface{}) {
 	}
 
 	if player.MatchServerID > 0 {
-		go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_CHOOSE_OPERATE, m)
+		SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_CHOOSE_OPERATE, m)
 	} else {
 		log.Error("handleTransferTeamOperate CharID %v Invalid MatchServerID %v", player.Char.CharID, player.MatchServerID)
 	}
@@ -310,12 +309,12 @@ func handleReqFriendOperate(args []interface{}) {
 		RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
 	}
 
-	s := g.Mongo.Ref()
-	defer g.Mongo.UnRef(s)
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
 
 	if m.Action == clientmsg.FriendOperateActionType_FOAT_SEARCH {
-		c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-		results := []g.Character{}
+		c := s.DB(DB_NAME_GAME).C(TB_NAME_CHARACTER)
+		results := []Character{}
 		err := c.Find(bson.M{"charname": bson.M{"$regex": bson.RegEx{m.SearchName, "i"}}}).Select(bson.M{"charid": 1}).Limit(10).All(&results)
 		if err == nil {
 			for _, result := range results {
@@ -326,7 +325,7 @@ func handleReqFriendOperate(args []interface{}) {
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ADD_FRIEND {
 		ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.OperateCharID)
 		if ok {
-			go g.SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_DEL_FRIEND {
@@ -334,7 +333,7 @@ func handleReqFriendOperate(args []interface{}) {
 
 		ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.OperateCharID)
 		if ok {
-			go g.SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_ACCEPT {
@@ -342,7 +341,7 @@ func handleReqFriendOperate(args []interface{}) {
 
 		ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.OperateCharID)
 		if ok {
-			go g.SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
+			SendMessageTo(gsid, conf.Server.GameServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_GS_FRIEND_OPERATE, m)
 			rsp.RetCode = clientmsg.Type_GameRetCode_GRC_OK
 		}
 	} else if m.Action == clientmsg.FriendOperateActionType_FOAT_REJECT {
@@ -370,7 +369,7 @@ func handleReqChat(args []interface{}) {
 			MessageData: m.MessageData,
 			SenderID:    player.Char.CharID,
 		}
-		g.BroadCastMsgToGamePlayers(rsp)
+		BroadCastMsgToGamePlayers(rsp)
 	}
 }
 
@@ -396,11 +395,11 @@ func handleReqQueryCharInfo(args []interface{}) {
 		charids[i] = charid
 	}
 
-	s := g.Mongo.Ref()
-	defer g.Mongo.UnRef(s)
+	s := Mongo.Ref()
+	defer Mongo.UnRef(s)
 
-	c := s.DB(g.DB_NAME_GAME).C(g.TB_NAME_CHARACTER)
-	results := []g.Character{}
+	c := s.DB(DB_NAME_GAME).C(TB_NAME_CHARACTER)
+	results := []Character{}
 	err := c.Find(bson.M{"charid": bson.M{"$in": charids}}).All(&results)
 	if err != nil {
 		log.Error("handleReqQueryCharInfo %v Error %v", charids, err)
@@ -448,7 +447,7 @@ func handleReqMakeTeamOperate(args []interface{}) {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //防止多次点击匹配
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BENCH)
 			innerReq.ActorCharname = player.Char.CharName
-			player.MatchServerID, _ = g.RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+			player.MatchServerID, _ = RandSendMessageTo("matchserver", player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
 		} else {
 			log.Error("Invalid Status %v When MakeTeamOperate CharID %v", player.GetGamePlayerStatus(), player.Char.CharID)
 			a.WriteMsg(&clientmsg.Rlt_MakeTeamOperate{
@@ -461,27 +460,27 @@ func handleReqMakeTeamOperate(args []interface{}) {
 			ok, gsid := player.GetPlayerAsset().AssetFriend_QueryCharIDGSID(m.TargetID)
 			if ok {
 				innerReq.Targetgsid = gsid
-				go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+				SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
 			}
 		}
 	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_ACCEPT {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE {
 			innerReq.ActorCharname = player.Char.CharName
-			go g.SendMessageTo(m.MatchServerID, conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+			SendMessageTo(m.MatchServerID, conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
 		}
 	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_REJECT {
 		//log.Debug("MakeTeamOperateType_MTOT_REJECT From CharID %v", player.Char.CharID)
 	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_START_MATCH {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
-			go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+			SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
 		}
 	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_LEAVE {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
-			go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+			SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
 		}
 	} else if m.Action == clientmsg.MakeTeamOperateType_MTOT_KICK {
 		if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BENCH {
-			go g.SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
+			SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE, innerReq)
 		}
 	} else {
 		log.Error("Invalid MakeTeamOperateType %v CharID %v", m.Action, player.Char.CharID)
@@ -514,7 +513,7 @@ func handleTransferLoadingProgress(args []interface{}) {
 		return
 	}
 
-	g.LoadingRoom(player.CharID, m)
+	LoadingRoom(player.CharID, m)
 }
 
 func handleReqConnectBS(args []interface{}) {
@@ -527,16 +526,16 @@ func handleReqConnectBS(args []interface{}) {
 		return
 	}
 
-	ret, name := g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey, a.RemoteAddr().String())
+	ret, name := ConnectRoom(m.CharID, m.RoomID, m.BattleKey, a.RemoteAddr().String())
 	if  ret {
-		player := &g.BPlayer{
+		player := &BPlayer{
 			CharID:        m.CharID,
 			CharName: 	   name,
-			GameServerID:  int(g.GetMemberGSID(m.CharID)),
+			GameServerID:  int(GetMemberGSID(m.CharID)),
 			HeartBeatTime: time.Now(),
 		}
-		g.AddBattlePlayer(player, &a)
-		rsp := g.GenRoomInfoPB(m.CharID, false)
+		AddBattlePlayer(player, &a)
+		rsp := GenRoomInfoPB(m.CharID, false)
 		a.WriteMsg(rsp)
 	} else {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
@@ -561,7 +560,7 @@ func handleReqEndBattle(args []interface{}) {
 		CharID:  m.CharID,
 	})
 
-	g.EndBattle(player.CharID)
+	EndBattle(player.CharID)
 }
 
 func handleTransferCommand(args []interface{}) {
@@ -573,7 +572,7 @@ func handleTransferCommand(args []interface{}) {
 		a.Close()
 		return
 	}
-	g.AddMessage(player.CharID, m)
+	AddMessage(player.CharID, m)
 }
 
 func handleTransferBattleMessage(args []interface{}) {
@@ -585,7 +584,7 @@ func handleTransferBattleMessage(args []interface{}) {
 		a.Close()
 		return
 	}
-	g.TransferRoomMessage(player.CharID, m)
+	TransferRoomMessage(player.CharID, m)
 }
 
 func handleReqBattleHeartBeat(args []interface{}) {
@@ -612,10 +611,10 @@ func handleReqReConnectBS(args []interface{}) {
 		return
 	}
 
-	ret, _ := g.ReConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
+	ret, _ := ReConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
 	if ret {
-		g.ReconnectBattlePlayer(m.CharID, &a)
-		rsp := g.GenRoomInfoPB(m.CharID, true)
+		ReconnectBattlePlayer(m.CharID, &a)
+		rsp := GenRoomInfoPB(m.CharID, true)
 		a.WriteMsg(rsp)
 	} else {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{

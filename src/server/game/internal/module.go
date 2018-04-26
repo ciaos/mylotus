@@ -2,7 +2,6 @@ package internal
 
 import (
 	"server/base"
-	"server/game/g"
 
 	"github.com/ciaos/leaf/module"
 )
@@ -19,20 +18,20 @@ type Module struct {
 func (m *Module) OnInit() {
 	m.Skeleton = skeleton
 
-	g.InitMongoConnection()
-	g.InitRedisConnection()
+	InitMongoConnection()
+	InitRedisConnection()
 
-	g.InitBenchManager()
-	g.InitTableManager()
-	g.InitRoomManager()
+	InitBenchManager()
+	InitTableManager()
+	InitRoomManager()
 }
 
 func (m *Module) OnDestroy() {
-	g.UninitRoomManager()
-	g.UninitTableManager()
-	g.UninitBenchManager()
-	g.UninitGamePlayerManager()
+	UninitRoomManager()
+	UninitTableManager()
+	UninitBenchManager()
+	UninitGamePlayerManager()
 
-	g.UninitRedisConnection()
-	g.UninitMongoConnection()
+	UninitRedisConnection()
+	UninitMongoConnection()
 }
