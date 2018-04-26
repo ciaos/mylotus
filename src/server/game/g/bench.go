@@ -247,6 +247,12 @@ func AcceptBench(charid uint32, charname string, benchid int32, serverid int32, 
 		}
 		go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 	} else {
+		rsp := &clientmsg.Rlt_MakeTeamOperate{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OK,
+			Action: clientmsg.MakeTeamOperateType_MTOT_ACCEPT,
+		}
+		go SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+
 		unit := &Unit{
 			charid:     charid,
 			jointime:   time.Now(),
@@ -255,6 +261,7 @@ func AcceptBench(charid uint32, charname string, benchid int32, serverid int32, 
 			charname:   charname,
 		}
 		bench.units = append(bench.units, unit)
+		PlayerBenchIDMap[charid] = bench.benchid
 		bench.notifyResultToBench(clientmsg.Type_GameRetCode_GRC_BENCH_INFO)
 	}
 }
@@ -309,6 +316,11 @@ func KickBench(charid uint32, targetid uint32) {
 			bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 			for i, unit := range bench.units {
 				if unit.charid == targetid {
+					msg := &proxymsg.Proxy_MS_GS_Delete{
+						Reason : 2,
+					}
+					go SendMessageTo(unit.serverid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, msg)
+
 					bench.units = append(bench.units[0:i], bench.units[i+1:]...)
 
 					log.Debug("KickBench BenchID %v CharID %v RestCount %v", benchid, charid, len(bench.units))
@@ -339,18 +351,27 @@ func LeaveBench(charid uint32, matchmode int32) {
 			}
 			bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 
-			if len(bench.units) <= 1 {
+			gsid := int32(0)
+			if len(bench.units) == 1 {
+				gsid = bench.units[0].serverid
 				bench.units = append([]*Unit{})
 				log.Debug("LeaveBench BenchID %v CharID %v Empty", benchid, charid)
 			} else {
 				for i, unit := range bench.units {
 					if unit.charid == charid {
+						gsid = unit.serverid
 						bench.units = append(bench.units[0:i], bench.units[i+1:]...)
 
 						log.Debug("LeaveBench BenchID %v CharID %v RestCount %v", benchid, charid, len(bench.units))
 						break
 					}
 				}
+			}
+			if gsid > 0 {
+				rsp := &proxymsg.Proxy_MS_GS_Delete{
+					Reason : 3,
+				}
+				go SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
 			}
 		} else {
 			log.Error("LeaveBench BenchID %v Not Exist CharID %v", benchid, charid)

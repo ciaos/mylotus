@@ -60,6 +60,16 @@ func RandSendMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMessa
 	return 0, false
 }
 
+func BroadCastMessageTo(toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) {
+
+	switch toserver {
+	case "matchserver":
+		for _, server := range conf.Server.MatchServerList {
+			SendMessageTo(int32(server.ServerID), conf.Server.MatchServerRename, charid, msgid, msgdata)
+		}
+	}
+}
+
 func SendMessageTo(toid int32, toserver string, charid uint32, msgid proxymsg.ProxyMessageType, msgdata interface{}) bool {
 	//EncodeMsgData
 	msgbuff, err := proto.Marshal(msgdata.(proto.Message))

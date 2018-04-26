@@ -21,6 +21,7 @@ func init() {
 	skeleton.RegisterCommand("benchmap", "list charid benchid map", commandBenchMap)
 	skeleton.RegisterCommand("gplayer", "list gameserver online member count", commandGPlayer)
 	skeleton.RegisterCommand("bplayer", "list battleserver online member count", commandBPlayer)
+	skeleton.RegisterCommand("bsinfo", "list battleserver info for matchserver", commandBSInfo)
 }
 
 func commandFree(args []interface{}) interface{} {
@@ -136,4 +137,12 @@ func commandBPlayer(args []interface{}) interface{} {
 	} else {
 		return g.FormatBPlayerInfo()
 	}
+}
+
+func commandBSInfo(args []interface{}) interface{} {
+	output := fmt.Sprintf("BattleServerCnt:%v", len(g.BSOnlineManager))
+	for i, _ := range g.BSOnlineManager {
+		output = strings.Join([]string{output, g.FormatBSOnline(i)}, "\r\n")
+	}
+	return strings.TrimLeft(output, "\r\n")
 }

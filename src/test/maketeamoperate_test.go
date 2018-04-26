@@ -74,6 +74,8 @@ func (s *MakeTeamOperateSuite) TestMakeTeamOperate(c *C) {
 	proto.Unmarshal(msgdata, rspMsg)
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 
+	time.Sleep(time.Duration(5) * time.Second)
+
 	reqMsg.Action = clientmsg.MakeTeamOperateType_MTOT_INVITE
 	reqMsg.TargetID = s.charid[1]
 	Send(c, &s.conn[0], clientmsg.MessageType_MT_REQ_MAKETEAM_OPERATE, reqMsg)
@@ -83,6 +85,8 @@ func (s *MakeTeamOperateSuite) TestMakeTeamOperate(c *C) {
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(rspMsg.TargetID, Equals, s.charid[1])
 	c.Assert(rspMsg.InviterID, Equals, s.charid[0])
+
+	time.Sleep(time.Duration(5) * time.Second)
 
 	reqMsg.Action = clientmsg.MakeTeamOperateType_MTOT_ACCEPT
 	reqMsg.BenchID = rspMsg.BenchID
@@ -95,6 +99,8 @@ func (s *MakeTeamOperateSuite) TestMakeTeamOperate(c *C) {
 	proto.Unmarshal(msgdata, rspMsg)
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_BENCH_INFO)
 
+	time.Sleep(time.Duration(5) * time.Second)
+
 	reqMsg.Action = clientmsg.MakeTeamOperateType_MTOT_START_MATCH
 	msgdata = SendAndRecvUtil(c, &s.conn[0], clientmsg.MessageType_MT_REQ_MAKETEAM_OPERATE, reqMsg, clientmsg.MessageType_MT_RLT_MAKETEAM_OPERATE)
 	proto.Unmarshal(msgdata, rspMsg)
@@ -106,5 +112,5 @@ func (s *MakeTeamOperateSuite) TestMakeTeamOperate(c *C) {
 	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
 	c.Assert(rspMsg.Action, Equals, clientmsg.MakeTeamOperateType_MTOT_START_MATCH)
 
-	//time.Sleep(time.Duration(100) * time.Second)
+	time.Sleep(time.Duration(15) * time.Second)
 }

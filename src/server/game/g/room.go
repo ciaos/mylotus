@@ -65,11 +65,13 @@ var PlayerRoomIDMap = make(map[uint32]int32, 1024)
 var RoomManager = make(map[int32]*Room, 128)
 var g_roomid int32
 
+var lastSyncInfoTime time.Time
+
 //var mRoomID *sync.Mutex
 
 func InitRoomManager() {
 	g_roomid = 0
-
+	lastSyncInfoTime = time.Now()
 	//mRoomID = new(sync.Mutex)
 }
 
@@ -237,9 +239,23 @@ func changeMemberStatus(member *Member, status string) {
 	log.Debug("changeMemberStatus Member %v Status %v", (*member).charid, (*member).status)
 }
 
+func syncBSInfoToMS() {
+	msg := &proxymsg.Proxy_BS_MS_SyncBSInfo{
+		BattleServerID : int32(conf.Server.ServerID),
+		BattleRoomCount : int32(len(RoomManager)),
+		BattleMemberCount : int32(len(PlayerRoomIDMap)),
+	}
+	go BroadCastMessageTo("matchserver", 0, proxymsg.ProxyMessageType_PMT_BS_MS_SYNCBSINFO, msg)
+}
+
 func UpdateRoomManager(now *time.Time) {
 	for _, room := range RoomManager {
 		(*room).update(now)
+	}
+
+	if now.Unix() - lastSyncInfoTime.Unix() >= 10 {
+		syncBSInfoToMS()
+		lastSyncInfoTime = *now
 	}
 }
 

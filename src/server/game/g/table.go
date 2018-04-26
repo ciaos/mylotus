@@ -8,9 +8,9 @@ import (
 	"server/gamedata/cfg"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
+	"server/conf"
 	"strconv"
 	"strings"
-	//	"sync"
 	"time"
 
 	"github.com/ciaos/leaf/log"
@@ -62,16 +62,21 @@ type Table struct {
 	modeplayercnt int32
 }
 
+type BSOnline struct {
+	serverid 	int32
+	roomcnt 	int32
+	playercnt  	int32
+	updatetime  time.Time
+}
+
 var TableManager = make(map[int32]*Table, 128)
 var PlayerTableIDMap = make(map[uint32]int32, 1024)
-var g_tableid int32
+var BSOnlineManager = make(map[int32]*BSOnline, 20)
 
-//var mTableID *sync.Mutex
+var g_tableid int32
 
 func InitTableManager() {
 	g_tableid = 0
-
-	//	mTableID = new(sync.Mutex)
 }
 
 func UninitTableManager() {
@@ -92,6 +97,41 @@ func allocTableID() {
 	if g_tableid > MAX_TABLE_COUNT {
 		g_tableid = 1
 	}
+}
+
+func UpdateBSOnlineManager(msg *proxymsg.Proxy_BS_MS_SyncBSInfo) {
+	bsinfo, ok := BSOnlineManager[msg.BattleServerID]
+	if ok {
+		bsinfo.roomcnt = msg.BattleRoomCount
+		bsinfo.playercnt = msg.BattleMemberCount
+		bsinfo.updatetime = time.Now()
+	} else {
+		ninfo := &BSOnline{
+			serverid : msg.BattleServerID,
+			roomcnt : msg.BattleRoomCount,
+			playercnt : msg.BattleMemberCount,
+			updatetime : time.Now(),
+		}
+		BSOnlineManager[msg.BattleServerID] = ninfo
+	}
+}
+
+func getNextBSID() int32 {
+	nextBSID := int32(0)
+	minPlayerCnt := int32(math.MaxInt32)
+	for i, bsinfo := range BSOnlineManager {
+		if bsinfo.updatetime.Unix() + 20 > time.Now().Unix() {
+			if bsinfo.playercnt < minPlayerCnt {
+				nextBSID = bsinfo.serverid
+				minPlayerCnt = bsinfo.playercnt
+			}
+		} else if bsinfo.updatetime.Unix() + 60 < time.Now().Unix() {
+			log.Error("battleserver %v lastupdatetime %v playercnt %v roomcnt %v", bsinfo.serverid, bsinfo.updatetime, bsinfo.playercnt, bsinfo.roomcnt)
+			delete(BSOnlineManager, i)
+		}
+	}
+	log.Debug("getNextBSID %v", nextBSID)
+	return nextBSID
 }
 
 func (table *Table) getTeamID(teamCnt int) (int32, int) {
@@ -373,7 +413,12 @@ func (table *Table) allocBattleRoom() {
 	}
 
 	//todo 固定路由到指定的BattleServer
-	go RandSendMessageTo("battleserver", uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
+	nextbsid := getNextBSID()
+	if nextbsid == 0 {
+		go RandSendMessageTo("battleserver", uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
+	} else {
+		go SendMessageTo(nextbsid, conf.Server.BattleServerRename, uint32(table.tableid), proxymsg.ProxyMessageType_PMT_MS_BS_ALLOCBATTLEROOM, innerReq)
+	}
 }
 
 func UpdateTableManager(now *time.Time) {
@@ -629,18 +674,28 @@ func LeaveTable(charid uint32, matchmode int32) {
 				return
 			}
 
-			if len(table.seats) <= 1 {
+			gsid := int32(0)
+			if len(table.seats) == 1 {
+				gsid = table.seats[0].serverid
 				table.seats = append([]*Seat{})
 				log.Debug("LeaveTable TableID %v CharID %v Empty", tableid, charid)
 			} else {
 				for i, seat := range table.seats {
-					if (*seat).charid == charid {
+					if seat.charid == charid {
+						gsid = seat.serverid
 						table.seats = append(table.seats[0:i], table.seats[i+1:]...)
 
 						log.Debug("LeaveTable TableID %v CharID %v RestCount %v", tableid, charid, len(table.seats))
 						break
 					}
 				}
+			}
+
+			if gsid > 0 {
+				rsp := &proxymsg.Proxy_MS_GS_Delete{
+					Reason : 1,
+				}
+				go SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
 			}
 		} else {
 			log.Error("LeaveTable TableID %v Not Exist CharID %v", tableid, charid)
@@ -792,4 +847,12 @@ func FormatSeatInfo(tableid int32) string {
 		}
 	}
 	return output
+}
+
+func FormatBSOnline(bsid int32) string {
+	bs, ok := BSOnlineManager[bsid]
+	if ok {
+		return fmt.Sprintf("BSID:%v\tRoomCnt:%v\tPlayerCnt:%v\tUpdateTime:%v", bs.serverid, bs.roomcnt, bs.playercnt, bs.updatetime.Format(TIME_FORMAT))
+	}
+	return ""
 }

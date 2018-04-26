@@ -69,6 +69,8 @@ func queueMessage(args []interface{}) {
 		proxyHandleGSMSMakeTeamOperate(pmsg)
 	case proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE:
 		proxyHandleMSGSMakeTeamOperate(pmsg)
+	case proxymsg.ProxyMessageType_PMT_MS_GS_DELETE:
+		proxyHandleMSGSDelete(pmsg)
 	default:
 		log.Error("Invalid InnerMsg ID %v", pmsg.Msgid)
 	}
@@ -319,10 +321,21 @@ func proxyHandleBSGSFinishBattle(pmsg *proxymsg.InternalMessage) {
 	if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_BATTLE {
 		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		player.BattleServerID = 0
+	} else {
+		player.BattleServerID = 0
 	}
 }
 
 func proxyHandleBSMSSyncBSInfo(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_BS_MS_SyncBSInfo{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("Message Decode Error %v", err)
+		return
+	}
+
+	log.Debug("SyncBSInfo From BattleServerID %v RoomCnt %v PlayerCnt %v", msg.BattleServerID, msg.BattleRoomCount, msg.BattleMemberCount)
+	g.UpdateBSOnlineManager(msg)
 }
 
 func proxyHandleGSMSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
@@ -358,19 +371,48 @@ func proxyHandleMSGSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 	
-	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_OK {
+	player, _ := g.GetPlayer(pmsg.Charid)
+	if player == nil {
+		log.Error("MakeTeamOperate CharID %v Not Found", pmsg.Charid)
+		return
+	}
 
-		player, _ := g.GetPlayer(pmsg.Charid)
+	if msg.RetCode == clientmsg.Type_GameRetCode_GRC_OK {
 		if msg.Action == clientmsg.MakeTeamOperateType_MTOT_INVITE {
-			if player != nil && player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //在线状态才通知邀请
+			if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE { //在线状态才通知邀请
 				g.SendMsgToPlayer(pmsg.Charid, msg)
 			}
+		} else if msg.Action == clientmsg.MakeTeamOperateType_MTOT_ACCEPT {
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BENCH)
+			player.MatchServerID = int(pmsg.Fromid)
 		} else {
+			if msg.Action == clientmsg.MakeTeamOperateType_MTOT_START_MATCH {
+				player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
+			}
+
 			g.SendMsgToPlayer(pmsg.Charid, msg)
 		}
 	} else { // Error , Full, List
 		g.SendMsgToPlayer(pmsg.Charid, msg)
 	}
+}
+
+func proxyHandleMSGSDelete(pmsg *proxymsg.InternalMessage) {
+	msg := &proxymsg.Proxy_MS_GS_Delete{}
+	err := proto.Unmarshal(pmsg.Msgdata, msg)
+	if err != nil {
+		log.Error("Message Decode Error %v", err)
+		return
+	}
+
+	log.Debug("Proxy_MS_GS_Delete CharID %v Reason %v", pmsg.Charid, msg.Reason)
+	player, _ := g.GetPlayer(pmsg.Charid)
+	if player == nil {
+		log.Error("Proxy_MS_GS_Delete CharID %v Not Found", pmsg.Charid)
+		return
+	}
+
+	player.MatchServerID = 0
 }
 
 func updateFrame(args []interface{}) {
