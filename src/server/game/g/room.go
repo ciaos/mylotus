@@ -423,18 +423,18 @@ func GenRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
 	return rsp
 }
 
-func ConnectRoom(charid uint32, roomid int32, battlekey []byte, remoteaddr string) bool {
+func ConnectRoom(charid uint32, roomid int32, battlekey []byte, remoteaddr string) (bool, string) {
 	room, ok := RoomManager[roomid]
 	if ok {
 		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 		if err != nil {
 			log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
-			return false
+			return false, ""
 		}
 
 		if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, roomid)) != 0 {
 			log.Error("ConnectRoom Battlekey Mismatch")
-			return false
+			return false, ""
 		}
 
 		member, ok := room.members[charid]
@@ -457,17 +457,17 @@ func ConnectRoom(charid uint32, roomid int32, battlekey []byte, remoteaddr strin
 			}
 
 			log.Debug("ConnectRoom RoomID %v CharID %v", roomid, charid)
-			return true
+			return true, member.charname
 		} else {
 			log.Error("ConnectRoom RoomID %v Member Not Exist %v", roomid, charid)
 		}
 	} else {
 		log.Error("ConnectRoom RoomID %v Not Exist", roomid)
 	}
-	return false
+	return false, ""
 }
 
-func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) bool {
+func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
@@ -475,12 +475,12 @@ func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr s
 			plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 			if err != nil {
 				log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)
-				return false
+				return false, ""
 			}
 
 			if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, roomid)) != 0 {
 				log.Error("ReConnectRoom Battlekey Mismatch")
-				return false
+				return false, ""
 			}
 
 			member, ok := room.members[charid]
@@ -489,7 +489,7 @@ func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr s
 				changeMemberStatus(member, MEMBER_RECONNECTED)
 				member.frameid = frameid
 				log.Debug("ReConnectRoom RoomID %v CharID %v", roomid, charid)
-				return true
+				return true, member.charname
 			} else {
 				log.Error("ReConnectRoom RoomID %v Member Not Exist %v", roomid, charid)
 			}
@@ -497,7 +497,7 @@ func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr s
 			log.Error("ReConnectRoom RoomID %v Not Exist", roomid)
 		}
 	}
-	return false
+	return false, ""
 }
 
 func GetMemberGSID(charid uint32) int32 {

@@ -527,9 +527,11 @@ func handleReqConnectBS(args []interface{}) {
 		return
 	}
 
-	if g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey, a.RemoteAddr().String()) {
+	ret, name := g.ConnectRoom(m.CharID, m.RoomID, m.BattleKey, a.RemoteAddr().String())
+	if  ret {
 		player := &g.BPlayer{
 			CharID:        m.CharID,
+			CharName: 	   name,
 			GameServerID:  int(g.GetMemberGSID(m.CharID)),
 			HeartBeatTime: time.Now(),
 		}
@@ -610,7 +612,8 @@ func handleReqReConnectBS(args []interface{}) {
 		return
 	}
 
-	if g.ReConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String()) {
+	ret, _ := g.ReConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
+	if ret {
 		g.ReconnectBattlePlayer(m.CharID, &a)
 		rsp := g.GenRoomInfoPB(m.CharID, true)
 		a.WriteMsg(rsp)
