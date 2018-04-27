@@ -330,6 +330,7 @@ func handleReqFriendOperate(args []interface{}) {
 	s := Mongo.Ref()
 	defer Mongo.UnRef(s)
 
+	log.Debug("FriendAction %v CharID %v", m.Action, player.Char.CharID)
 	if m.Action == clientmsg.FriendOperateActionType_FOAT_SEARCH {
 		c := s.DB(DB_NAME_GAME).C(TB_NAME_CHARACTER)
 		results := []Character{}

@@ -488,7 +488,7 @@ func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Oper
 			allready = false
 		}
 	}
-	log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
+	log.Debug("TeamOperate CharID %v CharType %v SkinID %v Table %v Status %v Action %v", charid, req.CharType, req.SkinID, table.tableid, table.status, req.Action)
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_CHOOSE_OPERATE, req)
 
 	//都准备好了就进入锁定倒计时阶段
