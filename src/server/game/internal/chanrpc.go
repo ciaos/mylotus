@@ -285,7 +285,7 @@ func proxyHandleGSBSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 		CharID: msg.Charid,
 	}
 
-	room := getRoomByCharID(msg.Charid)
+	room := getRoomByCharID(msg.Charid, false)
 	if room == nil {
 		rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = false, nil, ""
 	} else {

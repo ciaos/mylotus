@@ -513,7 +513,7 @@ func handleTransferLoadingProgress(args []interface{}) {
 		return
 	}
 
-	room := getRoomByCharID(player.CharID)
+	room := getRoomByCharID(player.CharID, false)
 	if room == nil {
 		a.Close()
 		return
@@ -571,7 +571,7 @@ func handleReqEndBattle(args []interface{}) {
 		CharID:  m.CharID,
 	})
 
-	room := getRoomByCharID(m.CharID)
+	room := getRoomByCharID(m.CharID, false)
 	if room != nil {
 		room.EndBattle(player.CharID)
 	}
@@ -587,7 +587,7 @@ func handleTransferCommand(args []interface{}) {
 		return
 	}
 
-	room := getRoomByCharID(player.CharID)
+	room := getRoomByCharID(player.CharID, false)
 	if room != nil {
 		room.AddFrameMessage(player.CharID, m)
 	}
@@ -603,7 +603,7 @@ func handleTransferBattleMessage(args []interface{}) {
 		return
 	}
 
-	room := getRoomByCharID(player.CharID)
+	room := getRoomByCharID(player.CharID, false)
 	if room != nil {
 		room.broadcast(m)
 	}
@@ -633,7 +633,7 @@ func handleReqReConnectBS(args []interface{}) {
 		return
 	}
 
-	room := getRoomByCharID(m.CharID)
+	room := getRoomByCharID(m.CharID, false)
 	if room == nil {
 		a.Close()
 		return

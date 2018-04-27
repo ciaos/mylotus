@@ -144,7 +144,7 @@ func (room *Room) checkOffline() {
 	}
 }
 
-func getRoomByCharID(charid uint32) *Room {
+func getRoomByCharID(charid uint32, nolog bool) *Room {
 	roomid, ok := PlayerRoomIDMap[charid]
 	if ok {
 		room, ok := RoomManager[roomid]
@@ -154,7 +154,9 @@ func getRoomByCharID(charid uint32) *Room {
 			delete(PlayerRoomIDMap, charid)
 		}
 	}
-	log.Error("getRoomByCharID nil Charid %v", charid)
+	if nolog == false {
+		log.Error("getRoomByCharID nil Charid %v", charid)
+	}
 	return nil
 }
 
@@ -344,7 +346,7 @@ func createRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte
 		}
 
 		//Leave Previous Room
-		prevroom := getRoomByCharID(mem.CharID)
+		prevroom := getRoomByCharID(mem.CharID, true)
 		if prevroom != nil {
 			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, prevroom.roomid)
 			prevroom.LeaveRoom(mem.CharID)

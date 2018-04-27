@@ -244,7 +244,7 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 			log.Debug("RemoveBattlePlayer %v", clientid)
 			delete(BattlePlayerManager, clientid)
 
-			room := getRoomByCharID(clientid)
+			room := getRoomByCharID(clientid, true)
 			if room != nil {
 				room.LeaveRoom(clientid)
 			}
@@ -270,7 +270,7 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 				_ = player.agent
 			}
 
-			room := getRoomByCharID(clientid)
+			room := getRoomByCharID(clientid, true)
 			if room != nil && room.getMemberRemoteAddr(clientid) == remoteaddr {
 				room.LeaveRoom(clientid)
 			}
