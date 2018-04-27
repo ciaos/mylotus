@@ -303,8 +303,6 @@ func (player *BPlayerInfo) update(now *time.Time) {
 }
 
 func login(req *WaitInfo) {
-	log.Release("GamePlayer Begin Login UserID %v From %v", req.UserID, (*req.UserAgent).RemoteAddr().String())
-
 	player := &Player{}
 	var isnew bool
 	var ret bool
@@ -379,7 +377,7 @@ func login(req *WaitInfo) {
 			player.AssetMail_CheckGlobalMail()
 		}
 
-		log.Release("GamePlayer End Login UserID %v From %v", req.UserID, (*req.UserAgent).RemoteAddr().String())
+		log.Release("GameServer Login UserID %v From %v GsID %v CharID %v IsNew %v", req.UserID, (*req.UserAgent).RemoteAddr().String(), conf.Server.ServerID, player.Char.CharID, isnew)
 	}
 
 	if ret == true {

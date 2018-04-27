@@ -620,7 +620,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 				table.seats = append(table.seats, seat)
 				PlayerTableIDMap[charid] = i
 
-				log.Debug("JoinTable TableID %v CharID %v CharName %v", i, charid, charname)
+				log.Debug("JoinTable TableID %v CharID %v", i, charid)
 
 				createnew = false
 				break
@@ -632,7 +632,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 
 		_, ok := TableManager[g_tableid]
 		if ok {
-			log.Error("TableID %v Is Using Current TableCnt %v", g_tableid, len(TableManager))
+			log.Error("TableID %v Is Being Used Current TableCnt %v", g_tableid, len(TableManager))
 			rsp := &clientmsg.Rlt_Match{
 				RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR,
 			}
@@ -665,7 +665,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 		TableManager[table.tableid] = table
 		PlayerTableIDMap[charid] = table.tableid
 
-		log.Debug("JoinTable CreateTableID %v CharID %v CharName %v", table.tableid, charid, charname)
+		log.Release("CreateTable TableID %v CharID %v", table.tableid, charid)
 	}
 
 	rsp := &clientmsg.Rlt_Match{

@@ -89,7 +89,7 @@ func handleRegister(args []interface{}) {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: uint32(userid), SessionKey: sessionkey})
 				}
 
-				log.Debug("Register Create New Account UserID : %v , UserName : %v", userid, m.UserName)
+				log.Release("CreateAccount UserID : %v , UserName : %v", userid, m.UserName)
 			}
 		}
 	} else {
@@ -111,7 +111,7 @@ func handleRegister(args []interface{}) {
 				} else {
 					a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_OK, UserID: result.UserID, SessionKey: sessionkey})
 
-					log.Debug("Register Use Old Account UserID : %v , UserName : %v", result.UserID, m.UserName)
+					log.Debug("LoginAccount UserID : %v , UserName : %v", result.UserID, m.UserName)
 				}
 			} else {
 				a.WriteMsg(&clientmsg.Rlt_Register{RetCode: clientmsg.Type_LoginRetCode_LRC_PASSWORD_ERROR})

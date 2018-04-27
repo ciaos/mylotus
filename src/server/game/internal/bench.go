@@ -227,7 +227,7 @@ func createBench(charid uint32, charname string, matchmode int32, mapid int32, s
 	BenchManager[bench.benchid] = bench
 	PlayerBenchIDMap[charid] = bench.benchid
 
-	log.Debug("CreateBenchID %v CharID %v CharName %v", bench.benchid, charid, charname)
+	log.Release("CreateBench BenchID %v CharID %v", bench.benchid, charid)
 
 	rsp := &clientmsg.Rlt_MakeTeamOperate{
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
@@ -237,6 +237,7 @@ func createBench(charid uint32, charname string, matchmode int32, mapid int32, s
 }
 
 func (bench *Bench)inviteBench(charid uint32, targetid uint32, targetgsid int32) {
+	log.Debug("InviteBench %v %v to BenchID %v",charid, targetid, bench.benchid)
 	rsp := &clientmsg.Rlt_MakeTeamOperate{
 		RetCode:       clientmsg.Type_GameRetCode_GRC_OK,
 		Action:        clientmsg.MakeTeamOperateType_MTOT_INVITE,
@@ -288,6 +289,8 @@ func (bench *Bench)startMatch(charid uint32) {
 	}
 
 	if joinTableFromBench(bench) == true {
+
+		log.Release("StartMatch BenchID %v CharID %v", bench.benchid, charid)
 		rsp := &clientmsg.Rlt_MakeTeamOperate{
 			RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 			Action : clientmsg.MakeTeamOperateType_MTOT_START_MATCH,

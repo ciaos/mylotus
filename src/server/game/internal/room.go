@@ -361,7 +361,7 @@ func createRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte
 	room.changeRoomStatus(ROOM_STATUS_NONE)
 	RoomManager[room.roomid] = room
 
-	log.Debug("Create RoomID %v", room.roomid)
+	log.Release("Create RoomID %v For TableID %v MatchMode %v MapID %v", room.roomid, msg.Matchtableid, msg.Matchmode, msg.Mapid)
 	return nil, room.roomid, room.battlekey
 }
 
@@ -447,7 +447,7 @@ func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string
 			member.changeMemberStatus(MEMBER_RECONNECTED)
 		}
 
-		log.Debug("ConnectRoom RoomID %v CharID %v", room.roomid, charid)
+		log.Release("ConnectRoom RoomID %v CharID %v", room.roomid, charid)
 		return true, member.charname
 	} else {
 		log.Error("ConnectRoom RoomID %v Member Not Exist %v", room.roomid, charid)
