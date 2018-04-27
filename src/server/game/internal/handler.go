@@ -532,7 +532,7 @@ func handleReqConnectBS(args []interface{}) {
 		return
 	}
 
-	room := getRoomByCharID(m.CharID)
+	room := getRoomByRoomID(m.RoomID)
 	if room == nil {
 		return
 	}
