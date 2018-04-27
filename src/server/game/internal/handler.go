@@ -298,7 +298,7 @@ func handleTransferTeamOperate(args []interface{}) {
 		return
 	}
 
-	if player.GetPlayerAsset().AssetHero_HaveHero(player.Char.CharID, uint32(m.CharType)) == false {
+	if m.CharType != 0 && player.GetPlayerAsset().AssetHero_HaveHero(player.Char.CharID, uint32(m.CharType)) == false {
 		log.Error("Player %v HaveHero %v Error", player.Char.CharID, m.CharType)
 		return
 	}

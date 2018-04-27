@@ -466,12 +466,20 @@ func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Oper
 	for _, seat := range table.seats {
 		if (*seat).charid == (*req).CharID {
 			if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
-				(*seat).chartype = (*req).CharType
-				(*seat).skinid = (*req).SkinID
+				if (*req).CharType != 0 {
+					(*seat).chartype = (*req).CharType
+				}
+				if (*req).SkinID != 0 {
+					(*seat).skinid = (*req).SkinID
+				}
 			}
 			if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
-				(*seat).chartype = (*req).CharType
-				(*seat).skinid = (*req).SkinID
+				if (*req).CharType != 0 {
+					(*seat).chartype = (*req).CharType
+				}
+				if (*req).SkinID != 0 {
+					(*seat).skinid = (*req).SkinID
+				}
 				(*seat).status = SEAT_READY
 			}
 		}
