@@ -458,7 +458,7 @@ func (table *Table) deleteTableSeat() {
 func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 	allready := true
 
-	if table.status != MATCH_CHARTYPE_CHOOSING {
+	if table.status != MATCH_CHARTYPE_CHOOSING && table.status != MATCH_CHARTYPE_FIXED {
 		log.Error("TeamOperate CharID %v CharType %v SkinID %v Table %v Status %v Action %v", charid, req.CharType, req.SkinID, table.tableid, table.status, req.Action)
 		return
 	}
@@ -466,7 +466,7 @@ func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Oper
 	for _, seat := range table.seats {
 		if (*seat).charid == (*req).CharID {
 			if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
-				if (*req).CharType != 0 {
+				if (*req).CharType != 0 && table.status == MATCH_CHARTYPE_CHOOSING {
 					(*seat).chartype = (*req).CharType
 				}
 				if (*req).SkinID != 0 {
@@ -474,7 +474,7 @@ func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Oper
 				}
 			}
 			if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
-				if (*req).CharType != 0 {
+				if (*req).CharType != 0 && table.status == MATCH_CHARTYPE_CHOOSING {
 					(*seat).chartype = (*req).CharType
 				}
 				if (*req).SkinID != 0 {
