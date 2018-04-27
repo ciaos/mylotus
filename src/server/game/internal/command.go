@@ -35,11 +35,16 @@ func commandGM(args []interface{}) interface{} {
 func commandRoom(args []interface{}) interface{} {
 	if len(args) == 1 {
 		roomid, _ := strconv.Atoi(args[0].(string))
-		return FormatMemberInfo(int32(roomid))
+		room := getRoomByRoomID(int32(roomid))
+		if room != nil {
+			return room.FormatMemberInfo()
+		} else {
+			return ""
+		}
 	} else {
 		var output string
-		for i, _ := range RoomManager {
-			output = strings.Join([]string{output, FormatRoomInfo(i)}, "\r\n")
+		for _, room := range RoomManager {
+			output = strings.Join([]string{output, room.FormatRoomInfo()}, "\r\n")
 		}
 		output = strings.Join([]string{output, fmt.Sprintf("RoomCnt:%v RoomPlayerTotal:%v", len(RoomManager), len(PlayerRoomIDMap))}, "\r\n")
 		return strings.TrimLeft(output, "\r\n")
@@ -64,11 +69,16 @@ func commandRoomMap(args []interface{}) interface{} {
 func commandTable(args []interface{}) interface{} {
 	if len(args) == 1 {
 		tableid, _ := strconv.Atoi(args[0].(string))
-		return FormatSeatInfo(int32(tableid))
+		table := getTableByTableID(int32(tableid))
+		if table != nil {
+			return table.FormatSeatInfo()
+		} else {
+			return ""
+		}
 	} else {
 		output := fmt.Sprintf("TableCnt:%v TablePlayerTotal:%v", len(TableManager), len(PlayerTableIDMap))
-		for i, _ := range TableManager {
-			output = strings.Join([]string{output, FormatTableInfo(i)}, "\r\n")
+		for _, table := range TableManager {
+			output = strings.Join([]string{output, table.FormatTableInfo()}, "\r\n")
 		}
 		return strings.TrimLeft(output, "\r\n")
 	}
@@ -92,11 +102,16 @@ func commandTableMap(args []interface{}) interface{} {
 func commandBench(args []interface{}) interface{} {
 	if len(args) == 1 {
 		benchid, _ := strconv.Atoi(args[0].(string))
-		return FormatUnitInfo(int32(benchid))
+		bench := getBenchByBenchID(int32(benchid))
+		if bench != nil {
+			return bench.FormatUnitInfo()
+		} else {
+			return ""
+		}
 	} else {
 		output := fmt.Sprintf("BenchCnt:%v BenchPlayerTotal:%v", len(BenchManager), len(PlayerBenchIDMap))
-		for i, _ := range BenchManager {
-			output = strings.Join([]string{output, FormatBenchInfo(i)}, "\r\n")
+		for _, bench := range BenchManager {
+			output = strings.Join([]string{output, bench.FormatBenchInfo()}, "\r\n")
 		}
 		return strings.TrimLeft(output, "\r\n")
 	}

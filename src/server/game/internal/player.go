@@ -243,7 +243,11 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 		if reason == REASON_FREE_MEMORY {
 			log.Debug("RemoveBattlePlayer %v", clientid)
 			delete(BattlePlayerManager, clientid)
-			LeaveRoom(clientid)
+
+			room := getRoomByCharID(clientid)
+			if room != nil {
+				room.LeaveRoom(clientid)
+			}
 		} else if reason == REASON_REPLACED {
 			log.Debug("RemoveBattlePlayer %v Reason %v", clientid, reason)
 			if player.agent != nil {
@@ -266,8 +270,9 @@ func RemoveBattlePlayer(clientid uint32, remoteaddr string, reason int32) {
 				_ = player.agent
 			}
 
-			if GetMemberRemoteAddr(clientid) == remoteaddr {
-				LeaveRoom(clientid)
+			room := getRoomByCharID(clientid)
+			if room != nil && room.getMemberRemoteAddr(clientid) == remoteaddr {
+				room.LeaveRoom(clientid)
 			}
 		}
 	}

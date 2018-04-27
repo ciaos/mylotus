@@ -513,7 +513,13 @@ func handleTransferLoadingProgress(args []interface{}) {
 		return
 	}
 
-	LoadingRoom(player.CharID, m)
+	room := getRoomByCharID(player.CharID)
+	if room == nil {
+		a.Close()
+		return
+	}
+
+	room.loadingRoom(player.CharID, m)
 }
 
 func handleReqConnectBS(args []interface{}) {
@@ -526,16 +532,21 @@ func handleReqConnectBS(args []interface{}) {
 		return
 	}
 
-	ret, name := ConnectRoom(m.CharID, m.RoomID, m.BattleKey, a.RemoteAddr().String())
+	room := getRoomByCharID(m.CharID)
+	if room == nil {
+		return
+	}
+
+	ret, name := room.connectRoom(m.CharID, m.BattleKey, a.RemoteAddr().String())
 	if  ret {
 		player := &BPlayer{
 			CharID:        m.CharID,
 			CharName: 	   name,
-			GameServerID:  int(GetMemberGSID(m.CharID)),
+			GameServerID:  int(room.getMemberGSID(m.CharID)),
 			HeartBeatTime: time.Now(),
 		}
 		AddBattlePlayer(player, &a)
-		rsp := GenRoomInfoPB(m.CharID, false)
+		rsp := room.genRoomInfoPB(m.CharID, false)
 		a.WriteMsg(rsp)
 	} else {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
@@ -560,7 +571,10 @@ func handleReqEndBattle(args []interface{}) {
 		CharID:  m.CharID,
 	})
 
-	EndBattle(player.CharID)
+	room := getRoomByCharID(m.CharID)
+	if room != nil {
+		room.EndBattle(player.CharID)
+	}
 }
 
 func handleTransferCommand(args []interface{}) {
@@ -572,7 +586,11 @@ func handleTransferCommand(args []interface{}) {
 		a.Close()
 		return
 	}
-	AddMessage(player.CharID, m)
+
+	room := getRoomByCharID(player.CharID)
+	if room != nil {
+		room.AddFrameMessage(player.CharID, m)
+	}
 }
 
 func handleTransferBattleMessage(args []interface{}) {
@@ -584,7 +602,11 @@ func handleTransferBattleMessage(args []interface{}) {
 		a.Close()
 		return
 	}
-	TransferRoomMessage(player.CharID, m)
+
+	room := getRoomByCharID(player.CharID)
+	if room != nil {
+		room.broadcast(m)
+	}
 }
 
 func handleReqBattleHeartBeat(args []interface{}) {
@@ -611,10 +633,16 @@ func handleReqReConnectBS(args []interface{}) {
 		return
 	}
 
-	ret, _ := ReConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
+	room := getRoomByCharID(m.CharID)
+	if room == nil {
+		a.Close()
+		return
+	}
+
+	ret, _ := room.reConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
 	if ret {
 		ReconnectBattlePlayer(m.CharID, &a)
-		rsp := GenRoomInfoPB(m.CharID, true)
+		rsp := room.genRoomInfoPB(m.CharID, true)
 		a.WriteMsg(rsp)
 	} else {
 		a.WriteMsg(&clientmsg.Rlt_ConnectBS{

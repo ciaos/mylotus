@@ -105,14 +105,15 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 	}
 	log.Debug("proxyHandleGSMSMatch CharID %v Action %v", msg.Charid, msg.Action)
 
+	table := getTableByCharID(msg.Charid)
 	if msg.Action == int32(clientmsg.MatchActionType_MAT_JOIN) {
 		JoinTable(msg.Charid, msg.Charname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CANCEL) {
-		LeaveTable(msg.Charid, msg.Matchmode)
+		table.LeaveTable(msg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CONFIRM) {
-		ConfirmTable(msg.Charid, msg.Matchmode)
+		table.ConfirmTable(msg.Charid, msg.Matchmode)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_REJECT) {
-		RejectTable(msg.Charid, msg.Matchmode)
+		table.RejectTable(msg.Charid, msg.Matchmode)
 	} else {
 		log.Error("proxyHandleGSMSMatch Invalid Action %v", msg.Action)
 	}
@@ -154,8 +155,14 @@ func proxyHandleGSMSOffline(pmsg *proxymsg.InternalMessage) {
 	}
 	log.Debug("proxyHandleGSMSOffline CharID %v Offline", msg.Charid)
 
-	LeaveTable(msg.Charid, 0)
-	LeaveBench(msg.Charid, 0)
+	table := getTableByCharID(msg.Charid)
+	if table != nil {
+		table.LeaveTable(msg.Charid, 0)
+	}
+	bench := getBenchByCharID(msg.Charid, true)
+	if bench != nil {
+		bench.leaveBench(msg.Charid, 0)
+	}
 }
 
 func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
@@ -167,7 +174,7 @@ func proxyHandleMSBSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 	}
 
 	rsp := &proxymsg.Proxy_BS_MS_AllocBattleRoom{}
-	err, roomid, battlekey := CreateRoom(msg)
+	err, roomid, battlekey := createRoom(msg)
 	if err == nil {
 		rsp.Retcode = 0
 		rsp.Matchtableid = msg.Matchtableid
@@ -195,7 +202,10 @@ func proxyHandleBSMSAllocBattleRoom(pmsg *proxymsg.InternalMessage) {
 
 	log.Debug("proxyHandleBSMSAllocBattleRoom RetCode %v TableID %v RoomID %v BattleServerID %v", msg.Retcode, msg.Matchtableid, msg.Battleroomid, msg.Battleserverid)
 
-	ClearTable(msg)
+	table := getTableByTableID(msg.Matchtableid)
+	if table != nil {
+		table.ClearTable(msg)
+	}
 }
 
 func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
@@ -228,7 +238,10 @@ func proxyHandleGSMSTeamOperate(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	TeamOperate(pmsg.Charid, msg)
+	table := getTableByCharID(pmsg.Charid)
+	if table != nil {
+		table.TeamOperate(pmsg.Charid, msg)
+	}
 }
 
 func proxyHandleMSGSTeamOperate(pmsg *proxymsg.InternalMessage) {
@@ -264,14 +277,20 @@ func proxyHandleGSBSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 	msg := &proxymsg.Proxy_GS_BS_Query_BattleInfo{}
 	err := proto.Unmarshal(pmsg.Msgdata, msg)
 	if err != nil {
-		log.Error("proxymsg.Proxy_GS_BS_Query_BattleInfo Decode Error %v", err)
+		log.Error("Message Decode Error %v", err)
 		return
 	}
 
 	rsp := &proxymsg.Proxy_BS_GS_Query_BattleInfo{
 		CharID: msg.Charid,
 	}
-	rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = QueryBattleInfo(msg.Charid)
+
+	room := getRoomByCharID(msg.Charid)
+	if room == nil {
+		rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = false, nil, ""
+	} else {
+		rsp.InBattle, rsp.BattleKey, rsp.BattleAddr = true, room.battlekey, conf.Server.ConnectAddr
+	}
 
 	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, 0, proxymsg.ProxyMessageType_PMT_BS_GS_QUERY_BATTLEINFO, rsp)
 }
@@ -345,17 +364,32 @@ func proxyHandleGSMSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 	}
 
 	if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_CREATE) {
-		CreateBench(pmsg.Charid, msg.ActorCharname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
+		createBench(pmsg.Charid, msg.ActorCharname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_LEAVE) {
-		LeaveBench(pmsg.Charid, msg.Matchmode)
+		bench := getBenchByCharID(pmsg.Charid, false)
+		if bench != nil {
+			bench.leaveBench(pmsg.Charid, msg.Matchmode)
+		}
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_START_MATCH) {
-		StartMatch(pmsg.Charid)
+		bench := getBenchByCharID(pmsg.Charid, false)
+		if bench != nil {
+			bench.startMatch(pmsg.Charid)
+		}
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_ACCEPT) {
-		AcceptBench(pmsg.Charid, msg.ActorCharname, msg.Benchid, pmsg.Fromid, pmsg.Fromtype)
+		bench := getBenchByBenchID(msg.Benchid)
+		if bench != nil {
+			bench.acceptBench(pmsg.Charid, msg.ActorCharname, msg.Benchid, pmsg.Fromid, pmsg.Fromtype)
+		}
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_INVITE) {
-		InviteBench(pmsg.Charid, msg.Targetid, msg.Targetgsid)
+		bench := getBenchByCharID(pmsg.Charid, false)
+		if bench != nil {
+			bench.inviteBench(pmsg.Charid, msg.Targetid, msg.Targetgsid)
+		}
 	} else if msg.Action == int32(clientmsg.MakeTeamOperateType_MTOT_KICK) {
-		KickBench(pmsg.Charid, msg.Targetid)
+		bench := getBenchByCharID(pmsg.Charid, false)
+		if bench != nil {
+			bench.kickBench(pmsg.Charid, msg.Targetid)
+		}
 	} else {
 		log.Error("proxyHandleGSMSMakeTeamOperate Invalid Action %v", msg.Action)
 	}

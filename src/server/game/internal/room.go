@@ -27,6 +27,8 @@ const (
 	MEMBER_RECONNECTED = "member_reconnected"
 	MEMBER_OFFLINE     = "member_offline"
 	MEMBER_END         = "member_end"
+
+	SYNC_BSINFO_STEP   = 10
 )
 
 type Member struct {
@@ -71,7 +73,7 @@ var lastSyncInfoTime time.Time
 
 func InitRoomManager() {
 	g_roomid = 0
-	lastSyncInfoTime = time.Now()
+	lastSyncInfoTime = time.Now().Add(time.Second * time.Duration(-SYNC_BSINFO_STEP))
 	//mRoomID = new(sync.Mutex)
 }
 
@@ -138,8 +140,30 @@ func (room *Room) checkOffline() {
 	}
 	if allOffLine {
 		log.Debug("AllMemberOffline %v", (*room).roomid)
-		changeRoomStatus(room, ROOM_END)
+		room.changeRoomStatus(ROOM_END)
 	}
+}
+
+func getRoomByCharID(charid uint32) *Room {
+	roomid, ok := PlayerRoomIDMap[charid]
+	if ok {
+		room, ok := RoomManager[roomid]
+		if ok {
+			return room
+		} else {
+			delete(PlayerRoomIDMap, charid)
+		}
+	}
+	log.Error("getRoomByCharID nil Charid %v", charid)
+	return nil
+}
+
+func getRoomByRoomID(roomid int32) *Room {
+	room, ok := RoomManager[roomid]
+	if ok {
+		return room
+	}
+	return nil
 }
 
 func (room *Room) update(now *time.Time) {
@@ -174,13 +198,13 @@ func (room *Room) update(now *time.Time) {
 
 						if member.frameid >= room.frameid || member.frameid >= uint32(len(room.messagesbackup)) {
 							log.Debug("Reconnect All Frame Sent 1 CharID %v, FrameID %v", member.charid, member.frameid)
-							changeMemberStatus(member, MEMBER_CONNECTED)
+							member.changeMemberStatus(MEMBER_CONNECTED)
 							break
 						}
 					}
 				} else {
 					log.Debug("Reconnect All Frame Sent 2 CharID %v, FrameID %v", member.charid, member.frameid)
-					changeMemberStatus(member, MEMBER_CONNECTED)
+					member.changeMemberStatus(MEMBER_CONNECTED)
 				}
 			}
 		}
@@ -188,7 +212,7 @@ func (room *Room) update(now *time.Time) {
 		//bug
 		if now.Unix()-(*room).createtime.Unix() > int64(3600) {
 			log.Error("room Fight TimeOut Now %v CreateTime %v", now.Unix(), room.createtime)
-			changeRoomStatus(room, ROOM_END)
+			room.changeRoomStatus(ROOM_END)
 			return
 		}
 
@@ -199,23 +223,23 @@ func (room *Room) update(now *time.Time) {
 	} else if (*room).status == ROOM_CONNECTING {
 		//loading状态30秒直接切换
 		if (*now).Unix()-(*room).createtime.Unix() > 30 {
-			changeRoomStatus(room, ROOM_FIGHTING)
+			room.changeRoomStatus(ROOM_FIGHTING)
 			return
 		}
 	} else if (*room).status == ROOM_CLEAR {
 		if (*now).Unix()-(*room).checktime.Unix() > 5 {
-			deleteRoomMemberInfo((*room).roomid)
-			DeleteRoom((*room).roomid)
+			room.deleteRoomMember()
+			room.deleteRoom()
 		}
 	} else if (*room).status == ROOM_STATUS_NONE {
 		if (*now).Unix()-(*room).checktime.Unix() > 5 {
 			log.Error("ROOM_STATUS_NONE TimeOut %v", (*room).roomid)
-			changeRoomStatus(room, ROOM_END)
+			room.changeRoomStatus(ROOM_END)
 		}
 	}
 }
 
-func changeRoomStatus(room *Room, status string) {
+func (room *Room)changeRoomStatus(status string) {
 	(*room).status = status
 	room.checktime = time.Now()
 	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
@@ -228,22 +252,22 @@ func changeRoomStatus(room *Room, status string) {
 			}
 		}
 		room.messagesbackup = append([]*clientmsg.Transfer_Command{})
-		changeRoomStatus(room, ROOM_CLEAR)
+		room.changeRoomStatus(ROOM_CLEAR)
 	} else if (*room).status == ROOM_FIGHTING {
 		room.notifyBattleStart()
 	}
 }
 
-func changeMemberStatus(member *Member, status string) {
+func (member *Member)changeMemberStatus(status string) {
 	(*member).status = status
 	log.Debug("changeMemberStatus Member %v Status %v", (*member).charid, (*member).status)
 }
 
 func syncBSInfoToMS() {
 	msg := &proxymsg.Proxy_BS_MS_SyncBSInfo{
-		BattleServerID : int32(conf.Server.ServerID),
-		BattleRoomCount : int32(len(RoomManager)),
-		BattleMemberCount : int32(len(PlayerRoomIDMap)),
+		BattleServerID:    int32(conf.Server.ServerID),
+		BattleRoomCount:   int32(len(RoomManager)),
+		BattleMemberCount: int32(len(PlayerRoomIDMap)),
 	}
 	BroadCastMessageTo("matchserver", 0, proxymsg.ProxyMessageType_PMT_BS_MS_SYNCBSINFO, msg)
 }
@@ -253,34 +277,31 @@ func UpdateRoomManager(now *time.Time) {
 		(*room).update(now)
 	}
 
-	if now.Unix() - lastSyncInfoTime.Unix() >= 10 {
+	if now.Unix()-lastSyncInfoTime.Unix() >= SYNC_BSINFO_STEP {
 		syncBSInfoToMS()
 		lastSyncInfoTime = *now
 	}
 }
 
-func DeleteRoom(roomid int32) {
-	log.Debug("DeleteRoom RoomID %v", roomid)
-	delete(RoomManager, roomid)
+func (room *Room)deleteRoom() {
+	log.Debug("DeleteRoom RoomID %v", room.roomid)
+	delete(RoomManager, room.roomid)
 }
 
-func deleteRoomMemberInfo(roomid int32) {
-	room, ok := RoomManager[roomid]
-	if ok {
-		for charid, member := range room.members {
-			if member.ownerid == 0 {
-				rid, exist := PlayerRoomIDMap[charid]
-				if exist && rid == roomid { //玩家已进入另外一场战斗，不删除映射信息和网络连接
-					delete(PlayerRoomIDMap, charid)
-					RemoveBattlePlayer(member.charid, "", REASON_CLEAR)
-				}
+func (room *Room)deleteRoomMember() {
+	for charid, member := range room.members {
+		if member.ownerid == 0 {
+			rid, exist := PlayerRoomIDMap[charid]
+			if exist && rid == room.roomid { //玩家已进入另外一场战斗，不删除映射信息和网络连接
+				delete(PlayerRoomIDMap, charid)
+				RemoveBattlePlayer(member.charid, "", REASON_CLEAR)
 			}
-			delete(room.members, charid)
 		}
+		delete(room.members, charid)
 	}
 }
 
-func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte) {
+func createRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte) {
 	allocRoomID()
 
 	//roomid has being used
@@ -323,19 +344,19 @@ func CreateRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte
 		}
 
 		//Leave Previous Room
-		oldroomid, ok := PlayerRoomIDMap[mem.CharID]
-		if ok {
-			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, oldroomid)
-			LeaveRoom(mem.CharID)
+		prevroom := getRoomByCharID(mem.CharID)
+		if prevroom != nil {
+			log.Debug("CharID %v Leave Previous RoomID %v", mem.CharID, prevroom.roomid)
+			prevroom.LeaveRoom(mem.CharID)
 			RemoveBattlePlayer(mem.CharID, "", REASON_REPLACED)
 		}
 
-		changeMemberStatus(member, MEMBER_UNCONNECTED)
+		member.changeMemberStatus(MEMBER_UNCONNECTED)
 		room.members[member.charid] = member
 		log.Debug("JoinRoom RoomID %v CharID %v OwnerID %v", room.roomid, member.charid, member.ownerid)
 	}
 
-	changeRoomStatus(room, ROOM_STATUS_NONE)
+	room.changeRoomStatus(ROOM_STATUS_NONE)
 	RoomManager[room.roomid] = room
 
 	log.Debug("Create RoomID %v", room.roomid)
@@ -350,263 +371,163 @@ func (room *Room) notifyBattleStart() {
 	room.broadcast(rsp)
 }
 
-func LoadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
-	roomid, ok := PlayerRoomIDMap[charid]
+func (room *Room)loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
+	if room.status != ROOM_CONNECTING {
+		log.Error("Invalid Status %v RoomID %v Charid %v Progress %v", room.status, room.roomid, req.CharID, req.Progress)
+		return
+	}
+
+	member, ok := room.members[(*req).CharID]
 	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			if room.status != ROOM_CONNECTING {
-				log.Error("Invalid Status %v RoomID %v Charid %v Progress %v", room.status, room.roomid, req.CharID, req.Progress)
-				return
+		member.progress = (*req).Progress
+		log.Debug("SetLoadingProgress RoomID %v CharID %v PlayerID %v Progress %v", room.roomid, charid, (*req).CharID, (*req).Progress)
+		room.broadcast(req)
+
+		if member.progress >= 100 {
+			room.memberloadingok += 1
+
+			if room.memberloadingok >= len(room.members) {
+				room.changeRoomStatus(ROOM_FIGHTING)
 			}
-
-			member, ok := room.members[(*req).CharID]
-			if ok {
-				member.progress = (*req).Progress
-				log.Debug("SetLoadingProgress RoomID %v CharID %v PlayerID %v Progress %v", roomid, charid, (*req).CharID, (*req).Progress)
-				room.broadcast(req)
-
-				if member.progress >= 100 {
-					room.memberloadingok += 1
-
-					if room.memberloadingok >= len(room.members) {
-						changeRoomStatus(room, ROOM_FIGHTING)
-					}
-				}
-			}
-		} else {
-			delete(PlayerRoomIDMap, charid)
 		}
 	}
 }
 
-func QueryBattleInfo(charid uint32) (bool, []byte, string) {
-	roomid, ok := PlayerRoomIDMap[charid]
-	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			_, ok := room.members[charid]
-			if ok {
-				return true, room.battlekey, conf.Server.ConnectAddr
-			}
-		}
-	}
-	return false, nil, ""
-}
-
-func GenRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
+func (room *Room)genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
 	rsp := &clientmsg.Rlt_ConnectBS{
 		IsReconnect: isreconnect,
+		RetCode : clientmsg.Type_BattleRetCode_BRC_OK,
+		MapID : room.mapid,
 	}
 
-	roomid, _ := PlayerRoomIDMap[charid]
-	room, ok := RoomManager[roomid]
-	if ok {
-		rsp.RetCode = clientmsg.Type_BattleRetCode_BRC_OK
-		rsp.MapID = room.mapid
-
-		for _, member := range room.members {
-			m := &clientmsg.Rlt_ConnectBS_MemberInfo{
-				CharID:   member.charid,
-				CharName: member.charname,
-				CharType: member.chartype,
-				TeamID:   member.teamid,
-				OwnerID:  member.ownerid,
-			}
-
-			rsp.Member = append(rsp.Member, m)
+	for _, member := range room.members {
+		m := &clientmsg.Rlt_ConnectBS_MemberInfo{
+			CharID:   member.charid,
+			CharName: member.charname,
+			CharType: member.chartype,
+			TeamID:   member.teamid,
+			OwnerID:  member.ownerid,
 		}
-	} else {
-		log.Error("GenRoomInfoPB RoomID %v Error", roomid)
-		rsp.RetCode = clientmsg.Type_BattleRetCode_BRC_OTHER
+
+		rsp.Member = append(rsp.Member, m)
 	}
 	return rsp
 }
 
-func ConnectRoom(charid uint32, roomid int32, battlekey []byte, remoteaddr string) (bool, string) {
-	room, ok := RoomManager[roomid]
+func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string) (bool, string) {
+	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
+	if err != nil {
+		log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
+		return false, ""
+	}
+
+	if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, room.roomid)) != 0 {
+		log.Error("ConnectRoom Battlekey Mismatch")
+		return false, ""
+	}
+
+	member, ok := room.members[charid]
 	if ok {
-		plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
-		if err != nil {
-			log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
-			return false, ""
-		}
+		member.remoteaddr = remoteaddr
+		member.changeMemberStatus(MEMBER_CONNECTED)
+		PlayerRoomIDMap[charid] = room.roomid
 
-		if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, roomid)) != 0 {
-			log.Error("ConnectRoom Battlekey Mismatch")
-			return false, ""
-		}
-
-		member, ok := room.members[charid]
-		if ok {
-			member.remoteaddr = remoteaddr
-			changeMemberStatus(member, MEMBER_CONNECTED)
-			PlayerRoomIDMap[charid] = roomid
-
-			//set connect for robot
-			for _, mem := range room.members {
-				if mem.ownerid == charid {
-					changeMemberStatus(mem, MEMBER_CONNECTED)
-				}
+		//set connect for robot
+		for _, mem := range room.members {
+			if mem.ownerid == charid {
+				mem.changeMemberStatus(MEMBER_CONNECTED)
 			}
-
-			if room.status == ROOM_STATUS_NONE {
-				changeRoomStatus(room, ROOM_CONNECTING)
-			} else if room.status == ROOM_FIGHTING {
-				changeMemberStatus(member, MEMBER_RECONNECTED)
-			}
-
-			log.Debug("ConnectRoom RoomID %v CharID %v", roomid, charid)
-			return true, member.charname
-		} else {
-			log.Error("ConnectRoom RoomID %v Member Not Exist %v", roomid, charid)
 		}
+
+		if room.status == ROOM_STATUS_NONE {
+			room.changeRoomStatus(ROOM_CONNECTING)
+		} else if room.status == ROOM_FIGHTING {
+			member.changeMemberStatus(MEMBER_RECONNECTED)
+		}
+
+		log.Debug("ConnectRoom RoomID %v CharID %v", room.roomid, charid)
+		return true, member.charname
 	} else {
-		log.Error("ConnectRoom RoomID %v Not Exist", roomid)
+		log.Error("ConnectRoom RoomID %v Member Not Exist %v", room.roomid, charid)
 	}
 	return false, ""
 }
 
-func ReConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
-	roomid, ok := PlayerRoomIDMap[charid]
+func (room *Room)reConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
+	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
+	if err != nil {
+		log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)
+		return false, ""
+	}
+
+	if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, room.roomid)) != 0 {
+		log.Error("ReConnectRoom Battlekey Mismatch")
+		return false, ""
+	}
+
+	member, ok := room.members[charid]
 	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
-			if err != nil {
-				log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)
-				return false, ""
-			}
-
-			if strings.Compare(string(plaintext), fmt.Sprintf(CRYPTO_PREFIX, roomid)) != 0 {
-				log.Error("ReConnectRoom Battlekey Mismatch")
-				return false, ""
-			}
-
-			member, ok := room.members[charid]
-			if ok {
-				member.remoteaddr = remoteaddr
-				changeMemberStatus(member, MEMBER_RECONNECTED)
-				member.frameid = frameid
-				log.Debug("ReConnectRoom RoomID %v CharID %v", roomid, charid)
-				return true, member.charname
-			} else {
-				log.Error("ReConnectRoom RoomID %v Member Not Exist %v", roomid, charid)
-			}
-		} else {
-			log.Error("ReConnectRoom RoomID %v Not Exist", roomid)
-		}
+		member.remoteaddr = remoteaddr
+		member.changeMemberStatus(MEMBER_RECONNECTED)
+		member.frameid = frameid
+		log.Debug("ReConnectRoom RoomID %v CharID %v", room.roomid, charid)
+		return true, member.charname
+	} else {
+		log.Error("ReConnectRoom RoomID %v Member Not Exist %v", room.roomid, charid)
 	}
 	return false, ""
 }
 
-func GetMemberGSID(charid uint32) int32 {
-	roomid, ok := PlayerRoomIDMap[charid]
+func (room *Room)getMemberGSID(charid uint32) int32 {
+	member, ok := room.members[charid]
 	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			member, ok := room.members[charid]
-			if ok {
-				return member.gameserverid
-			}
-		}
+		return member.gameserverid
 	}
 	return 0
 }
 
-func GetMemberRemoteAddr(charid uint32) string {
-	roomid, ok := PlayerRoomIDMap[charid]
+func (room *Room)getMemberRemoteAddr(charid uint32) string {
+	member, ok := room.members[charid]
 	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			member, ok := room.members[charid]
-			if ok {
-				return member.remoteaddr
-			}
-		}
+		return member.remoteaddr
 	}
 	return ""
 }
 
-func LeaveRoom(charid uint32) {
-	setRoomMemberStatus(charid, MEMBER_OFFLINE)
-}
-
-func EndBattle(charid uint32) {
-	setRoomMemberStatus(charid, MEMBER_END)
-}
-
-func setRoomMemberStatus(charid uint32, status string) {
-	roomid, ok := PlayerRoomIDMap[charid]
+func (room *Room)LeaveRoom(charid uint32) {
+	member, ok := room.members[charid]
 	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			member, ok := room.members[charid]
-			if ok {
-				changeMemberStatus(member, status)
+		member.changeMemberStatus(MEMBER_OFFLINE)
+		room.checkOffline()
+	}
+}
 
-				if member.ownerid == 0 {
-					SendMessageTo(member.gameserverid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
-				}
-				log.Debug("SetRoomMemberStatus RoomID %v CharID %v Status %v", roomid, charid, status)
-				room.checkOffline()
-			}
-		} else {
-			delete(PlayerRoomIDMap, charid)
+func (room *Room)EndBattle(charid uint32) {
+	member, ok := room.members[charid]
+	if ok {
+		member.changeMemberStatus(MEMBER_END)
+
+		if member.ownerid == 0 {
+			SendMessageTo(member.gameserverid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_BS_GS_FINISH_BATTLE, &proxymsg.Proxy_BS_GS_FINISH_BATTLE{CharID: member.charid})
 		}
 	}
 }
 
-func AddMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
-	roomid, ok := PlayerRoomIDMap[charid]
-	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			for _, message := range transcmd.Messages {
-				message.CharID = charid
-				(*room).messages = append((*room).messages, message)
-			}
-
-		} else {
-			log.Error("AddMessage RoomID %v Not Exist", roomid)
-			delete(PlayerRoomIDMap, charid)
-		}
-	} else {
-		//正常情况
-		//log.Debug("AddMessage CharID %v Not Exist Size %v", charid, len(PlayerRoomIDMap))
+func (room *Room)AddFrameMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
+	for _, message := range transcmd.Messages {
+		message.CharID = charid
+		room.messages = append(room.messages, message)
 	}
 }
 
-func TransferRoomMessage(charid uint32, transcmd *clientmsg.Transfer_Battle_Message) {
-	roomid, ok := PlayerRoomIDMap[charid]
-	if ok {
-		room, ok := RoomManager[roomid]
-		if ok {
-			room.broadcast(transcmd)
-		} else {
-			log.Error("TransferRoomMessage RoomID %v Not Exist", roomid)
-			delete(PlayerRoomIDMap, charid)
-		}
-	} else {
-		log.Error("TransferRoomMessage CharID %v Not Exist", charid)
-	}
+func (room *Room)FormatRoomInfo() string {
+	return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v\tMatchMode:%v\tMapID:%v\tFrameID:%v", (*room).roomid, (*room).createtime.Format(TIME_FORMAT), (*room).status, len((*room).members), room.matchmode, room.mapid, room.frameid)
 }
 
-func FormatRoomInfo(roomid int32) string {
-	room, ok := RoomManager[roomid]
-	if ok {
-		return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v\tMatchMode:%v\tMapID:%v\tFrameID:%v", (*room).roomid, (*room).createtime.Format(TIME_FORMAT), (*room).status, len((*room).members), room.matchmode, room.mapid, room.frameid)
-	}
-	return ""
-}
-
-func FormatMemberInfo(roomid int32) string {
-	output := FormatRoomInfo(roomid)
-	room, ok := RoomManager[roomid]
-	if ok {
-		for _, member := range (*room).members {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tCharType:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v\tCharName:%v", member.charid, member.chartype, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid, member.charname)}, "\r\n")
-		}
+func (room *Room)FormatMemberInfo() string {
+	output := room.FormatRoomInfo()
+	for _, member := range (*room).members {
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tCharType:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v\tCharName:%v", member.charid, member.chartype, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid, member.charname)}, "\r\n")
 	}
 	return output
 }

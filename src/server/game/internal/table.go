@@ -99,6 +99,29 @@ func allocTableID() {
 	}
 }
 
+func getTableByCharID(charid uint32) *Table {
+	tableid, ok := PlayerTableIDMap[charid]
+	if ok {
+		table, ok := TableManager[tableid]
+		if ok {
+			return table
+		} else {
+			delete(PlayerTableIDMap, charid)
+		}
+	}
+	log.Error("getTableByCharID nil Charid %v", charid)
+	return nil
+}
+
+func getTableByTableID(tableid int32) *Table {
+	table, ok := TableManager[tableid]
+	if ok {
+		return table
+	} 
+	log.Error("getTableByTableID nil Tableid %v", tableid)
+	return nil
+}
+
 func UpdateBSOnlineManager(msg *proxymsg.Proxy_BS_MS_SyncBSInfo) {
 	bsinfo, ok := BSOnlineManager[msg.BattleServerID]
 	if ok {
@@ -300,7 +323,7 @@ func (table *Table) changeTableStatus(status string) {
 		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
 		table.changeTableStatus(MATCH_FINISH)
 	} else if (*table).status == MATCH_EMPTY {
-		DeleteTable((*table).tableid)
+		table.deleteTable()
 	} else if (*table).status == MATCH_OK {
 		//notify all member to choose
 		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
@@ -327,9 +350,8 @@ func (table *Table) changeTableStatus(status string) {
 		table.allocBattleRoom()
 		table.changeTableStatus(MATCH_ALLOCROOM)
 	} else if (*table).status == MATCH_END {
-		table.deleteTableSeatInfo()
-		table.seats = append([]*Seat{}) //clear seats
-		DeleteTable(table.tableid)
+		table.deleteTableSeat()
+		table.deleteTable()
 	} else if (*table).status == MATCH_CLEAR_BADGUY {
 		table.kickBadGuy()
 	}
@@ -425,59 +447,49 @@ func UpdateTableManager(now *time.Time) {
 	}
 }
 
-func DeleteTable(tableid int32) {
-	log.Debug("DeleteTable TableID %v", tableid)
-	delete(TableManager, tableid)
+func (table *Table)deleteTable() {
+	log.Debug("DeleteTable TableID %v", table.tableid)
+	delete(TableManager, table.tableid)
 }
 
-func (table *Table) deleteTableSeatInfo() {
+func (table *Table) deleteTableSeat() {
 	for _, seat := range table.seats {
 		if seat.ownerid == 0 {
 			delete(PlayerTableIDMap, seat.charid)
 		}
 	}
+	table.seats = append([]*Seat{}) //clear seats
 }
 
-func TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
-
+func (table *Table)TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 	allready := true
 
-	tableid, ok := PlayerTableIDMap[charid]
-	if ok {
-		table, ok := TableManager[tableid]
-		if ok {
-			if table.status != MATCH_CHARTYPE_CHOOSING {
-				log.Error("TeamOperate CharID %v Table %v Status %v Action %v", charid, tableid, table.status, req.Action)
-				return
-			}
+	if table.status != MATCH_CHARTYPE_CHOOSING {
+		log.Error("TeamOperate CharID %v Table %v Status %v Action %v", charid, table.tableid, table.status, req.Action)
+		return
+	}
 
-			for _, seat := range table.seats {
-				if (*seat).charid == (*req).CharID {
-					if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
-						(*seat).chartype = (*req).CharType
-					}
-					if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
-						(*seat).chartype = (*req).CharType
-						(*seat).status = SEAT_READY
-					}
-				}
-
-				if (*seat).status != SEAT_READY {
-					allready = false
-				}
+	for _, seat := range table.seats {
+		if (*seat).charid == (*req).CharID {
+			if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
+				(*seat).chartype = (*req).CharType
 			}
-			log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
-			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_CHOOSE_OPERATE, req)
-
-			//都准备好了就进入锁定倒计时阶段
-			if allready {
-				table.changeTableStatus(MATCH_CHARTYPE_FIXED)
+			if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
+				(*seat).chartype = (*req).CharType
+				(*seat).status = SEAT_READY
 			}
-		} else {
-			log.Error("TeamOperate Table Not Exist", tableid)
 		}
-	} else {
-		log.Error("TeamOperate Error CharID %v Not In Table Action %v", charid, req.Action)
+
+		if (*seat).status != SEAT_READY {
+			allready = false
+		}
+	}
+	log.Debug("Team_Operate %v %v %v %v", charid, req.Action, req.CharID, req.CharType)
+	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_CHOOSE_OPERATE, req)
+
+	//都准备好了就进入锁定倒计时阶段
+	if allready {
+		table.changeTableStatus(MATCH_CHARTYPE_FIXED)
 	}
 }
 
@@ -663,186 +675,158 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 	SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 }
 
-func LeaveTable(charid uint32, matchmode int32) {
-	tableid, ok := PlayerTableIDMap[charid]
-	if ok {
-		table, ok := TableManager[tableid]
-		if ok {
-			if table.status != MATCH_CONTINUE { //match already done
-				return
-			}
-
-			gsid := int32(0)
-			if len(table.seats) == 1 {
-				gsid = table.seats[0].serverid
-				table.seats = append([]*Seat{})
-				log.Debug("LeaveTable TableID %v CharID %v Empty", tableid, charid)
-			} else {
-				for i, seat := range table.seats {
-					if seat.charid == charid {
-						gsid = seat.serverid
-						table.seats = append(table.seats[0:i], table.seats[i+1:]...)
-
-						log.Debug("LeaveTable TableID %v CharID %v RestCount %v", tableid, charid, len(table.seats))
-						break
-					}
-				}
-			}
-
-			if gsid > 0 {
-				rsp := &proxymsg.Proxy_MS_GS_Delete{
-					Reason : 1,
-				}
-				SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
-			}
-		} else {
-			log.Error("LeaveTable TableID %v Not Exist CharID %v", tableid, charid)
-		}
-
-		delete(PlayerTableIDMap, charid)
+func (table *Table)LeaveTable(charid uint32, matchmode int32) {
+	if table == nil {
+		log.Error("LeaveTable CharID %v Table Nil", charid)
+		return
 	}
-}
 
-func ConfirmTable(charid uint32, matchmode int32) {
-	tableid, ok := PlayerTableIDMap[charid]
-	if ok {
-		table, ok := TableManager[tableid]
-		if ok {
-			if table.status != MATCH_CONFIRM {
-				log.Error("ConfirmTable CharID %v Table %v Status %v", charid, tableid, table.status)
-				return
-			}
+	if table.status != MATCH_CONTINUE { //match already done
+		return
+	}
 
-			allconfirmed := true
-
-			msg := &clientmsg.Rlt_Match{}
-
-			for _, seat := range table.seats {
-				if (*seat).charid == charid || (*seat).ownerid == charid {
-					seat.status = SEAT_CONFIRM
-					log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", tableid, seat.charid, seat.ownerid)
-
-					member := &clientmsg.Rlt_Match_MemberInfo{}
-					member.CharID = (*seat).charid
-					member.OwnerID = (*seat).ownerid
-					member.TeamID = (*seat).teamid
-					member.CharName = (*seat).charname
-					member.CharType = (*seat).chartype
-					member.Status = clientmsg.MemberStatus(seat.status)
-					msg.Members = append(msg.Members, member)
-				}
-
-				if seat.status != SEAT_CONFIRM {
-					allconfirmed = false
-				}
-			}
-
-			if allconfirmed {
-				log.Debug("AllConfirmTable TableID %v", tableid)
-				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED
-				r := gamedata.CSVMatchMode.Index((*table).matchmode)
-				row := r.(*cfg.MatchMode)
-				msg.WaitUntilTime = time.Now().Unix() + int64(row.ChooseTimeOutSec)
-
-				table.changeTableStatus(MATCH_CHARTYPE_CHOOSING)
-			} else {
-				msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
-			}
-
-			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
-		} else {
-			log.Error("ConfirmTable TableID %v Not Exist CharID %v", tableid, charid)
-			delete(PlayerTableIDMap, charid)
-		}
+	gsid := int32(0)
+	if len(table.seats) == 1 {
+		gsid = table.seats[0].serverid
+		table.seats = append([]*Seat{})
+		log.Debug("LeaveTable TableID %v CharID %v Empty", table.tableid, charid)
 	} else {
-		log.Error("ConfirmTable CharID %v Not Exist", charid)
+		for i, seat := range table.seats {
+			if seat.charid == charid {
+				gsid = seat.serverid
+				table.seats = append(table.seats[0:i], table.seats[i+1:]...)
+
+				log.Debug("LeaveTable TableID %v CharID %v RestCount %v", table.tableid, charid, len(table.seats))
+				break
+			}
+		}
+	}
+
+	delete(PlayerTableIDMap, charid)
+	if gsid > 0 {
+		rsp := &proxymsg.Proxy_MS_GS_Delete{
+			Reason : 1,
+		}
+		SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
 	}
 }
 
-func RejectTable(charid uint32, matchmode int32) {
-	tableid, ok := PlayerTableIDMap[charid]
-	if ok {
-		table, ok := TableManager[tableid]
-		if ok {
-			if table.status != MATCH_CONFIRM {
-				log.Error("RejectTable CharID %v Table %v Status %v", charid, tableid, table.status)
-				return
-			}
+func (table *Table)ConfirmTable(charid uint32, matchmode int32) {
+	if table == nil {
+		log.Error("ConfirmTable CharID %v Table Nil", charid)
+		return
+	}
 
-			msg := &clientmsg.Rlt_Match{}
+	if table.status != MATCH_CONFIRM {
+		log.Error("ConfirmTable CharID %v Table %v Status %v", charid, table.tableid, table.status)
+		return
+	}
 
-			for _, seat := range table.seats {
-				if (*seat).charid == charid {
-					seat.status = SEAT_REJECT
-					log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", tableid, seat.charid, seat.ownerid)
+	allconfirmed := true
 
-					member := &clientmsg.Rlt_Match_MemberInfo{}
-					member.CharID = (*seat).charid
-					member.OwnerID = (*seat).ownerid
-					member.TeamID = (*seat).teamid
-					member.CharName = (*seat).charname
-					member.CharType = (*seat).chartype
-					member.Status = clientmsg.MemberStatus(seat.status)
-					msg.Members = append(msg.Members, member)
+	msg := &clientmsg.Rlt_Match{}
 
-					break
-				}
-			}
+	for _, seat := range table.seats {
+		if (*seat).charid == charid || (*seat).ownerid == charid {
+			seat.status = SEAT_CONFIRM
+			log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
 
-			table.changeTableStatus(MATCH_SOMEBODY_REJECT)
-			msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
-
-			r := gamedata.CSVMatchMode.Index((*table).matchmode)
-			row := r.(*cfg.MatchMode)
-			msg.WaitUntilTime = time.Now().Unix() + int64(row.RejectWaitTime)
-
-			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
-		} else {
-			log.Error("ConfirmTable TableID %v Not Exist CharID %v", tableid, charid)
-			delete(PlayerTableIDMap, charid)
+			member := &clientmsg.Rlt_Match_MemberInfo{}
+			member.CharID = (*seat).charid
+			member.OwnerID = (*seat).ownerid
+			member.TeamID = (*seat).teamid
+			member.CharName = (*seat).charname
+			member.CharType = (*seat).chartype
+			member.Status = clientmsg.MemberStatus(seat.status)
+			msg.Members = append(msg.Members, member)
 		}
+
+		if seat.status != SEAT_CONFIRM {
+			allconfirmed = false
+		}
+	}
+
+	if allconfirmed {
+		log.Debug("AllConfirmTable TableID %v", table.tableid)
+		msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_ALL_CONFIRMED
+		r := gamedata.CSVMatchMode.Index((*table).matchmode)
+		row := r.(*cfg.MatchMode)
+		msg.WaitUntilTime = time.Now().Unix() + int64(row.ChooseTimeOutSec)
+
+		table.changeTableStatus(MATCH_CHARTYPE_CHOOSING)
 	} else {
-		log.Error("ConfirmTable CharID %v Not Exist", charid)
+		msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 	}
+
+	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
-func ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
-	table, ok := TableManager[rlt.Matchtableid]
-	if ok {
-		if rlt.Retcode == 0 {
-			msg := &clientmsg.Rlt_NotifyBattleAddress{
-				RoomID:         rlt.Battleroomid,
-				BattleAddr:     rlt.Connectaddr,
-				BattleKey:      rlt.Battleroomkey,
-				BattleServerID: rlt.Battleserverid,
-			}
+func (table *Table)RejectTable(charid uint32, matchmode int32) {
+	if table == nil {
+		log.Error("RejectTable CharID %v Table Nil", charid)
+		return
+	}
 
-			table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)
-			table.checktime = time.Now()
-			table.changeTableStatus(MATCH_FINISH)
-		} else {
-			table.changeTableStatus(MATCH_ERROR)
+	if table.status != MATCH_CONFIRM {
+		log.Error("RejectTable CharID %v Table %v Status %v", charid, table.tableid, table.status)
+		return
+	}
+
+	msg := &clientmsg.Rlt_Match{}
+
+	for _, seat := range table.seats {
+		if (*seat).charid == charid {
+			seat.status = SEAT_REJECT
+			log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
+
+			member := &clientmsg.Rlt_Match_MemberInfo{}
+			member.CharID = (*seat).charid
+			member.OwnerID = (*seat).ownerid
+			member.TeamID = (*seat).teamid
+			member.CharName = (*seat).charname
+			member.CharType = (*seat).chartype
+			member.Status = clientmsg.MemberStatus(seat.status)
+			msg.Members = append(msg.Members, member)
+
+			break
 		}
+	}
+
+	table.changeTableStatus(MATCH_SOMEBODY_REJECT)
+	msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
+
+	r := gamedata.CSVMatchMode.Index((*table).matchmode)
+	row := r.(*cfg.MatchMode)
+	msg.WaitUntilTime = time.Now().Unix() + int64(row.RejectWaitTime)
+
+	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
+}
+
+func (table *Table)ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
+	if rlt.Retcode == 0 {
+		msg := &clientmsg.Rlt_NotifyBattleAddress{
+			RoomID:         rlt.Battleroomid,
+			BattleAddr:     rlt.Connectaddr,
+			BattleKey:      rlt.Battleroomkey,
+			BattleServerID: rlt.Battleserverid,
+		}
+
+		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)
+		table.checktime = time.Now()
+		table.changeTableStatus(MATCH_FINISH)
 	} else {
-		log.Error("ClearTable TableID %v Not Found , TableCount %v", rlt.Matchtableid, len(TableManager))
+		table.changeTableStatus(MATCH_ERROR)
 	}
 }
 
-func FormatTableInfo(tableid int32) string {
-	table, ok := TableManager[tableid]
-	if ok {
-		return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tSeatCnt:%v\tStatus:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format(TIME_FORMAT), len((*table).seats), (*table).status)
-	}
-	return ""
+func (table *Table)FormatTableInfo() string {
+	return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tSeatCnt:%v\tStatus:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format(TIME_FORMAT), len((*table).seats), (*table).status)
 }
 
-func FormatSeatInfo(tableid int32) string {
-	output := FormatTableInfo(tableid)
-	table, ok := TableManager[tableid]
-	if ok {
-		for _, seat := range (*table).seats {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
-		}
+func (table *Table)FormatSeatInfo() string {
+	output := table.FormatTableInfo()
+	for _, seat := range (*table).seats {
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
 	}
 	return output
 }

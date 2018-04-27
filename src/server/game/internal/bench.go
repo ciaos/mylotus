@@ -70,6 +70,31 @@ func UpdateBenchManager(now *time.Time) {
 	}
 }
 
+func getBenchByCharID(charid uint32, nolog bool) *Bench {
+	benchid, ok := PlayerBenchIDMap[charid]
+	if ok {
+		bench, ok := BenchManager[benchid]
+		if ok {
+			return bench
+		} else {
+			delete(PlayerBenchIDMap, charid)
+		}
+	}
+	if nolog == false {
+		log.Error("getBenchByCharID nil Charid %v", charid)
+	}
+	return nil
+}
+
+func getBenchByBenchID(benchid int32) *Bench {
+	bench, ok := BenchManager[benchid]
+	if ok {
+		return bench
+	} 
+	log.Error("getBenchByBenchID nil Benchid %v", benchid)
+	return nil
+}
+
 func (bench *Bench) update(now *time.Time) {
 
 	if (*bench).status == BENCH_WAIT {
@@ -98,15 +123,16 @@ func allocBenchID() {
 	}
 }
 
-func DeleteBench(benchid int32) {
-	log.Debug("DeleteBench BenchID %v", benchid)
-	delete(BenchManager, benchid)
+func (bench *Bench)deleteBench() {
+	log.Debug("DeleteBench BenchID %v", bench.benchid)
+	delete(BenchManager, bench.benchid)
 }
 
-func (bench *Bench) deleteBenchUnitInfo() {
+func (bench *Bench) deleteBenchUnit() {
 	for _, unit := range bench.units {
 		delete(PlayerBenchIDMap, unit.charid)
 	}
+	bench.units = append([]*Unit{}) //clear seats
 }
 
 func (bench *Bench) changeBenchStatus(status string) {
@@ -119,14 +145,13 @@ func (bench *Bench) changeBenchStatus(status string) {
 		bench.notifyResultToBench(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
 		bench.changeBenchStatus(BENCH_FINISH)
 	} else if (*bench).status == BENCH_EMPTY {
-		DeleteBench((*bench).benchid)
+		bench.deleteBench()
 	} else if (*bench).status == BENCH_TIMEOUT {
 		bench.notifyResultToBench(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
 		bench.changeBenchStatus(BENCH_FINISH)
 	} else if (*bench).status == BENCH_END {
-		bench.deleteBenchUnitInfo()
-		bench.units = append([]*Unit{}) //clear seats
-		DeleteBench(bench.benchid)
+		bench.deleteBenchUnit()
+		bench.deleteBench()
 	}
 }
 
@@ -156,7 +181,7 @@ func (bench *Bench) notifyResultToBench(retcode clientmsg.Type_GameRetCode) {
 	bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 }
 
-func CreateBench(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
+func createBench(charid uint32, charname string, matchmode int32, mapid int32, serverid int32, servertype string) {
 	allocBenchID()
 
 	_, ok := BenchManager[g_benchid]
@@ -211,33 +236,21 @@ func CreateBench(charid uint32, charname string, matchmode int32, mapid int32, s
 	SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 }
 
-func InviteBench(charid uint32, targetid uint32, targetgsid int32) {
-	benchid, ok := PlayerBenchIDMap[charid]
-	if ok {
-		bench, ok := BenchManager[benchid]
-		if ok {
-			rsp := &clientmsg.Rlt_MakeTeamOperate{
-				RetCode:       clientmsg.Type_GameRetCode_GRC_OK,
-				Action:        clientmsg.MakeTeamOperateType_MTOT_INVITE,
-				Mode:          clientmsg.MatchModeType(bench.matchmode),
-				MapID:         bench.mapid,
-				TargetID:      targetid,
-				BenchID:       bench.benchid,
-				MatchServerID: int32(conf.Server.ServerID),
-				InviterID:     charid,
-			}
-			SendMessageTo(targetgsid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
-		}
+func (bench *Bench)inviteBench(charid uint32, targetid uint32, targetgsid int32) {
+	rsp := &clientmsg.Rlt_MakeTeamOperate{
+		RetCode:       clientmsg.Type_GameRetCode_GRC_OK,
+		Action:        clientmsg.MakeTeamOperateType_MTOT_INVITE,
+		Mode:          clientmsg.MatchModeType(bench.matchmode),
+		MapID:         bench.mapid,
+		TargetID:      targetid,
+		BenchID:       bench.benchid,
+		MatchServerID: int32(conf.Server.ServerID),
+		InviterID:     charid,
 	}
+	SendMessageTo(targetgsid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
 }
 
-func AcceptBench(charid uint32, charname string, benchid int32, serverid int32, servertype string) {
-	bench, ok := BenchManager[benchid]
-	if !ok {
-		log.Error("BenchID %v NotExist CharID %v", benchid, charid)
-		return
-	}
-
+func (bench *Bench)acceptBench(charid uint32, charname string, benchid int32, serverid int32, servertype string) {
 	log.Debug("AcceptBench %v %v",charid, benchid)
 	if len(bench.units) >= int(bench.maxunitcnt) {
 		rsp := &clientmsg.Rlt_MakeTeamOperate{
@@ -264,136 +277,105 @@ func AcceptBench(charid uint32, charname string, benchid int32, serverid int32, 
 	}
 }
 
-func StartMatch(charid uint32) {
-	benchid, ok := PlayerBenchIDMap[charid]
-	if ok {
-		bench, ok := BenchManager[benchid]
-		if ok {
-			if bench.status != BENCH_WAIT || len(bench.units) <= 0 {
-				return
-			}
-
-			if bench.units[0].charid != charid {
-				log.Error("StartMatch Invalid CharID %v != %v", bench.units[0].charid, charid)
-				return
-			}
-
-			if joinTableFromBench(bench) == true {
-				rsp := &clientmsg.Rlt_MakeTeamOperate{
-					RetCode: clientmsg.Type_GameRetCode_GRC_OK,
-					Action : clientmsg.MakeTeamOperateType_MTOT_START_MATCH,
-				}
-				bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
-				bench.changeBenchStatus(BENCH_FINISH)
-			} else {
-				bench.changeBenchStatus(BENCH_ERROR)
-			}
-		}
+func (bench *Bench)startMatch(charid uint32) {
+	if bench.status != BENCH_WAIT || len(bench.units) <= 0 {
+		return
 	}
-}
 
-func KickBench(charid uint32, targetid uint32) {
-	benchid, ok := PlayerBenchIDMap[charid]
-	if ok {
-		bench, ok := BenchManager[benchid]
-		if ok {
-			if bench.status != BENCH_WAIT || len(bench.units) <= 1 { //match already done
-				return
-			}
+	if bench.units[0].charid != charid {
+		log.Error("StartMatch Invalid CharID %v != %v", bench.units[0].charid, charid)
+		return
+	}
 
-			if bench.units[0].charid != charid {
-				log.Error("KickBench Invalid CharID %v != %v kick %v", bench.units[0].charid, charid, targetid)
-				return
-			}
-
-			rsp := &clientmsg.Rlt_MakeTeamOperate{
-				RetCode:  clientmsg.Type_GameRetCode_GRC_OK,
-				Action:   clientmsg.MakeTeamOperateType_MTOT_KICK,
-				TargetID: targetid,
-			}
-			bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
-			for i, unit := range bench.units {
-				if unit.charid == targetid {
-					msg := &proxymsg.Proxy_MS_GS_Delete{
-						Reason : 2,
-					}
-					SendMessageTo(unit.serverid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, msg)
-
-					bench.units = append(bench.units[0:i], bench.units[i+1:]...)
-
-					log.Debug("KickBench BenchID %v CharID %v RestCount %v", benchid, charid, len(bench.units))
-					break
-				}
-			}
-		} else {
-			log.Error("KickBench BenchID %v Not Exist CharID %v", benchid, charid)
+	if joinTableFromBench(bench) == true {
+		rsp := &clientmsg.Rlt_MakeTeamOperate{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OK,
+			Action : clientmsg.MakeTeamOperateType_MTOT_START_MATCH,
 		}
+		bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+		bench.changeBenchStatus(BENCH_FINISH)
 	} else {
-		log.Error("KickBench CharID %v Not Exist", charid)
+		bench.changeBenchStatus(BENCH_ERROR)
 	}
 }
 
-func LeaveBench(charid uint32, matchmode int32) {
-	benchid, ok := PlayerBenchIDMap[charid]
-	if ok {
-		bench, ok := BenchManager[benchid]
-		if ok {
-			if bench.status != BENCH_WAIT { //match already done
-				return
-			}
-
-			rsp := &clientmsg.Rlt_MakeTeamOperate{
-				RetCode:  clientmsg.Type_GameRetCode_GRC_OK,
-				Action:   clientmsg.MakeTeamOperateType_MTOT_LEAVE,
-				TargetID: charid,
-			}
-			bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
-
-			gsid := int32(0)
-			if len(bench.units) == 1 {
-				gsid = bench.units[0].serverid
-				bench.units = append([]*Unit{})
-				log.Debug("LeaveBench BenchID %v CharID %v Empty", benchid, charid)
-			} else {
-				for i, unit := range bench.units {
-					if unit.charid == charid {
-						gsid = unit.serverid
-						bench.units = append(bench.units[0:i], bench.units[i+1:]...)
-
-						log.Debug("LeaveBench BenchID %v CharID %v RestCount %v", benchid, charid, len(bench.units))
-						break
-					}
-				}
-			}
-			if gsid > 0 {
-				rsp := &proxymsg.Proxy_MS_GS_Delete{
-					Reason : 3,
-				}
-				SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
-			}
-		} else {
-			log.Error("LeaveBench BenchID %v Not Exist CharID %v", benchid, charid)
-		}
-
-		delete(PlayerBenchIDMap, charid)
-	} 
-}
-
-func FormatBenchInfo(benchid int32) string {
-	bench, ok := BenchManager[benchid]
-	if ok {
-		return fmt.Sprintf("BenchID:%v\tMatchMode:%v\tMapID:%v\tMaxUnitCount:%v\tCTime:%v\tStatus:%v\tUnitCnt:%v", bench.benchid, bench.matchmode, bench.mapid, bench.maxunitcnt, bench.createtime.Format(TIME_FORMAT), bench.status, len(bench.units))
+func (bench *Bench)kickBench(charid uint32, targetid uint32) {
+	if bench.status != BENCH_WAIT || len(bench.units) <= 1 { //match already done
+		return
 	}
-	return ""
+
+	if bench.units[0].charid != charid {
+		log.Error("KickBench Invalid CharID %v != %v kick %v", bench.units[0].charid, charid, targetid)
+		return
+	}
+
+	rsp := &clientmsg.Rlt_MakeTeamOperate{
+		RetCode:  clientmsg.Type_GameRetCode_GRC_OK,
+		Action:   clientmsg.MakeTeamOperateType_MTOT_KICK,
+		TargetID: targetid,
+	}
+	bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+	for i, unit := range bench.units {
+		if unit.charid == targetid {
+			msg := &proxymsg.Proxy_MS_GS_Delete{
+				Reason : 2,
+			}
+			SendMessageTo(unit.serverid, conf.Server.GameServerRename, targetid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, msg)
+
+			bench.units = append(bench.units[0:i], bench.units[i+1:]...)
+
+			log.Debug("KickBench BenchID %v CharID %v RestCount %v", bench.benchid, charid, len(bench.units))
+			break
+		}
+	}
 }
 
-func FormatUnitInfo(benchid int32) string {
-	output := FormatBenchInfo(benchid)
-	bench, ok := BenchManager[benchid]
-	if ok {
-		for _, unit := range bench.units {
-			output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tGSID:%v\tCharName:%v", unit.charid, unit.jointime.Format(TIME_FORMAT), unit.serverid, unit.charname)}, "\r\n")
+func (bench *Bench)leaveBench(charid uint32, matchmode int32) {
+	if bench.status != BENCH_WAIT { //match already done
+		return
+	}
+
+	rsp := &clientmsg.Rlt_MakeTeamOperate{
+		RetCode:  clientmsg.Type_GameRetCode_GRC_OK,
+		Action:   clientmsg.MakeTeamOperateType_MTOT_LEAVE,
+		TargetID: charid,
+	}
+	bench.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MAKE_TEAM_OPERATE, rsp)
+
+	gsid := int32(0)
+	if len(bench.units) == 1 {
+		gsid = bench.units[0].serverid
+		bench.units = append([]*Unit{})
+		log.Debug("LeaveBench BenchID %v CharID %v Empty", bench.benchid, charid)
+	} else {
+		for i, unit := range bench.units {
+			if unit.charid == charid {
+				gsid = unit.serverid
+				bench.units = append(bench.units[0:i], bench.units[i+1:]...)
+
+				log.Debug("LeaveBench BenchID %v CharID %v RestCount %v", bench.benchid, charid, len(bench.units))
+				break
+			}
 		}
+	}
+
+	delete(PlayerBenchIDMap, charid)
+	if gsid > 0 {
+		rsp := &proxymsg.Proxy_MS_GS_Delete{
+			Reason : 3,
+		}
+		SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
+	}
+}
+
+func (bench *Bench)FormatBenchInfo() string {
+	return fmt.Sprintf("BenchID:%v\tMatchMode:%v\tMapID:%v\tMaxUnitCount:%v\tCTime:%v\tStatus:%v\tUnitCnt:%v", bench.benchid, bench.matchmode, bench.mapid, bench.maxunitcnt, bench.createtime.Format(TIME_FORMAT), bench.status, len(bench.units))
+}
+
+func (bench *Bench)FormatUnitInfo() string {
+	output := bench.FormatBenchInfo()
+	for _, unit := range bench.units {
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tGSID:%v\tCharName:%v", unit.charid, unit.jointime.Format(TIME_FORMAT), unit.serverid, unit.charname)}, "\r\n")
 	}
 	return output
 }
