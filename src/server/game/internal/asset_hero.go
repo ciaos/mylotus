@@ -121,6 +121,42 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 	}
 }
 
+//method
+func (asset *PlayerAsset) AssetHero_DelHero(charid uint32, chartypeid uint32) {
+	data := &clientmsg.Rlt_Asset_Hero{}
+
+	if asset == nil { //offline
+		s := Mongo.Ref()
+		defer Mongo.UnRef(s)
+
+		c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
+		err := c.Find(bson.M{"charid": charid}).One(data)
+		if err != nil {
+			return
+		}
+	} else {
+		data = asset.AssetHero
+	}
+
+	for i, role := range data.Roles {
+		if role.CharTypeID == chartypeid {
+			data.Roles = append(data.Roles[0:i], data.Roles[i+1:]...)
+			break
+		}
+	}
+
+	if asset == nil {
+		s := Mongo.Ref()
+		defer Mongo.UnRef(s)
+
+		c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
+
+		c.Update(bson.M{"charid": charid}, data)
+	} else {
+		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
+	}
+}
+
 func (asset *PlayerAsset) AssetHero_HaveHero(charid uint32, chartypeid uint32) bool {
 	data := &clientmsg.Rlt_Asset_Hero{}
 

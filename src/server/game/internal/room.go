@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 	"server/conf"
-	"server/tool"
-	"strings"
-	//	"sync"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
+	"server/tool"
+	"strings"
 	"time"
 
 	"github.com/ciaos/leaf/log"
@@ -28,7 +27,7 @@ const (
 	MEMBER_OFFLINE     = "member_offline"
 	MEMBER_END         = "member_end"
 
-	SYNC_BSINFO_STEP   = 10
+	SYNC_BSINFO_STEP = 10
 )
 
 type Member struct {
@@ -241,7 +240,7 @@ func (room *Room) update(now *time.Time) {
 	}
 }
 
-func (room *Room)changeRoomStatus(status string) {
+func (room *Room) changeRoomStatus(status string) {
 	(*room).status = status
 	room.checktime = time.Now()
 	log.Debug("changeRoomStatus Room %v Status %v", (*room).roomid, (*room).status)
@@ -260,7 +259,7 @@ func (room *Room)changeRoomStatus(status string) {
 	}
 }
 
-func (member *Member)changeMemberStatus(status string) {
+func (member *Member) changeMemberStatus(status string) {
 	(*member).status = status
 	log.Debug("changeMemberStatus Member %v Status %v", (*member).charid, (*member).status)
 }
@@ -285,12 +284,12 @@ func UpdateRoomManager(now *time.Time) {
 	}
 }
 
-func (room *Room)deleteRoom() {
+func (room *Room) deleteRoom() {
 	log.Debug("DeleteRoom RoomID %v", room.roomid)
 	delete(RoomManager, room.roomid)
 }
 
-func (room *Room)deleteRoomMember() {
+func (room *Room) deleteRoomMember() {
 	for charid, member := range room.members {
 		if member.ownerid == 0 {
 			rid, exist := PlayerRoomIDMap[charid]
@@ -373,7 +372,7 @@ func (room *Room) notifyBattleStart() {
 	room.broadcast(rsp)
 }
 
-func (room *Room)loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
+func (room *Room) loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
 	if room.status != ROOM_CONNECTING {
 		log.Error("Invalid Status %v RoomID %v Charid %v Progress %v", room.status, room.roomid, req.CharID, req.Progress)
 		return
@@ -395,11 +394,11 @@ func (room *Room)loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Prog
 	}
 }
 
-func (room *Room)genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
+func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_ConnectBS {
 	rsp := &clientmsg.Rlt_ConnectBS{
 		IsReconnect: isreconnect,
-		RetCode : clientmsg.Type_BattleRetCode_BRC_OK,
-		MapID : room.mapid,
+		RetCode:     clientmsg.Type_BattleRetCode_BRC_OK,
+		MapID:       room.mapid,
 	}
 
 	for _, member := range room.members {
@@ -455,7 +454,7 @@ func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string
 	return false, ""
 }
 
-func (room *Room)reConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
+func (room *Room) reConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
 	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)
@@ -480,7 +479,7 @@ func (room *Room)reConnectRoom(charid uint32, frameid uint32, battlekey []byte, 
 	return false, ""
 }
 
-func (room *Room)getMemberGSID(charid uint32) int32 {
+func (room *Room) getMemberGSID(charid uint32) int32 {
 	member, ok := room.members[charid]
 	if ok {
 		return member.gameserverid
@@ -488,7 +487,7 @@ func (room *Room)getMemberGSID(charid uint32) int32 {
 	return 0
 }
 
-func (room *Room)getMemberRemoteAddr(charid uint32) string {
+func (room *Room) getMemberRemoteAddr(charid uint32) string {
 	member, ok := room.members[charid]
 	if ok {
 		return member.remoteaddr
@@ -496,7 +495,7 @@ func (room *Room)getMemberRemoteAddr(charid uint32) string {
 	return ""
 }
 
-func (room *Room)LeaveRoom(charid uint32) {
+func (room *Room) LeaveRoom(charid uint32) {
 	member, ok := room.members[charid]
 	if ok {
 		member.changeMemberStatus(MEMBER_OFFLINE)
@@ -504,7 +503,7 @@ func (room *Room)LeaveRoom(charid uint32) {
 	}
 }
 
-func (room *Room)EndBattle(charid uint32) {
+func (room *Room) EndBattle(charid uint32) {
 	member, ok := room.members[charid]
 	if ok {
 		member.changeMemberStatus(MEMBER_END)
@@ -515,18 +514,18 @@ func (room *Room)EndBattle(charid uint32) {
 	}
 }
 
-func (room *Room)AddFrameMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
+func (room *Room) AddFrameMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
 	for _, message := range transcmd.Messages {
 		message.CharID = charid
 		room.messages = append(room.messages, message)
 	}
 }
 
-func (room *Room)FormatRoomInfo() string {
+func (room *Room) FormatRoomInfo() string {
 	return fmt.Sprintf("RoomID:%v\tCreateTime:%v\tStatus:%v\tMemberCnt:%v\tMatchMode:%v\tMapID:%v\tFrameID:%v", (*room).roomid, (*room).createtime.Format(TIME_FORMAT), (*room).status, len((*room).members), room.matchmode, room.mapid, room.frameid)
 }
 
-func (room *Room)FormatMemberInfo() string {
+func (room *Room) FormatMemberInfo() string {
 	output := room.FormatRoomInfo()
 	for _, member := range (*room).members {
 		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tCharType:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v\tCharName:%v", member.charid, member.chartype, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid, member.charname)}, "\r\n")

@@ -50,7 +50,7 @@ type PlayerInfo struct {
 
 type BPlayer struct {
 	CharID        uint32
-	CharName 	  string
+	CharName      string
 	GameServerID  int
 	HeartBeatTime time.Time
 	OnlineTime    time.Time
