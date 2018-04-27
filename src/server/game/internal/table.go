@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"server/conf"
 	"server/gamedata"
 	"server/gamedata/cfg"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
-	"server/conf"
 	"strconv"
 	"strings"
 	"time"
@@ -63,10 +63,10 @@ type Table struct {
 }
 
 type BSOnline struct {
-	serverid 	int32
-	roomcnt 	int32
-	playercnt  	int32
-	updatetime  time.Time
+	serverid   int32
+	roomcnt    int32
+	playercnt  int32
+	updatetime time.Time
 }
 
 var TableManager = make(map[int32]*Table, 128)
@@ -117,7 +117,7 @@ func getTableByTableID(tableid int32) *Table {
 	table, ok := TableManager[tableid]
 	if ok {
 		return table
-	} 
+	}
 	log.Error("getTableByTableID nil Tableid %v", tableid)
 	return nil
 }
@@ -130,10 +130,10 @@ func UpdateBSOnlineManager(msg *proxymsg.Proxy_BS_MS_SyncBSInfo) {
 		bsinfo.updatetime = time.Now()
 	} else {
 		ninfo := &BSOnline{
-			serverid : msg.BattleServerID,
-			roomcnt : msg.BattleRoomCount,
-			playercnt : msg.BattleMemberCount,
-			updatetime : time.Now(),
+			serverid:   msg.BattleServerID,
+			roomcnt:    msg.BattleRoomCount,
+			playercnt:  msg.BattleMemberCount,
+			updatetime: time.Now(),
 		}
 		BSOnlineManager[msg.BattleServerID] = ninfo
 	}
@@ -143,12 +143,12 @@ func getNextBSID() int32 {
 	nextBSID := int32(0)
 	minPlayerCnt := int32(math.MaxInt32)
 	for i, bsinfo := range BSOnlineManager {
-		if bsinfo.updatetime.Unix() + 20 > time.Now().Unix() {
+		if bsinfo.updatetime.Unix()+20 > time.Now().Unix() {
 			if bsinfo.playercnt < minPlayerCnt {
 				nextBSID = bsinfo.serverid
 				minPlayerCnt = bsinfo.playercnt
 			}
-		} else if bsinfo.updatetime.Unix() + 60 < time.Now().Unix() {
+		} else if bsinfo.updatetime.Unix()+60 < time.Now().Unix() {
 			log.Error("battleserver %v lastupdatetime %v playercnt %v roomcnt %v", bsinfo.serverid, bsinfo.updatetime, bsinfo.playercnt, bsinfo.roomcnt)
 			delete(BSOnlineManager, i)
 		}
@@ -187,7 +187,7 @@ func (table *Table) fillRobotToTable() bool {
 		return false
 	}
 
-	robotnum := row.PlayerCnt * row.TeamCnt - len((*table).seats)
+	robotnum := row.PlayerCnt*row.TeamCnt - len((*table).seats)
 	ownerid := (*table).seats[0].charid
 
 	i := 1
@@ -374,7 +374,7 @@ func (table *Table) update(now *time.Time) {
 			return
 		}
 
-		if len((*table).seats) >= row.PlayerCnt * row.TeamCnt {
+		if len((*table).seats) >= row.PlayerCnt*row.TeamCnt {
 			table.changeTableStatus(MATCH_OK)
 		} else if len((*table).seats) <= 0 {
 			table.changeTableStatus(MATCH_EMPTY)
@@ -447,7 +447,7 @@ func UpdateTableManager(now *time.Time) {
 	}
 }
 
-func (table *Table)deleteTable() {
+func (table *Table) deleteTable() {
 	log.Debug("DeleteTable TableID %v", table.tableid)
 	delete(TableManager, table.tableid)
 }
@@ -461,7 +461,7 @@ func (table *Table) deleteTableSeat() {
 	table.seats = append([]*Seat{}) //clear seats
 }
 
-func (table *Table)TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
+func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Operate) {
 	allready := true
 
 	if table.status != MATCH_CHARTYPE_CHOOSING {
@@ -509,12 +509,12 @@ func joinTableFromBench(bench *Bench) bool {
 				continue
 			}
 
-			if int((*table).modeplayercnt) - len((*table).seats) < len(bench.units) {
+			if int((*table).modeplayercnt)-len((*table).seats) < len(bench.units) {
 				continue
 			}
 
 			teamid, teamcnt := table.getTeamID(row.TeamCnt)
-			if teamcnt + len(bench.units) > row.PlayerCnt {
+			if teamcnt+len(bench.units) > row.PlayerCnt {
 				continue
 			}
 
@@ -549,11 +549,11 @@ func joinTableFromBench(bench *Bench) bool {
 		}
 
 		table := &Table{
-			tableid:    g_tableid,
-			createtime: time.Now(),
-			checktime:  time.Now(),
-			matchmode:  bench.matchmode,
-			mapid:      bench.mapid,
+			tableid:       g_tableid,
+			createtime:    time.Now(),
+			checktime:     time.Now(),
+			matchmode:     bench.matchmode,
+			mapid:         bench.mapid,
 			status:        MATCH_CONTINUE,
 			modeplayercnt: int32(row.PlayerCnt * row.TeamCnt),
 		}
@@ -578,7 +578,7 @@ func joinTableFromBench(bench *Bench) bool {
 			log.Debug("joinTableFromBench CreateNew TableID %v CharID %v CharName %v", table.tableid, unit.charid, unit.charname)
 		}
 	}
-	
+
 	return true
 }
 
@@ -675,12 +675,7 @@ func JoinTable(charid uint32, charname string, matchmode int32, mapid int32, ser
 	SendMessageTo(serverid, servertype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 }
 
-func (table *Table)LeaveTable(charid uint32, matchmode int32) {
-	if table == nil {
-		log.Error("LeaveTable CharID %v Table Nil", charid)
-		return
-	}
-
+func (table *Table) LeaveTable(charid uint32, matchmode int32) {
 	if table.status != MATCH_CONTINUE { //match already done
 		return
 	}
@@ -705,18 +700,13 @@ func (table *Table)LeaveTable(charid uint32, matchmode int32) {
 	delete(PlayerTableIDMap, charid)
 	if gsid > 0 {
 		rsp := &proxymsg.Proxy_MS_GS_Delete{
-			Reason : 1,
+			Reason: 1,
 		}
 		SendMessageTo(gsid, conf.Server.GameServerRename, charid, proxymsg.ProxyMessageType_PMT_MS_GS_DELETE, rsp)
 	}
 }
 
-func (table *Table)ConfirmTable(charid uint32, matchmode int32) {
-	if table == nil {
-		log.Error("ConfirmTable CharID %v Table Nil", charid)
-		return
-	}
-
+func (table *Table) ConfirmTable(charid uint32, matchmode int32) {
 	if table.status != MATCH_CONFIRM {
 		log.Error("ConfirmTable CharID %v Table %v Status %v", charid, table.tableid, table.status)
 		return
@@ -761,12 +751,7 @@ func (table *Table)ConfirmTable(charid uint32, matchmode int32) {
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
-func (table *Table)RejectTable(charid uint32, matchmode int32) {
-	if table == nil {
-		log.Error("RejectTable CharID %v Table Nil", charid)
-		return
-	}
-
+func (table *Table) RejectTable(charid uint32, matchmode int32) {
 	if table.status != MATCH_CONFIRM {
 		log.Error("RejectTable CharID %v Table %v Status %v", charid, table.tableid, table.status)
 		return
@@ -802,7 +787,7 @@ func (table *Table)RejectTable(charid uint32, matchmode int32) {
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
-func (table *Table)ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
+func (table *Table) ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 	if rlt.Retcode == 0 {
 		msg := &clientmsg.Rlt_NotifyBattleAddress{
 			RoomID:         rlt.Battleroomid,
@@ -819,11 +804,11 @@ func (table *Table)ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 	}
 }
 
-func (table *Table)FormatTableInfo() string {
+func (table *Table) FormatTableInfo() string {
 	return fmt.Sprintf("TableID:%v\tMatchMode:%v\tMapID:%v\tPlayerCount:%v\tCTime:%v\tSeatCnt:%v\tStatus:%v", (*table).tableid, (*table).matchmode, (*table).mapid, (*table).modeplayercnt, (*table).createtime.Format(TIME_FORMAT), len((*table).seats), (*table).status)
 }
 
-func (table *Table)FormatSeatInfo() string {
+func (table *Table) FormatSeatInfo() string {
 	output := table.FormatTableInfo()
 	for _, seat := range (*table).seats {
 		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")

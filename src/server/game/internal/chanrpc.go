@@ -105,15 +105,23 @@ func proxyHandleGSMSMatch(pmsg *proxymsg.InternalMessage) {
 	}
 	log.Debug("proxyHandleGSMSMatch CharID %v Action %v", msg.Charid, msg.Action)
 
-	table := getTableByCharID(msg.Charid)
 	if msg.Action == int32(clientmsg.MatchActionType_MAT_JOIN) {
 		JoinTable(msg.Charid, msg.Charname, msg.Matchmode, msg.Mapid, pmsg.Fromid, pmsg.Fromtype)
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CANCEL) {
-		table.LeaveTable(msg.Charid, msg.Matchmode)
+		table := getTableByCharID(msg.Charid)
+		if table != nil {
+			table.LeaveTable(msg.Charid, msg.Matchmode)
+		}
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_CONFIRM) {
-		table.ConfirmTable(msg.Charid, msg.Matchmode)
+		table := getTableByCharID(msg.Charid)
+		if table != nil {
+			table.ConfirmTable(msg.Charid, msg.Matchmode)
+		}
 	} else if msg.Action == int32(clientmsg.MatchActionType_MAT_REJECT) {
-		table.RejectTable(msg.Charid, msg.Matchmode)
+		table := getTableByCharID(msg.Charid)
+		if table != nil {
+			table.RejectTable(msg.Charid, msg.Matchmode)
+		}
 	} else {
 		log.Error("proxyHandleGSMSMatch Invalid Action %v", msg.Action)
 	}
@@ -402,7 +410,7 @@ func proxyHandleMSGSMakeTeamOperate(pmsg *proxymsg.InternalMessage) {
 		log.Error("Message Decode Error %v", err)
 		return
 	}
-	
+
 	player, _ := GetPlayer(pmsg.Charid)
 	if player == nil {
 		log.Error("MakeTeamOperate CharID %v Not Found", pmsg.Charid)
