@@ -48,6 +48,7 @@ type Seat struct {
 	ownerid    uint32
 	teamid     int32
 	status     int32
+	skinid     int32
 }
 
 //for match server
@@ -305,14 +306,6 @@ reloop:
 	}
 }
 
-func ReconnectTable(charid uint32, pmsg *proxymsg.InternalMessage) {
-	rsp := proxymsg.Proxy_MS_GS_Reconnect{
-		Ok: false,
-	}
-
-	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, charid, proxymsg.ProxyMessageType_PMT_MS_GS_RECONNECT, rsp)
-}
-
 func (table *Table) changeTableStatus(status string) {
 	(*table).status = status
 	table.checktime = time.Now()
@@ -428,6 +421,7 @@ func (table *Table) allocBattleRoom() {
 			TeamID:       seat.teamid,
 			OwnerID:      seat.ownerid,
 			GameServerID: seat.serverid,
+			SkinID:       seat.skinid,
 		}
 		innerReq.Members = append(innerReq.Members, member)
 	}
@@ -465,7 +459,7 @@ func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Oper
 	allready := true
 
 	if table.status != MATCH_CHARTYPE_CHOOSING {
-		log.Error("TeamOperate CharID %v Table %v Status %v Action %v", charid, table.tableid, table.status, req.Action)
+		log.Error("TeamOperate CharID %v CharType %v SkinID %v Table %v Status %v Action %v", charid, req.CharType, req.SkinID, table.tableid, table.status, req.Action)
 		return
 	}
 
@@ -473,9 +467,11 @@ func (table *Table) TeamOperate(charid uint32, req *clientmsg.Transfer_Team_Oper
 		if (*seat).charid == (*req).CharID {
 			if (*req).Action == clientmsg.TeamOperateActionType_TOA_CHOOSE {
 				(*seat).chartype = (*req).CharType
+				(*seat).skinid = (*req).SkinID
 			}
 			if (*req).Action == clientmsg.TeamOperateActionType_TOA_SETTLE {
 				(*seat).chartype = (*req).CharType
+				(*seat).skinid = (*req).SkinID
 				(*seat).status = SEAT_READY
 			}
 		}
@@ -751,18 +747,51 @@ func (table *Table) ConfirmTable(charid uint32, matchmode int32) {
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
+func (table *Table) ReconnectTable(charid uint32) *clientmsg.Rlt_Match {
+	msg := &clientmsg.Rlt_Match{}
+
+	if table == nil || table.status == MATCH_FINISH {
+		log.Debug("ReconnectTable Failed CharID %v", charid)
+		msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_RECONNECT_ERROR
+		return msg
+	}
+
+	log.Debug("ReconnectTable OK CharID %v TableID %v", charid, table.tableid)
+
+	msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_RECONNECT_OK
+	for _, seat := range table.seats {
+		member := &clientmsg.Rlt_Match_MemberInfo{}
+		member.CharID = (*seat).charid
+		member.OwnerID = (*seat).ownerid
+		member.TeamID = (*seat).teamid
+		member.CharName = (*seat).charname
+		member.CharType = (*seat).chartype
+		member.SkinID = (*seat).skinid
+		member.Status = clientmsg.MemberStatus(seat.status)
+		msg.Members = append(msg.Members, member)
+	}
+
+	return msg
+}
+
 func (table *Table) RejectTable(charid uint32, matchmode int32) {
 	if table.status != MATCH_CONFIRM {
 		log.Error("RejectTable CharID %v Table %v Status %v", charid, table.tableid, table.status)
 		return
 	}
 
-	msg := &clientmsg.Rlt_Match{}
+	r := gamedata.CSVMatchMode.Index((*table).matchmode)
+	row := r.(*cfg.MatchMode)
+
+	msg := &clientmsg.Rlt_Match{
+		RetCode:       clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM,
+		WaitUntilTime: time.Now().Unix() + int64(row.RejectWaitTime),
+	}
 
 	for _, seat := range table.seats {
 		if (*seat).charid == charid {
 			seat.status = SEAT_REJECT
-			log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
+			log.Debug("RejectTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
 
 			member := &clientmsg.Rlt_Match_MemberInfo{}
 			member.CharID = (*seat).charid
@@ -770,6 +799,7 @@ func (table *Table) RejectTable(charid uint32, matchmode int32) {
 			member.TeamID = (*seat).teamid
 			member.CharName = (*seat).charname
 			member.CharType = (*seat).chartype
+			member.SkinID = (*seat).skinid
 			member.Status = clientmsg.MemberStatus(seat.status)
 			msg.Members = append(msg.Members, member)
 
@@ -777,14 +807,9 @@ func (table *Table) RejectTable(charid uint32, matchmode int32) {
 		}
 	}
 
-	table.changeTableStatus(MATCH_SOMEBODY_REJECT)
-	msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
-
-	r := gamedata.CSVMatchMode.Index((*table).matchmode)
-	row := r.(*cfg.MatchMode)
-	msg.WaitUntilTime = time.Now().Unix() + int64(row.RejectWaitTime)
-
 	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
+
+	table.changeTableStatus(MATCH_SOMEBODY_REJECT)
 }
 
 func (table *Table) ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
@@ -811,7 +836,7 @@ func (table *Table) FormatTableInfo() string {
 func (table *Table) FormatSeatInfo() string {
 	output := table.FormatTableInfo()
 	for _, seat := range (*table).seats {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tCharType:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tJoinTime:%v\tCharType:%v\tSkinID:%v\tOwnerID:%v\tTeamID:%v\tStatus:%v\tGSID:%v\tCharName:%v", (*seat).charid, (*seat).jointime.Format(TIME_FORMAT), (*seat).chartype, (*seat).skinid, (*seat).ownerid, (*seat).teamid, (*seat).status, (*seat).serverid, (*seat).charname)}, "\r\n")
 	}
 	return output
 }

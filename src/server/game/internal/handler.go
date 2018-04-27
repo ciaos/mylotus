@@ -122,6 +122,15 @@ func handleReqLogin(args []interface{}) {
 		}
 	}
 
+	if len(m.SessionKey) == 0 {
+		log.Error("Empty SessionKey")
+		a.WriteMsg(&clientmsg.Rlt_Login{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		a.Close()
+		return
+	}
+
 	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
 	if a.UserData() != nil || int(m.ServerID) != conf.Server.ServerID || err != nil {
 		a.WriteMsg(&clientmsg.Rlt_Login{
@@ -160,6 +169,11 @@ func handleReqReConnectGS(args []interface{}) {
 		return
 	}
 
+	if len(m.SessionKey) == 0 {
+		a.Close()
+		return
+	}
+
 	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		a.WriteMsg(&clientmsg.Rlt_Re_ConnectGS{
@@ -190,6 +204,8 @@ func handleReqReConnectGS(args []interface{}) {
 			Charid: m.CharID,
 		}
 		SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, m.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT, innerReq)
+	} else if player.BattleServerID != 0 {
+		// 如果在战斗，不做任何处理，否则会影响战斗
 	}
 }
 
@@ -286,6 +302,8 @@ func handleTransferTeamOperate(args []interface{}) {
 		log.Error("Player %v HaveHero %v Error", player.Char.CharID, m.CharType)
 		return
 	}
+
+	//todo 判断是否有皮肤
 
 	if player.MatchServerID > 0 {
 		SendMessageTo(int32(player.MatchServerID), conf.Server.MatchServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_MS_CHOOSE_OPERATE, m)
@@ -435,12 +453,12 @@ func handleReqMakeTeamOperate(args []interface{}) {
 
 	log.Debug("CharID %v Requst MakeTeamOperate %v", player.Char.CharID, m)
 	innerReq := &proxymsg.Proxy_GS_MS_MakeTeamOperate{
-		Action : int32(m.Action),
-		Matchmode : int32(m.Mode),
-		Mapid : m.MapID,
-		Targetid : m.TargetID,
-		Benchid : m.BenchID,
-		Matchserverid : m.MatchServerID,
+		Action:        int32(m.Action),
+		Matchmode:     int32(m.Mode),
+		Mapid:         m.MapID,
+		Targetid:      m.TargetID,
+		Benchid:       m.BenchID,
+		Matchserverid: m.MatchServerID,
 	}
 
 	if m.Action == clientmsg.MakeTeamOperateType_MTOT_CREATE {
@@ -538,10 +556,10 @@ func handleReqConnectBS(args []interface{}) {
 	}
 
 	ret, name := room.connectRoom(m.CharID, m.BattleKey, a.RemoteAddr().String())
-	if  ret {
+	if ret {
 		player := &BPlayer{
 			CharID:        m.CharID,
-			CharName: 	   name,
+			CharName:      name,
 			GameServerID:  int(room.getMemberGSID(m.CharID)),
 			HeartBeatTime: time.Now(),
 		}
@@ -628,7 +646,9 @@ func handleReqReConnectBS(args []interface{}) {
 	m := args[0].(*clientmsg.Req_Re_ConnectBS)
 	a := args[1].(gate.Agent)
 
+	log.Debug("handleReqReConnectBS")
 	if a.UserData() != nil {
+		log.Error("Exist Connection Try Reconnect")
 		a.Close()
 		return
 	}
@@ -639,6 +659,7 @@ func handleReqReConnectBS(args []interface{}) {
 		return
 	}
 
+	log.Debug("handleReqReConnectBS CharID %v From Addr %v FrameID %v RoomID %v", m.CharID, a.RemoteAddr().String(), m.FrameID, room.roomid)
 	ret, _ := room.reConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
 	if ret {
 		ReconnectBattlePlayer(m.CharID, &a)

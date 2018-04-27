@@ -60,8 +60,6 @@ func queueMessage(args []interface{}) {
 		proxyHandleBSGSFinishBattle(pmsg)
 	case proxymsg.ProxyMessageType_PMT_GS_MS_RECONNECT:
 		proxyHandleGSMSReconnect(pmsg)
-	case proxymsg.ProxyMessageType_PMT_MS_GS_RECONNECT:
-		proxyHandleMSGSReconnect(pmsg)
 	case proxymsg.ProxyMessageType_PMT_BS_MS_SYNCBSINFO:
 		proxyHandleBSMSSyncBSInfo(pmsg)
 	case proxymsg.ProxyMessageType_PMT_GS_MS_MAKE_TEAM_OPERATE:
@@ -135,23 +133,9 @@ func proxyHandleGSMSReconnect(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
-	ReconnectTable(msg.Charid, pmsg)
-}
-
-func proxyHandleMSGSReconnect(pmsg *proxymsg.InternalMessage) {
-	msg := &proxymsg.Proxy_MS_GS_Reconnect{}
-	err := proto.Unmarshal(pmsg.Msgdata, msg)
-	if err != nil {
-		log.Error("proxymsg.Proxy_MS_GS_Reconnect Decode Error %v", err)
-		return
-	}
-
-	if msg.Ok == false {
-		player, _ := GetPlayer(pmsg.Charid)
-		if player != nil {
-			player.MatchServerID = 0
-		}
-	}
+	table := getTableByCharID(msg.Charid)
+	rsp := table.ReconnectTable(msg.Charid)
+	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, msg.Charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
 }
 
 func proxyHandleGSMSOffline(pmsg *proxymsg.InternalMessage) {
@@ -235,6 +219,15 @@ func proxyHandleMSGSMatchResult(pmsg *proxymsg.InternalMessage) {
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 			player.MatchServerID = 0
 		}
+	} else if player.GetGamePlayerStatus() == clientmsg.UserStatus_US_PLAYER_ONLINE {
+		if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_RECONNECT_OK {
+			SendMsgToPlayer(pmsg.Charid, msg)
+			player.MatchServerID = int(pmsg.Fromid)
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_MATCH)
+		} else if msg.RetCode == clientmsg.Type_GameRetCode_GRC_MATCH_RECONNECT_ERROR {
+			SendMsgToPlayer(pmsg.Charid, msg)
+			player.MatchServerID = 0
+		}
 	}
 }
 
@@ -272,7 +265,9 @@ func proxyHandleMSGSBeginBattle(pmsg *proxymsg.InternalMessage) {
 	}
 	player, err := GetPlayer(pmsg.Charid)
 	if player != nil {
-		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BATTLE)
+		if player.GetGamePlayerStatus() != clientmsg.UserStatus_US_PLAYER_OFFLINE {
+			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_BATTLE)
+		}
 		player.BattleServerID = int(msg.BattleServerID)
 		player.MatchServerID = 0
 	}
@@ -317,6 +312,7 @@ func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 		return
 	}
 
+	log.Debug("Proxy_BS_GS_Query_BattleInfo %v", msg.CharID)
 	if msg.InBattle {
 		rsp := &clientmsg.Rlt_Continue_Battle{
 			CharID:     msg.CharID,

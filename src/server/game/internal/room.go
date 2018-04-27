@@ -41,6 +41,7 @@ type Member struct {
 	progress     int32
 	frameid      uint32
 	remoteaddr   string
+	skinid       int32
 }
 
 type Room struct {
@@ -342,6 +343,7 @@ func createRoom(msg *proxymsg.Proxy_MS_BS_AllocBattleRoom) (error, int32, []byte
 			progress:     0,
 			frameid:      0,
 			remoteaddr:   "",
+			skinid:       mem.SkinID,
 		}
 
 		//Leave Previous Room
@@ -408,6 +410,7 @@ func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_
 			CharType: member.chartype,
 			TeamID:   member.teamid,
 			OwnerID:  member.ownerid,
+			SkinID:   member.skinid,
 		}
 
 		rsp.Member = append(rsp.Member, m)
@@ -416,6 +419,11 @@ func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_
 }
 
 func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string) (bool, string) {
+	if len(battlekey) == 0 {
+		log.Error("Empty Battlekey")
+		return false, ""
+	}
+
 	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
@@ -455,6 +463,11 @@ func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string
 }
 
 func (room *Room) reConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
+	if len(battlekey) == 0 {
+		log.Error("Empty Battlekey")
+		return false, ""
+	}
+
 	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)
@@ -528,7 +541,7 @@ func (room *Room) FormatRoomInfo() string {
 func (room *Room) FormatMemberInfo() string {
 	output := room.FormatRoomInfo()
 	for _, member := range (*room).members {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tCharType:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v\tCharName:%v", member.charid, member.chartype, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid, member.charname)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tCharType:%v\tSkinID:%v\tTeamType:%v\tStatus:%v\tGSID:%v\tOwnerID:%v\tFrameID:%v\tCharName:%v", member.charid, member.chartype, member.skinid, member.teamid, member.status, member.gameserverid, member.ownerid, member.frameid, member.charname)}, "\r\n")
 	}
 	return output
 }

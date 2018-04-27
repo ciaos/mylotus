@@ -13,25 +13,27 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func TestConnectBS(t *testing.T) { TestingT(t) }
+func TestReConnectBS(t *testing.T) { TestingT(t) }
 
-type ConnectBSSuite struct {
+type ReConnectBSSuite struct {
 	conn  net.Conn
 	err   error
 	bconn net.Conn
 
-	charid uint32
+	charid    uint32
+	battlekey []byte
+	bsaddr    string
 }
 
-var _ = Suite(&ConnectBSSuite{})
+var _ = Suite(&ReConnectBSSuite{})
 
-func (s *ConnectBSSuite) SetUpSuite(c *C) {
+func (s *ReConnectBSSuite) SetUpSuite(c *C) {
 }
 
-func (s *ConnectBSSuite) TearDownSuite(c *C) {
+func (s *ReConnectBSSuite) TearDownSuite(c *C) {
 }
 
-func (s *ConnectBSSuite) SetUpTest(c *C) {
+func (s *ReConnectBSSuite) SetUpTest(c *C) {
 	s.conn, s.err = net.Dial("tcp", LoginServerAddr)
 	if s.err != nil {
 		c.Fatal("Connect Server Error ", s.err)
@@ -42,13 +44,7 @@ func (s *ConnectBSSuite) SetUpTest(c *C) {
 	password := "123456"
 
 	s.charid = QuickLogin(c, &s.conn, username, password)
-}
 
-func (s *ConnectBSSuite) TearDownTest(c *C) {
-	s.conn.Close()
-}
-
-func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	msgdata := QuickMatch(c, &s.conn)
 	rspMatch := &clientmsg.Rlt_Match{}
 	err := proto.Unmarshal(msgdata, rspMatch)
@@ -94,6 +90,8 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 	if s.err != nil {
 		c.Fatal("Connect BattleServer Error ", s.err)
 	}
+	s.battlekey = rspAddress.BattleKey
+	s.bsaddr = rspAddress.BattleAddr
 
 	reqMsg := &clientmsg.Req_ConnectBS{
 		RoomID:    rspAddress.RoomID,
@@ -115,5 +113,56 @@ func (s *ConnectBSSuite) TestConnectBS(c *C) {
 		c.Assert(member.CharType, Equals, int32(1001))
 		c.Assert(member.SkinID, Equals, int32(100001))
 	}
+
+	for _, member := range rMsg.Member {
+		req := &clientmsg.Transfer_Loading_Progress{
+			CharID:   member.CharID,
+			Progress: 100,
+		}
+		Send(c, &s.bconn, clientmsg.MessageType_MT_TRANSFER_LOADING_PROGRESS, req)
+	}
+	msgdata = RecvUtil(c, &s.bconn, clientmsg.MessageType_MT_RLT_STARTBATTLE)
+	rsp := &clientmsg.Rlt_StartBattle{}
+	err = proto.Unmarshal(msgdata, rsp)
+	if err != nil {
+		c.Fatal("Rlt_StartBattle Decode Error ", err)
+	}
+	c.Assert(rsp.RandSeed, Not(Equals), 0)
+}
+
+func (s *ReConnectBSSuite) TearDownTest(c *C) {
+	s.conn.Close()
+}
+
+func (s *ReConnectBSSuite) TestReConnectBS(c *C) {
 	s.bconn.Close()
+	time.Sleep(time.Duration(3) * time.Second)
+
+	s.bconn, s.err = kcp.Dial(s.bsaddr)
+	if s.err != nil {
+		c.Fatal("Connect BattleServer Error ", s.err)
+	}
+
+	req := &clientmsg.Req_Re_ConnectBS{
+		BattleKey: s.battlekey,
+		CharID:    s.charid,
+		FrameID:   0,
+	}
+
+	msgdata := SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_RE_CONNECTBS, req, clientmsg.MessageType_MT_RLT_CONNECTBS)
+	rsp := &clientmsg.Rlt_ConnectBS{}
+	err := proto.Unmarshal(msgdata, rsp)
+	if err != nil {
+		c.Fatal("Rlt_ConnectBS Decode Error ", err)
+	}
+	c.Assert(rsp.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_OK)
+	c.Assert(rsp.IsReconnect, Equals, true)
+
+	msgdata = RecvUtil(c, &s.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND)
+	cmd := &clientmsg.Transfer_Command{}
+	err = proto.Unmarshal(msgdata, cmd)
+	if err != nil {
+		c.Fatal("Transfer_Command Decode Error ", err)
+	}
+	c.Assert(cmd.FrameID, Equals, uint32(1))
 }

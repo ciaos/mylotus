@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"net"
 	"server/msg/clientmsg"
-
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -12,10 +11,10 @@ import (
 )
 
 const (
-	LoginServerAddr = "127.0.0.1:8888"
+	LoginServerAddr = "127.0.0.1:8000"
 	GameServerAddr  = LoginServerAddr
 
-	GameServerID = 1
+	GameServerID = 2
 )
 
 func SendAndRecvUtil(c *C, conn *net.Conn, msgid clientmsg.MessageType, msgdata interface{}, waitmsgid clientmsg.MessageType) []byte {
@@ -144,7 +143,12 @@ func QuickMatch(c *C, conn *net.Conn) []byte {
 	}
 
 	msgdata := SendAndRecvUtil(c, conn, clientmsg.MessageType_MT_REQ_MATCH, reqMsg, clientmsg.MessageType_MT_RLT_MATCH)
-
+	rspMsg := &clientmsg.Rlt_Match{}
+	err := proto.Unmarshal(msgdata, rspMsg)
+	if err != nil {
+		c.Fatal("Rlt_Match Decode Error ", err)
+	}
+	c.Assert(rspMsg.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_MATCH_START)
 	msgdata = RecvUtil(c, conn, clientmsg.MessageType_MT_RLT_MATCH)
 	return msgdata
 }
