@@ -17,8 +17,8 @@ var (
 	LittleEndian           = false
 
 	// skeleton conf
-	GoLen              = 100000
+	GoLen              = 10000
 	TimerDispatcherLen = 10000
-	AsynCallLen        = 100000
-	ChanRPCLen         = 100000
+	AsynCallLen        = 10000
+	ChanRPCLen         = 20000
 )
