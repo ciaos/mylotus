@@ -419,11 +419,6 @@ func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_
 }
 
 func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string) (bool, string) {
-	if len(battlekey) == 0 {
-		log.Error("Empty Battlekey")
-		return false, ""
-	}
-
 	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		log.Error("ConnectRoom Battlekey Decrypt Err %v", err)
@@ -463,11 +458,6 @@ func (room *Room) connectRoom(charid uint32, battlekey []byte, remoteaddr string
 }
 
 func (room *Room) reConnectRoom(charid uint32, frameid uint32, battlekey []byte, remoteaddr string) (bool, string) {
-	if len(battlekey) == 0 {
-		log.Error("Empty Battlekey")
-		return false, ""
-	}
-
 	plaintext, err := tool.DesDecrypt(battlekey, []byte(tool.CRYPT_KEY))
 	if err != nil {
 		log.Error("ReConnectRoom Battlekey Decrypt Err %v", err)

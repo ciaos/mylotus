@@ -122,15 +122,6 @@ func handleReqLogin(args []interface{}) {
 		}
 	}
 
-	if len(m.SessionKey) == 0 {
-		log.Error("Empty SessionKey")
-		a.WriteMsg(&clientmsg.Rlt_Login{
-			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
-		})
-		a.Close()
-		return
-	}
-
 	useridBuf, err := tool.DesDecrypt(m.SessionKey, []byte(tool.CRYPT_KEY))
 	if a.UserData() != nil || int(m.ServerID) != conf.Server.ServerID || err != nil {
 		a.WriteMsg(&clientmsg.Rlt_Login{
@@ -165,11 +156,6 @@ func handleReqReConnectGS(args []interface{}) {
 	a := args[1].(gate.Agent)
 
 	if a.UserData() != nil {
-		a.Close()
-		return
-	}
-
-	if len(m.SessionKey) == 0 {
 		a.Close()
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/cipher"
 	"crypto/des"
+	"errors"
 )
 
 const (
@@ -11,6 +12,10 @@ const (
 )
 
 func DesDecrypt(crypted, key []byte) ([]byte, error) {
+	if len(crypted) == 0 {
+		return nil, errors.New("empty crypted content")
+	}
+
 	block, err := des.NewCipher(key)
 	if err != nil {
 		return nil, err
