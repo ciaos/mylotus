@@ -13,7 +13,8 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func TestReConnectBS(t *testing.T) { TestingT(t) }
+func TestReConnectBS(t *testing.T)         { TestingT(t) }
+func TestReConnectBS_Restart(t *testing.T) { TestingT(t) }
 
 type ReConnectBSSuite struct {
 	conn  net.Conn
@@ -135,6 +136,67 @@ func (s *ReConnectBSSuite) TearDownTest(c *C) {
 }
 
 func (s *ReConnectBSSuite) TestReConnectBS(c *C) {
+
+	closeFrameID := uint32(20)
+	for {
+		msgdata := RecvUtil(c, &s.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND)
+		cmd := &clientmsg.Transfer_Command{}
+		err := proto.Unmarshal(msgdata, cmd)
+		if err != nil {
+			c.Fatal("Transfer_Command Decode Error ", err)
+		}
+		if closeFrameID == cmd.FrameID {
+			break
+		}
+	}
+	s.bconn.Close()
+	time.Sleep(time.Duration(3) * time.Second)
+
+	s.bconn, s.err = kcp.Dial(s.bsaddr)
+	if s.err != nil {
+		c.Fatal("Connect BattleServer Error ", s.err)
+	}
+
+	req := &clientmsg.Req_Re_ConnectBS{
+		BattleKey: s.battlekey,
+		CharID:    s.charid,
+		FrameID:   closeFrameID,
+	}
+
+	msgdata := SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_RE_CONNECTBS, req, clientmsg.MessageType_MT_RLT_CONNECTBS)
+	rsp := &clientmsg.Rlt_ConnectBS{}
+	err := proto.Unmarshal(msgdata, rsp)
+	if err != nil {
+		c.Fatal("Rlt_ConnectBS Decode Error ", err)
+	}
+	c.Assert(rsp.RetCode, Equals, clientmsg.Type_BattleRetCode_BRC_OK)
+	c.Assert(rsp.IsReconnect, Equals, true)
+
+	msgdata = RecvUtil(c, &s.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND)
+	cmd := &clientmsg.Transfer_Command{}
+	err = proto.Unmarshal(msgdata, cmd)
+	if err != nil {
+		c.Fatal("Transfer_Command Decode Error ", err)
+	}
+	c.Assert(cmd.FrameID, Equals, closeFrameID+1)
+
+	s.bconn.Close()
+}
+
+func (s *ReConnectBSSuite) TestReConnectBS_Restart(c *C) {
+
+	closeFrameID := uint32(20)
+	for {
+		msgdata := RecvUtil(c, &s.bconn, clientmsg.MessageType_MT_TRANSFER_COMMAND)
+		cmd := &clientmsg.Transfer_Command{}
+		err := proto.Unmarshal(msgdata, cmd)
+		if err != nil {
+			c.Fatal("Transfer_Command Decode Error ", err)
+		}
+		if closeFrameID == cmd.FrameID {
+			break
+		}
+	}
 	s.bconn.Close()
 	time.Sleep(time.Duration(3) * time.Second)
 
@@ -165,4 +227,6 @@ func (s *ReConnectBSSuite) TestReConnectBS(c *C) {
 		c.Fatal("Transfer_Command Decode Error ", err)
 	}
 	c.Assert(cmd.FrameID, Equals, uint32(1))
+
+	s.bconn.Close()
 }
