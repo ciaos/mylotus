@@ -199,14 +199,14 @@ func (room *Room) update(now *time.Time) {
 						member.frameid = msgdata.FrameID
 
 						if member.frameid >= room.frameid || member.frameid >= uint32(len(room.messagesbackup)) {
-							log.Debug("Reconnect All Frame Sent 1 CharID %v, FrameID %v", member.charid, member.frameid)
+							log.Debug("Reconnect All Frame Sent CharID %v, FrameID %v , Room.FrameID %v", member.charid, member.frameid, room.frameid)
 							member.changeMemberStatus(MEMBER_CONNECTED)
 							break
 						}
 					}
 				} else {
-					log.Debug("Reconnect All Frame Sent 2 CharID %v, FrameID %v", member.charid, member.frameid)
-					member.changeMemberStatus(MEMBER_CONNECTED)
+					log.Error("CharID %v Invalid FrameID %v Room.FrameID %v", member.charid, member.frameid, room.frameid)
+					member.frameid = 0 //restart
 				}
 			}
 		}
