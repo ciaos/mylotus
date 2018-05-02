@@ -2,6 +2,7 @@ package internal
 
 import (
 	"server/base"
+	"server/gamedata"
 
 	"github.com/ciaos/leaf/module"
 )
@@ -17,6 +18,8 @@ type Module struct {
 
 func (m *Module) OnInit() {
 	m.Skeleton = skeleton
+
+	gamedata.LoadCSV()
 
 	InitMongoConnection()
 	InitRedisConnection()

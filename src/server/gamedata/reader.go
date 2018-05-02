@@ -24,7 +24,16 @@ func readRf(st interface{}) *recordfile.RecordFile {
 	return rf
 }
 
-var CSVMatchMode = readRf(cfg.MatchMode{})
-var CSVGameServer = readRf(cfg.GameServer{})
-var CSVNewPlayer = readRf(cfg.NewPlayer{})
-var CSVBenchConfig = readRf(cfg.BenchConfig{})
+var (
+	CSVMatchMode   *recordfile.RecordFile
+	CSVGameServer  *recordfile.RecordFile
+	CSVNewPlayer   *recordfile.RecordFile
+	CSVBenchConfig *recordfile.RecordFile
+)
+
+func LoadCSV() {
+	CSVMatchMode = readRf(cfg.MatchMode{})
+	CSVGameServer = readRf(cfg.GameServer{})
+	CSVNewPlayer = readRf(cfg.NewPlayer{})
+	CSVBenchConfig = readRf(cfg.BenchConfig{})
+}

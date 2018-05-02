@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"runtime/debug"
+	"server/gamedata"
 	"strconv"
 	"strings"
 )
@@ -21,6 +22,7 @@ func init() {
 	skeleton.RegisterCommand("gplayer", "list gameserver online member count", commandGPlayer)
 	skeleton.RegisterCommand("bplayer", "list battleserver online member count", commandBPlayer)
 	skeleton.RegisterCommand("bsinfo", "list battleserver info for matchserver", commandBSInfo)
+	skeleton.RegisterCommand("reloadcsv", "reload csv file", commandReloadCSV)
 }
 
 func commandFree(args []interface{}) interface{} {
@@ -159,4 +161,9 @@ func commandBSInfo(args []interface{}) interface{} {
 		output = strings.Join([]string{output, FormatBSOnline(i)}, "\r\n")
 	}
 	return strings.TrimLeft(output, "\r\n")
+}
+
+func commandReloadCSV(args []interface{}) interface{} {
+	gamedata.LoadCSV()
+	return "OK"
 }
