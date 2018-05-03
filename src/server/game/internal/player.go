@@ -488,7 +488,7 @@ func FormatOneGPlayerInfo(charid uint32, assetname string) string {
 func FormatBPlayerInfo() string {
 	var output string
 	for _, player := range BattlePlayerManager {
-		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\ttPingTime:%v\tGSID:%v\tIsOffline:%v\tCharName:%v", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.OnlineTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.HeartBeatTime.Format(TIME_FORMAT), player.player.GameServerID, player.player.IsOffline, player.player.CharName)}, "\r\n")
+		output = strings.Join([]string{output, fmt.Sprintf("CharID:%10v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tGSID:%v\tIsOffline:%v\tCharName:%v", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.OnlineTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.HeartBeatTime.Format(TIME_FORMAT), player.player.GameServerID, player.player.IsOffline, player.player.CharName)}, "\r\n")
 	}
 	output = strings.Join([]string{output, fmt.Sprintf("BattlePlayerCnt:%d", len(BattlePlayerManager))}, "\r\n")
 	return strings.TrimLeft(output, "\r\n")
@@ -498,7 +498,7 @@ func FormatOneBPlayerInfo(charid uint32) string {
 	output := ""
 	player, ok := BattlePlayerManager[charid]
 	if ok {
-		output = fmt.Sprintf("CharID:%10v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\ttPingTime:%v\tGSID:%v\tIsOffline:%v\tCharName:%v", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.OnlineTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.HeartBeatTime.Format(TIME_FORMAT), player.player.GameServerID, player.player.IsOffline, player.player.CharName)
+		output = fmt.Sprintf("CharID:%10v\tAddr:%v\tOnlineTime:%v\tOfflineTime:%v\tPingTime:%v\tGSID:%v\tIsOffline:%v\tCharName:%v", player.player.CharID, (*player.agent).RemoteAddr().String(), player.player.OnlineTime.Format(TIME_FORMAT), player.player.OfflineTime.Format(TIME_FORMAT), player.player.HeartBeatTime.Format(TIME_FORMAT), player.player.GameServerID, player.player.IsOffline, player.player.CharName)
 	}
 	return output
 }
