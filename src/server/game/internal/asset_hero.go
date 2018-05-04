@@ -121,7 +121,7 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 
 		c.Update(bson.M{"charid": charid}, data)
 	} else {
-		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
+		asset.AssetHero_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
 	return true
 }
@@ -158,7 +158,7 @@ func (asset *PlayerAsset) AssetHero_DelHero(charid uint32, chartypeid uint32) {
 
 		c.Update(bson.M{"charid": charid}, data)
 	} else {
-		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
+		asset.AssetHero_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
 }
 

@@ -44,7 +44,7 @@ type PlayerAsset struct {
 	AssetAchievement_DirtyFlag int8
 	AssetTask_DirtyFlag        int8
 
-	lastSaveDBTime int64
+	lastSaveDBTime time.Time
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -60,7 +60,7 @@ func (player *Player) LoadPlayerAsset() bool {
 		player.loadPlayerAssetAchievement() &&
 		player.loadPlayerAssetTask()
 
-	player.Asset.lastSaveDBTime = time.Now().Unix()
+	player.Asset.lastSaveDBTime = time.Now()
 	return ret
 }
 
@@ -92,7 +92,7 @@ func (pinfo *PlayerInfo) UpdatePlayerAsset(now *time.Time) {
 	pinfo.syncPlayerAssetTask()
 
 	//sync to db
-	if now.Unix()-pinfo.player.Asset.lastSaveDBTime > int64(conf.Server.SaveAssetStep) {
+	if now.Unix()-pinfo.player.Asset.lastSaveDBTime.Unix() > int64(conf.Server.SaveAssetStep) {
 
 		pinfo.player.savePlayerAssetFriend()
 		pinfo.player.savePlayerAssetCash()
@@ -104,7 +104,7 @@ func (pinfo *PlayerInfo) UpdatePlayerAsset(now *time.Time) {
 		pinfo.player.savePlayerAssetAchievement()
 		pinfo.player.savePlayerAssetTask()
 
-		pinfo.player.Asset.lastSaveDBTime = now.Unix()
+		pinfo.player.Asset.lastSaveDBTime = *now
 	}
 }
 
@@ -119,7 +119,7 @@ func (player *Player) SavePlayerAsset() bool {
 		player.savePlayerAssetAchievement() &&
 		player.savePlayerAssetTask()
 
-	player.Asset.lastSaveDBTime = time.Now().Unix()
+	player.Asset.lastSaveDBTime = time.Now()
 	return ret
 }
 
