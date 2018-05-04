@@ -225,9 +225,15 @@ func handleReqSetCharName(args []interface{}) {
 		RetCode:     clientmsg.Type_GameRetCode_GRC_OK,
 		CharName:    m.CharName,
 		IsNewCreate: m.IsNewCreate,
+		Sex:         m.Sex,
 	})
 
 	player.Char.CharName = m.CharName
+
+	_, ok := clientmsg.Type_SexType_name[int32(m.Sex)]
+	if ok {
+		player.Char.Sex = int32(m.Sex)
+	}
 }
 
 func handleReqMatch(args []interface{}) {
