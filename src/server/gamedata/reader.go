@@ -29,6 +29,7 @@ var (
 	CSVGameServer  *recordfile.RecordFile
 	CSVNewPlayer   *recordfile.RecordFile
 	CSVBenchConfig *recordfile.RecordFile
+	CSVShopItem    *recordfile.RecordFile
 )
 
 func LoadCSV() {
@@ -36,4 +37,5 @@ func LoadCSV() {
 	CSVGameServer = readRf(cfg.GameServer{})
 	CSVNewPlayer = readRf(cfg.NewPlayer{})
 	CSVBenchConfig = readRf(cfg.BenchConfig{})
+	CSVShopItem = readRf(cfg.ShopItem{})
 }

@@ -30,8 +30,8 @@ func (player *Player) loadPlayerAssetMail() bool {
 
 		rewards := &clientmsg.Rlt_Give_Reward{}
 		for _, re := range row.InitMail.Rewards {
-			reward := &clientmsg.Rlt_Give_Reward_Reward{
-				X: int32(clientmsg.Type_Vec3X_TVX_CASH),
+			reward := &clientmsg.AwardVec{
+				X: clientmsg.Type_Vec3X_TVX_CASH,
 				Y: int32(re[0]),
 				Z: int32(re[1]),
 			}

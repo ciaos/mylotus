@@ -118,3 +118,38 @@ func (asset *PlayerAsset) AssetCash_AddDiamondCoin(coin int) {
 
 	asset.AssetCash_DirtyFlag |= DIRTYFLAG_TO_ALL
 }
+
+func (asset *PlayerAsset) AssetCash_CashEnough(cashtype clientmsg.Type_CashType, cashnum uint32) bool {
+	switch cashtype {
+	case clientmsg.Type_CashType_TCT_GOLD:
+		if asset.AssetCash.GoldCoin >= cashnum {
+			return true
+		}
+	case clientmsg.Type_CashType_TCT_SILVER:
+		if asset.AssetCash.SilverCoin >= cashnum {
+			return true
+		}
+	case clientmsg.Type_CashType_TCT_DIAMOND:
+		if asset.AssetCash.Diamond >= cashnum {
+			return true
+		}
+	}
+	return false
+}
+
+func (asset *PlayerAsset) AssetCash_ReduceCash(cashtype clientmsg.Type_CashType, cashnum uint32) {
+	switch cashtype {
+	case clientmsg.Type_CashType_TCT_GOLD:
+		if asset.AssetCash.GoldCoin >= cashnum {
+			asset.AssetCash.GoldCoin -= cashnum
+		}
+	case clientmsg.Type_CashType_TCT_SILVER:
+		if asset.AssetCash.SilverCoin >= cashnum {
+			asset.AssetCash.SilverCoin -= cashnum
+		}
+	case clientmsg.Type_CashType_TCT_DIAMOND:
+		if asset.AssetCash.Diamond >= cashnum {
+			asset.AssetCash.Diamond -= cashnum
+		}
+	}
+}

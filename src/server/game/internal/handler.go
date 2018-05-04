@@ -6,6 +6,8 @@ import (
 	//"math/rand"
 	"reflect"
 	"server/conf"
+	"server/gamedata"
+	"server/gamedata/cfg"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
 	"server/tool"
@@ -17,8 +19,8 @@ import (
 )
 
 func init() {
+	//game server
 	handler(&clientmsg.Ping{}, handlePing)
-
 	handler(&clientmsg.Req_ServerTime{}, handleReqServerTime)
 	handler(&clientmsg.Req_Login{}, handleReqLogin)
 	handler(&clientmsg.Req_SetCharName{}, handleReqSetCharName)
@@ -31,7 +33,10 @@ func init() {
 	handler(&clientmsg.Req_Mail_Action{}, handleReqMailAction)
 	handler(&clientmsg.Req_Re_ConnectGS{}, handleReqReConnectGS)
 	handler(&clientmsg.Req_GM_Command{}, handleReqGMCommand)
+	handler(&clientmsg.Req_Shop_List{}, handleReqShopList)
+	handler(&clientmsg.Req_Shop_Buy{}, handleReqShopBuy)
 
+	//battle server
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
 	handler(&clientmsg.Req_EndBattle{}, handleReqEndBattle)
 	handler(&clientmsg.Transfer_Loading_Progress{}, handleTransferLoadingProgress)
@@ -663,7 +668,8 @@ func handleReqGMCommand(args []interface{}) {
 	m := args[0].(*clientmsg.Req_GM_Command)
 	a := args[1].(gate.Agent)
 
-	if a.UserData() == nil {
+	player := getGSPlayer(&a)
+	if player == nil {
 		a.Close()
 		return
 	}
@@ -680,4 +686,130 @@ func handleReqGMCommand(args []interface{}) {
 		Result: result.(string),
 	}
 	a.WriteMsg(rsp)
+}
+
+func handleReqShopList(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Shop_List)
+	a := args[1].(gate.Agent)
+
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
+	}
+
+	rsp := &clientmsg.Rlt_Shop_List{
+		Category: m.Category,
+	}
+	count := gamedata.CSVShopItem.NumRecord()
+	for i := 0; i < count; i++ {
+		itemCfg := gamedata.CSVShopItem.Record(i).(*cfg.ShopItem)
+		if clientmsg.Type_Category(itemCfg.Category) != m.Category {
+			continue
+		}
+
+		item := &clientmsg.Rlt_Shop_List_ShopItem{
+			ItemID:   itemCfg.ItemID,
+			Name:     itemCfg.Name,
+			Icon:     itemCfg.Icon,
+			Desc:     itemCfg.Description,
+			Discount: itemCfg.Discount,
+			Order:    itemCfg.Order,
+		}
+
+		for j := 0; j < len(itemCfg.Award); j++ {
+			award := &clientmsg.AwardVec{
+				X: clientmsg.Type_Vec3X(itemCfg.Award[j][0]),
+				Y: int32(itemCfg.Award[j][1]),
+				Z: int32(itemCfg.Award[j][2]),
+			}
+			item.AwardList = append(item.AwardList, award)
+		}
+
+		for j := 0; j < len(itemCfg.Price); j++ {
+			buy := &clientmsg.Rlt_Shop_List_BuyVec{
+				CashType: clientmsg.Type_CashType(itemCfg.Price[j][0]),
+				CashNum:  int32(itemCfg.Price[j][1]),
+			}
+			item.BuyList = append(item.BuyList, buy)
+		}
+		rsp.Goods = append(rsp.Goods, item)
+	}
+	a.WriteMsg(rsp)
+}
+
+func handleReqShopBuy(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Shop_Buy)
+	a := args[1].(gate.Agent)
+
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
+	}
+	log.Debug("Player %v Buy %v Use %v", player.Char.CharID, m.ItemID, m.CashType)
+
+	rsp := &clientmsg.Rlt_Shop_Buy{}
+
+	r := gamedata.CSVShopItem.Index(m.ItemID)
+	if r == nil {
+		log.Error("Buy CSVShopItem ItemID Not Found %v ", m.ItemID)
+		rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_INVALID_ITEMID
+		a.WriteMsg(rsp)
+		return
+	}
+	row := r.(*cfg.ShopItem)
+
+	price := 0
+	for i := 0; i < len(row.Price); i++ {
+		if row.Price[i][0] == int(m.CashType) {
+			price = row.Price[i][1]
+			break
+		}
+	}
+	if price == 0 {
+		log.Error("Buy CSVShopItem BuyType Not Found %v ItemID %v ", m.CashType, m.ItemID)
+		rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_INVALID_CASHTYPE
+		a.WriteMsg(rsp)
+		return
+	}
+
+	if player.GetPlayerAsset().AssetCash_CashEnough(m.CashType, uint32(price)) == false {
+		if m.CashType == clientmsg.Type_CashType_TCT_GOLD {
+			rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_LACK_CASH_GOLD
+		} else if m.CashType == clientmsg.Type_CashType_TCT_SILVER {
+			rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_LACK_CASH_SILVER
+		} else if m.CashType == clientmsg.Type_CashType_TCT_DIAMOND {
+			rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_LACK_CASH_DIAMOND
+		}
+		a.WriteMsg(rsp)
+		return
+	}
+
+	awards := []*clientmsg.AwardVec{}
+	for i := 0; i < len(row.Award); i++ {
+		award := &clientmsg.AwardVec{
+			X: clientmsg.Type_Vec3X(row.Award[i][0]),
+			Y: int32(row.Award[i][1]),
+			Z: int32(row.Award[i][2]),
+		}
+		awards = append(awards, award)
+	}
+
+	ret := player.GiveAward(awards)
+
+	if ret == true {
+		player.GetPlayerAsset().AssetCash_ReduceCash(m.CashType, uint32(price))
+		rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_OK
+		a.WriteMsg(rsp)
+
+		msg := &clientmsg.Rlt_Give_Reward{}
+		for i := 0; i < len(awards); i++ {
+			msg.Rewardlist = append(msg.Rewardlist, awards[i])
+		}
+		a.WriteMsg(msg)
+	} else {
+		rsp.RetCode = clientmsg.Type_BuyRetCode_TBR_SYSTEM_ERR
+		a.WriteMsg(rsp)
+	}
 }

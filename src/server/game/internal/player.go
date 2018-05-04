@@ -90,6 +90,29 @@ func (player *Player) saveGamePlayerCharacterInfo() {
 	c.Update(bson.M{"charid": player.Char.CharID}, player.Char)
 }
 
+func (player *Player) GiveAward(awards []*clientmsg.AwardVec) bool {
+	for i := 0; i < len(awards); i++ {
+		switch awards[i].X {
+		case clientmsg.Type_Vec3X_TVX_CASH:
+			switch clientmsg.Type_CashType(awards[i].Y) {
+			case clientmsg.Type_CashType_TCT_GOLD:
+				player.GetPlayerAsset().AssetCash_AddGoldCoin(int(awards[i].Z))
+			case clientmsg.Type_CashType_TCT_SILVER:
+				player.GetPlayerAsset().AssetCash_AddSilverCoin(int(awards[i].Z))
+			case clientmsg.Type_CashType_TCT_DIAMOND:
+				player.GetPlayerAsset().AssetCash_AddDiamondCoin(int(awards[i].Z))
+			}
+		case clientmsg.Type_Vec3X_TVX_HERO:
+			ret := player.GetPlayerAsset().AssetHero_AddHero(player.Char.CharID, uint32(awards[i].Y), int64(awards[i].Z))
+			if ret == false {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 func AddGamePlayer(player *Player, agent *gate.Agent) {
 	exist, ok := GamePlayerManager[player.Char.CharID]
 	if ok {

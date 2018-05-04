@@ -73,4 +73,8 @@ func init() {
 	Processor.Register(&clientmsg.Rlt_GM_Command{})
 
 	//51 - 60
+	Processor.Register(&clientmsg.Req_Shop_List{})
+	Processor.Register(&clientmsg.Rlt_Shop_List{})
+	Processor.Register(&clientmsg.Req_Shop_Buy{})
+	Processor.Register(&clientmsg.Rlt_Shop_Buy{})
 }

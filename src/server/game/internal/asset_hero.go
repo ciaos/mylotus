@@ -64,7 +64,7 @@ func (pinfo *PlayerInfo) syncPlayerAssetHero() {
 }
 
 //method
-func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, deadlinetime int64) {
+func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, deadlinetime int64) bool {
 	data := &clientmsg.Rlt_Asset_Hero{}
 
 	if asset == nil { //offline
@@ -74,7 +74,7 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 		c := s.DB(DB_NAME_GAME).C(AssetName_Hero)
 		err := c.Find(bson.M{"charid": charid}).One(data)
 		if err != nil {
-			return
+			return false
 		}
 	} else {
 		data = asset.AssetHero
@@ -84,6 +84,10 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 	for _, role := range data.Roles {
 		if role.CharTypeID == chartypeid {
 			hasowned = true
+
+			if role.RoleStatus == clientmsg.Rlt_Asset_Hero_RS_OWNED {
+				return false
+			}
 
 			if deadlinetime == 0 {
 				role.RoleStatus = clientmsg.Rlt_Asset_Hero_RS_OWNED
@@ -119,6 +123,7 @@ func (asset *PlayerAsset) AssetHero_AddHero(charid uint32, chartypeid uint32, de
 	} else {
 		asset.AssetMail_DirtyFlag |= DIRTYFLAG_TO_ALL
 	}
+	return true
 }
 
 //method
