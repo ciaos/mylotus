@@ -397,12 +397,12 @@ func login(req *WaitInfo) {
 			AddCachedGamePlayer(cache, req.UserAgent)
 			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 
-			if cache.BattleServerID != 0 {
-				msg := &proxymsg.Proxy_GS_BS_Query_BattleInfo{
-					Charid: cache.Char.CharID,
-				}
-				SendMessageTo(int32(cache.BattleServerID), conf.Server.BattleServerRename, cache.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_BS_QUERY_BATTLEINFO, msg)
-			}
+			/*		if cache.BattleServerID != 0 {
+					msg := &proxymsg.Proxy_GS_BS_Query_BattleInfo{
+						Charid: cache.Char.CharID,
+					}
+					SendMessageTo(int32(cache.BattleServerID), conf.Server.BattleServerRename, cache.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_BS_QUERY_BATTLEINFO, msg)
+				}*/
 		} else {
 			AddGamePlayer(player, req.UserAgent)
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
