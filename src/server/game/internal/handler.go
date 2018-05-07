@@ -225,14 +225,14 @@ func handleReqSetCharName(args []interface{}) {
 		RetCode:     clientmsg.Type_GameRetCode_GRC_OK,
 		CharName:    m.CharName,
 		IsNewCreate: m.IsNewCreate,
-		Sex:         m.Sex,
+		Gender:      m.Gender,
 	})
 
 	player.Char.CharName = m.CharName
 
-	_, ok := clientmsg.Type_SexType_name[int32(m.Sex)]
+	_, ok := clientmsg.Type_GenderType_name[int32(m.Gender)]
 	if ok {
-		player.Char.Sex = int32(m.Sex)
+		player.Char.Gender = int32(m.Gender)
 	}
 }
 

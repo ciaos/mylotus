@@ -28,7 +28,7 @@ type Character struct {
 	UserID     uint32
 	GsId       int32
 	Status     int32
-	Sex        int32
+	Gender     int32
 	CharName   string
 	CreateTime time.Time
 	UpdateTime time.Time
@@ -354,7 +354,7 @@ func login(req *WaitInfo) {
 			GsId:       int32(conf.Server.ServerID),
 			Status:     int32(clientmsg.UserStatus_US_PLAYER_ONLINE),
 			CharName:   "",
-			Sex:        int32(clientmsg.Type_SexType_TST_UNKNOWN),
+			Gender:     int32(clientmsg.Type_GenderType_TST_UNKNOWN),
 			CreateTime: time.Now(),
 			UpdateTime: time.Now(),
 		}
@@ -411,7 +411,7 @@ func login(req *WaitInfo) {
 			CharID:         player.Char.CharID,
 			IsNewCharacter: isnew,
 			CharName:       player.Char.CharName,
-			Sex:            clientmsg.Type_SexType(player.Char.Sex),
+			Gender:         clientmsg.Type_GenderType(player.Char.Gender),
 		})
 	} else {
 		(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
