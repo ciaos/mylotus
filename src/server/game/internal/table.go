@@ -827,6 +827,7 @@ func (table *Table) ClearTable(rlt *proxymsg.Proxy_BS_MS_AllocBattleRoom) {
 			BattleAddr:     rlt.Connectaddr,
 			BattleKey:      rlt.Battleroomkey,
 			BattleServerID: rlt.Battleserverid,
+			IsReconnect:    false,
 		}
 
 		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_BEGIN_BATTLE, msg)

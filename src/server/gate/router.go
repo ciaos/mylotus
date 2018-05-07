@@ -29,6 +29,7 @@ func init() {
 	msg.Processor.SetRouter(&clientmsg.Req_GM_Command{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Shop_List{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Shop_Buy{}, game.ChanRPC)
+	msg.Processor.SetRouter(&clientmsg.Req_Set_Tutorial{}, game.ChanRPC)
 
 	//battle server
 	msg.Processor.SetRouter(&clientmsg.Req_ConnectBS{}, game.ChanRPC)
@@ -36,6 +37,5 @@ func init() {
 	msg.Processor.SetRouter(&clientmsg.Transfer_Command{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Transfer_Loading_Progress{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Transfer_Battle_Message{}, game.ChanRPC)
-	msg.Processor.SetRouter(&clientmsg.Req_Re_ConnectBS{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Transfer_Battle_Heartbeat{}, game.ChanRPC)
 }

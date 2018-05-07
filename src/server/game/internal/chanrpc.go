@@ -134,8 +134,17 @@ func proxyHandleGSMSReconnect(pmsg *proxymsg.InternalMessage) {
 	}
 
 	table := getTableByCharID(msg.Charid)
-	rsp := table.ReconnectTable(msg.Charid)
-	SendMessageTo(pmsg.Fromid, pmsg.Fromtype, msg.Charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+	if table != nil {
+		rsp := table.ReconnectTable(msg.Charid)
+		SendMessageTo(pmsg.Fromid, pmsg.Fromtype, msg.Charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, rsp)
+	} else {
+		bench := getBenchByCharID(msg.Charid, true)
+		if bench != nil {
+			//todo
+		} else {
+
+		}
+	}
 }
 
 func proxyHandleGSMSOffline(pmsg *proxymsg.InternalMessage) {
@@ -314,10 +323,12 @@ func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 
 	log.Debug("Proxy_BS_GS_Query_BattleInfo %v", msg.CharID)
 	if msg.InBattle {
-		rsp := &clientmsg.Rlt_Continue_Battle{
-			CharID:     msg.CharID,
-			BattleKey:  msg.BattleKey,
-			BattleAddr: msg.BattleAddr,
+		rsp := &clientmsg.Rlt_NotifyBattleAddress{
+			RoomID:         msg.BattleRoomID,
+			BattleAddr:     msg.BattleAddr,
+			BattleKey:      msg.BattleKey,
+			BattleServerID: pmsg.Fromid,
+			IsReconnect:    true,
 		}
 		SendMsgToPlayer(msg.CharID, rsp)
 	} else {

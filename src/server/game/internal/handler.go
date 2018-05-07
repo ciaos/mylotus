@@ -35,6 +35,7 @@ func init() {
 	handler(&clientmsg.Req_GM_Command{}, handleReqGMCommand)
 	handler(&clientmsg.Req_Shop_List{}, handleReqShopList)
 	handler(&clientmsg.Req_Shop_Buy{}, handleReqShopBuy)
+	handler(&clientmsg.Req_Set_Tutorial{}, handleReqSetTutorial)
 
 	//battle server
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
@@ -42,7 +43,6 @@ func init() {
 	handler(&clientmsg.Transfer_Loading_Progress{}, handleTransferLoadingProgress)
 	handler(&clientmsg.Transfer_Command{}, handleTransferCommand)
 	handler(&clientmsg.Transfer_Battle_Message{}, handleTransferBattleMessage)
-	handler(&clientmsg.Req_Re_ConnectBS{}, handleReqReConnectBS)
 	handler(&clientmsg.Transfer_Battle_Heartbeat{}, handleReqBattleHeartBeat)
 }
 
@@ -548,26 +548,53 @@ func handleReqConnectBS(args []interface{}) {
 		return
 	}
 
-	room := getRoomByRoomID(m.RoomID)
-	if room == nil {
-		return
-	}
-
-	ret, name := room.connectRoom(m.CharID, m.BattleKey, a.RemoteAddr().String())
-	if ret {
-		player := &BPlayer{
-			CharID:        m.CharID,
-			CharName:      name,
-			GameServerID:  int(room.getMemberGSID(m.CharID)),
-			HeartBeatTime: time.Now(),
+	if m.IsReconnect == false {
+		room := getRoomByRoomID(m.RoomID)
+		if room == nil {
+			a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+				RetCode: clientmsg.Type_BattleRetCode_BRC_ROOM_NOT_EXIST,
+			})
+			a.Close()
+			return
 		}
-		AddBattlePlayer(player, &a)
-		rsp := room.genRoomInfoPB(m.CharID, false)
-		a.WriteMsg(rsp)
+
+		ret, name := room.connectRoom(m.CharID, m.BattleKey, a.RemoteAddr().String())
+		if ret {
+			player := &BPlayer{
+				CharID:        m.CharID,
+				CharName:      name,
+				GameServerID:  int(room.getMemberGSID(m.CharID)),
+				HeartBeatTime: time.Now(),
+			}
+			AddBattlePlayer(player, &a)
+			rsp := room.genRoomInfoPB(m.CharID, false)
+			a.WriteMsg(rsp)
+		} else {
+			a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+				RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
+			})
+		}
 	} else {
-		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
-			RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
-		})
+		room := getRoomByCharID(m.CharID, false)
+		if room == nil {
+			a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+				RetCode: clientmsg.Type_BattleRetCode_BRC_ROOM_NOT_EXIST,
+			})
+			a.Close()
+			return
+		}
+
+		log.Debug("handleReqReConnectBS CharID %v From Addr %v FrameID %v RoomID %v", m.CharID, a.RemoteAddr().String(), m.FrameID, room.roomid)
+		ret, _ := room.reConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
+		if ret {
+			ReconnectBattlePlayer(m.CharID, &a)
+			rsp := room.genRoomInfoPB(m.CharID, true)
+			a.WriteMsg(rsp)
+		} else {
+			a.WriteMsg(&clientmsg.Rlt_ConnectBS{
+				RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
+			})
+		}
 	}
 }
 
@@ -640,36 +667,6 @@ func handleReqBattleHeartBeat(args []interface{}) {
 	a.WriteMsg(m)
 }
 
-func handleReqReConnectBS(args []interface{}) {
-	m := args[0].(*clientmsg.Req_Re_ConnectBS)
-	a := args[1].(gate.Agent)
-
-	log.Debug("handleReqReConnectBS")
-	if a.UserData() != nil {
-		log.Error("Exist Connection Try Reconnect")
-		a.Close()
-		return
-	}
-
-	room := getRoomByCharID(m.CharID, false)
-	if room == nil {
-		a.Close()
-		return
-	}
-
-	log.Debug("handleReqReConnectBS CharID %v From Addr %v FrameID %v RoomID %v", m.CharID, a.RemoteAddr().String(), m.FrameID, room.roomid)
-	ret, _ := room.reConnectRoom(m.CharID, m.FrameID, m.BattleKey, a.RemoteAddr().String())
-	if ret {
-		ReconnectBattlePlayer(m.CharID, &a)
-		rsp := room.genRoomInfoPB(m.CharID, true)
-		a.WriteMsg(rsp)
-	} else {
-		a.WriteMsg(&clientmsg.Rlt_ConnectBS{
-			RetCode: clientmsg.Type_BattleRetCode_BRC_OTHER,
-		})
-	}
-}
-
 func handleReqGMCommand(args []interface{}) {
 	m := args[0].(*clientmsg.Req_GM_Command)
 	a := args[1].(gate.Agent)
@@ -692,6 +689,19 @@ func handleReqGMCommand(args []interface{}) {
 		Result: result.(string),
 	}
 	a.WriteMsg(rsp)
+}
+
+func handleReqSetTutorial(args []interface{}) {
+	m := args[0].(*clientmsg.Req_Set_Tutorial)
+	a := args[1].(gate.Agent)
+
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
+	}
+
+	log.Debug("CharID %v SetTutorial %v", player.Char.CharID, m.TutorialID)
 }
 
 func handleReqShopList(args []interface{}) {

@@ -21,6 +21,8 @@ type ReConnectBSSuite struct {
 	err   error
 	bconn net.Conn
 
+	username  string
+	password  string
 	charid    uint32
 	battlekey []byte
 	bsaddr    string
@@ -41,10 +43,10 @@ func (s *ReConnectBSSuite) SetUpTest(c *C) {
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	username := fmt.Sprintf("pengjing%d", rand.Intn(10000))
-	password := "123456"
+	s.username = fmt.Sprintf("pengjing%d", rand.Intn(10000))
+	s.password = "123456"
 
-	s.charid = QuickLogin(c, &s.conn, username, password)
+	s.charid = QuickLogin(c, &s.conn, s.username, s.password)
 
 	msgdata := QuickMatch(c, &s.conn)
 	rspMatch := &clientmsg.Rlt_Match{}
@@ -95,9 +97,10 @@ func (s *ReConnectBSSuite) SetUpTest(c *C) {
 	s.bsaddr = rspAddress.BattleAddr
 
 	reqMsg := &clientmsg.Req_ConnectBS{
-		RoomID:    rspAddress.RoomID,
-		BattleKey: rspAddress.BattleKey,
-		CharID:    s.charid,
+		RoomID:      rspAddress.RoomID,
+		BattleKey:   rspAddress.BattleKey,
+		CharID:      s.charid,
+		IsReconnect: false,
 	}
 
 	msgdata = SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, reqMsg, clientmsg.MessageType_MT_RLT_CONNECTBS)
@@ -149,23 +152,32 @@ func (s *ReConnectBSSuite) TestReConnectBS(c *C) {
 			break
 		}
 	}
+	s.conn.Close()
 	s.bconn.Close()
 	time.Sleep(time.Duration(3) * time.Second)
 
-	s.bconn, s.err = kcp.Dial(s.bsaddr)
+	QuickLogin(c, &s.conn, s.username, s.password)
+	msgdata := RecvUtil(c, &s.conn, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	rspAddress := &clientmsg.Rlt_NotifyBattleAddress{}
+	err := proto.Unmarshal(msgdata, rspAddress)
+	if err != nil {
+		c.Fatal("Rlt_NotifyBattleAddress Decode Error")
+	}
+	s.bconn, s.err = kcp.Dial(rspAddress.BattleAddr)
 	if s.err != nil {
 		c.Fatal("Connect BattleServer Error ", s.err)
 	}
-
-	req := &clientmsg.Req_Re_ConnectBS{
-		BattleKey: s.battlekey,
-		CharID:    s.charid,
-		FrameID:   closeFrameID,
+	req := &clientmsg.Req_ConnectBS{
+		RoomID:      rspAddress.RoomID,
+		BattleKey:   rspAddress.BattleKey,
+		CharID:      s.charid,
+		FrameID:     closeFrameID,
+		IsReconnect: true,
 	}
 
-	msgdata := SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_RE_CONNECTBS, req, clientmsg.MessageType_MT_RLT_CONNECTBS)
+	msgdata = SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, req, clientmsg.MessageType_MT_RLT_CONNECTBS)
 	rsp := &clientmsg.Rlt_ConnectBS{}
-	err := proto.Unmarshal(msgdata, rsp)
+	err = proto.Unmarshal(msgdata, rsp)
 	if err != nil {
 		c.Fatal("Rlt_ConnectBS Decode Error ", err)
 	}
@@ -197,23 +209,33 @@ func (s *ReConnectBSSuite) TestReConnectBS_Restart(c *C) {
 			break
 		}
 	}
+	s.conn.Close()
 	s.bconn.Close()
 	time.Sleep(time.Duration(3) * time.Second)
 
-	s.bconn, s.err = kcp.Dial(s.bsaddr)
+	QuickLogin(c, &s.conn, s.username, s.password)
+	msgdata := RecvUtil(c, &s.conn, clientmsg.MessageType_MT_RLT_NOTIFYBATTLEADDRESS)
+	rspAddress := &clientmsg.Rlt_NotifyBattleAddress{}
+	err := proto.Unmarshal(msgdata, rspAddress)
+	if err != nil {
+		c.Fatal("Rlt_NotifyBattleAddress Decode Error")
+	}
+	s.bconn, s.err = kcp.Dial(rspAddress.BattleAddr)
 	if s.err != nil {
 		c.Fatal("Connect BattleServer Error ", s.err)
 	}
 
-	req := &clientmsg.Req_Re_ConnectBS{
-		BattleKey: s.battlekey,
-		CharID:    s.charid,
-		FrameID:   0,
+	req := &clientmsg.Req_ConnectBS{
+		RoomID:      rspAddress.RoomID,
+		BattleKey:   rspAddress.BattleKey,
+		CharID:      s.charid,
+		FrameID:     0,
+		IsReconnect: true,
 	}
 
-	msgdata := SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_RE_CONNECTBS, req, clientmsg.MessageType_MT_RLT_CONNECTBS)
+	msgdata = SendAndRecvUtil(c, &s.bconn, clientmsg.MessageType_MT_REQ_CONNECTBS, req, clientmsg.MessageType_MT_RLT_CONNECTBS)
 	rsp := &clientmsg.Rlt_ConnectBS{}
-	err := proto.Unmarshal(msgdata, rsp)
+	err = proto.Unmarshal(msgdata, rsp)
 	if err != nil {
 		c.Fatal("Rlt_ConnectBS Decode Error ", err)
 	}

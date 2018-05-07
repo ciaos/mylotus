@@ -411,6 +411,7 @@ func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_
 			TeamID:   member.teamid,
 			OwnerID:  member.ownerid,
 			SkinID:   member.skinid,
+			Progress: uint32(member.progress),
 		}
 
 		rsp.Member = append(rsp.Member, m)
