@@ -36,6 +36,7 @@ func init() {
 	handler(&clientmsg.Req_Shop_List{}, handleReqShopList)
 	handler(&clientmsg.Req_Shop_Buy{}, handleReqShopBuy)
 	handler(&clientmsg.Req_Set_Tutorial{}, handleReqSetTutorial)
+	handler(&clientmsg.Req_Re_Enter_Battle{}, handleReReEnterBattle)
 
 	//battle server
 	handler(&clientmsg.Req_ConnectBS{}, handleReqConnectBS)
@@ -702,6 +703,26 @@ func handleReqSetTutorial(args []interface{}) {
 	}
 
 	log.Debug("CharID %v SetTutorial %v", player.Char.CharID, m.TutorialID)
+}
+
+func handleReReEnterBattle(args []interface{}) {
+	_ = args[0].(*clientmsg.Req_Re_Enter_Battle)
+	a := args[1].(gate.Agent)
+
+	player := getGSPlayer(&a)
+	if player == nil {
+		a.Close()
+		return
+	}
+
+	if player.BattleServerID != 0 {
+		msg := &proxymsg.Proxy_GS_BS_Query_BattleInfo{
+			Charid: player.Char.CharID,
+		}
+		SendMessageTo(int32(player.BattleServerID), conf.Server.BattleServerRename, player.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_BS_QUERY_BATTLEINFO, msg)
+	} else {
+		a.WriteMsg(&clientmsg.Rlt_Re_Enter_Battle{RetCode: clientmsg.Type_BattleRetCode_BRC_ROOM_NOT_EXIST})
+	}
 }
 
 func handleReqShopList(args []interface{}) {

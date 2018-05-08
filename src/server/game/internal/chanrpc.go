@@ -334,6 +334,8 @@ func proxyHandleBSGSQueryBattleInfo(pmsg *proxymsg.InternalMessage) {
 	} else {
 		player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		player.BattleServerID = 0
+
+		SendMsgToPlayer(player.Char.CharID, &clientmsg.Rlt_Re_Enter_Battle{RetCode: clientmsg.Type_BattleRetCode_BRC_ROOM_NOT_EXIST})
 	}
 }
 

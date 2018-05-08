@@ -392,17 +392,16 @@ func login(req *WaitInfo) {
 	} else {
 		ret = player.LoadPlayerAsset()
 	}
+
+	checkreenterbs := false
 	if ret == true {
 		if cache != nil {
 			AddCachedGamePlayer(cache, req.UserAgent)
 			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 
-			/*		if cache.BattleServerID != 0 {
-					msg := &proxymsg.Proxy_GS_BS_Query_BattleInfo{
-						Charid: cache.Char.CharID,
-					}
-					SendMessageTo(int32(cache.BattleServerID), conf.Server.BattleServerRename, cache.Char.CharID, proxymsg.ProxyMessageType_PMT_GS_BS_QUERY_BATTLEINFO, msg)
-				}*/
+			if cache.BattleServerID != 0 {
+				checkreenterbs = true
+			}
 		} else {
 			AddGamePlayer(player, req.UserAgent)
 			player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
@@ -414,11 +413,12 @@ func login(req *WaitInfo) {
 
 	if ret == true {
 		(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{
-			RetCode:        clientmsg.Type_GameRetCode_GRC_OK,
-			CharID:         player.Char.CharID,
-			IsNewCharacter: isnew,
-			CharName:       player.Char.CharName,
-			Gender:         clientmsg.Type_GenderType(player.Char.Gender),
+			RetCode:            clientmsg.Type_GameRetCode_GRC_OK,
+			CharID:             player.Char.CharID,
+			IsNewCharacter:     isnew,
+			CharName:           player.Char.CharName,
+			Gender:             clientmsg.Type_GenderType(player.Char.Gender),
+			CheckReenterBattle: checkreenterbs,
 		})
 	} else {
 		(*req.UserAgent).WriteMsg(&clientmsg.Rlt_Login{

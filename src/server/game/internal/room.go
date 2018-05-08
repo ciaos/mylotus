@@ -21,11 +21,12 @@ const (
 	ROOM_END         = "room_end"
 	ROOM_CLEAR       = "room_clear"
 
-	MEMBER_UNCONNECTED = "member_unconnected"
-	MEMBER_CONNECTED   = "member_connected"
-	MEMBER_RECONNECTED = "member_reconnected"
-	MEMBER_OFFLINE     = "member_offline"
-	MEMBER_END         = "member_end"
+	MEMBER_UNCONNECTED  = "member_unconnected"
+	MEMBER_CONNECTED    = "member_connected"
+	MEMBER_RECONNECTING = "member_reconnecting"
+	MEMBER_RECONNECTED  = "member_reconnected"
+	MEMBER_OFFLINE      = "member_offline"
+	MEMBER_END          = "member_end"
 
 	SYNC_BSINFO_STEP = 10
 )
@@ -133,7 +134,7 @@ func (room *Room) sendmsg(charid uint32, msgdata interface{}) {
 func (room *Room) checkOffline() {
 	var allOffLine = true
 	for _, member := range room.members {
-		if (member.status == MEMBER_CONNECTED || member.status == MEMBER_RECONNECTED) && member.ownerid == 0 {
+		if (member.status == MEMBER_CONNECTED || member.status == MEMBER_RECONNECTED || member.status == MEMBER_RECONNECTING) && member.ownerid == 0 {
 			allOffLine = false
 			break
 		}
@@ -375,22 +376,32 @@ func (room *Room) notifyBattleStart() {
 }
 
 func (room *Room) loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
-	if room.status != ROOM_CONNECTING {
-		log.Error("Invalid Status %v RoomID %v Charid %v Progress %v", room.status, room.roomid, req.CharID, req.Progress)
-		return
-	}
+	if room.status == ROOM_CONNECTING {
+		member, ok := room.members[(*req).CharID]
+		if ok {
+			member.progress = (*req).Progress
+			log.Debug("SetLoadingProgress RoomID %v CharID %v PlayerID %v Progress %v", room.roomid, charid, (*req).CharID, (*req).Progress)
+			room.broadcast(req)
 
-	member, ok := room.members[(*req).CharID]
-	if ok {
-		member.progress = (*req).Progress
-		log.Debug("SetLoadingProgress RoomID %v CharID %v PlayerID %v Progress %v", room.roomid, charid, (*req).CharID, (*req).Progress)
-		room.broadcast(req)
+			if member.progress >= 100 {
+				room.memberloadingok += 1
 
-		if member.progress >= 100 {
-			room.memberloadingok += 1
-
-			if room.memberloadingok >= len(room.members) {
-				room.changeRoomStatus(ROOM_FIGHTING)
+				if room.memberloadingok >= len(room.members) {
+					room.changeRoomStatus(ROOM_FIGHTING)
+				}
+			}
+		}
+	} else {
+		member, ok := room.members[charid]
+		if ok && member.status == MEMBER_RECONNECTING {
+			SendMsgToPlayer(charid, req)
+			member.progress = (*req).Progress
+			if member.progress >= 100 {
+				rsp := &clientmsg.Rlt_StartBattle{
+					RandSeed: room.seed,
+				}
+				SendMsgToPlayer(charid, rsp)
+				member.changeMemberStatus(MEMBER_RECONNECTED)
 			}
 		}
 	}
@@ -473,7 +484,7 @@ func (room *Room) reConnectRoom(charid uint32, frameid uint32, battlekey []byte,
 	member, ok := room.members[charid]
 	if ok {
 		member.remoteaddr = remoteaddr
-		member.changeMemberStatus(MEMBER_RECONNECTED)
+		member.changeMemberStatus(MEMBER_RECONNECTING)
 		member.frameid = frameid
 		log.Debug("ReConnectRoom RoomID %v CharID %v", room.roomid, charid)
 		return true, member.charname

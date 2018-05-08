@@ -30,6 +30,7 @@ func init() {
 	msg.Processor.SetRouter(&clientmsg.Req_Shop_List{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Shop_Buy{}, game.ChanRPC)
 	msg.Processor.SetRouter(&clientmsg.Req_Set_Tutorial{}, game.ChanRPC)
+	msg.Processor.SetRouter(&clientmsg.Req_Re_Enter_Battle{}, game.ChanRPC)
 
 	//battle server
 	msg.Processor.SetRouter(&clientmsg.Req_ConnectBS{}, game.ChanRPC)

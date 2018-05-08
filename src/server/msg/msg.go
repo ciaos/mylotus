@@ -67,7 +67,7 @@ func init() {
 	Processor.Register(&clientmsg.Req_Re_ConnectGS{})
 	Processor.Register(&clientmsg.Rlt_Re_ConnectGS{})
 	Processor.Register(&clientmsg.Req_Set_Tutorial{})
-	Processor.Register(&clientmsg.Rlt_Set_Tutorial{})
+	Processor.Register(&clientmsg.Req_Re_Enter_Battle{})
 	Processor.Register(&clientmsg.Transfer_Battle_Heartbeat{})
 	Processor.Register(&clientmsg.Req_GM_Command{})
 	Processor.Register(&clientmsg.Rlt_GM_Command{})
@@ -77,4 +77,5 @@ func init() {
 	Processor.Register(&clientmsg.Rlt_Shop_List{})
 	Processor.Register(&clientmsg.Req_Shop_Buy{})
 	Processor.Register(&clientmsg.Rlt_Shop_Buy{})
+	Processor.Register(&clientmsg.Rlt_Re_Enter_Battle{})
 }
