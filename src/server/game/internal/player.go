@@ -152,7 +152,7 @@ func AddCachedGamePlayer(player *Player, agent *gate.Agent) {
 	log.Debug("AddGamePlayerFromCache %v From %v", player.Char.CharID, (*agent).RemoteAddr().String())
 }
 
-func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
+func ReconnectGamePlayer(charid uint32, agent *gate.Agent) bool {
 	exist, ok := GamePlayerManager[charid]
 	if ok {
 		log.Debug("ReconnectGamePlayer %v OK From %v Exist %v", charid, (*agent).RemoteAddr().String(), (*exist.agent).RemoteAddr().String())
@@ -165,8 +165,11 @@ func ReconnectGamePlayer(charid uint32, agent *gate.Agent) {
 		exist.player.Char.UpdateTime = time.Now()
 		exist.player.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 		exist.player.OfflineTime = time.Unix(0, 0)
+
+		return true
 	} else {
 		log.Error("ReconnectGamePlayer %v Error From %v", charid, (*agent).RemoteAddr().String())
+		return false
 	}
 }
 
@@ -400,7 +403,7 @@ func login(req *WaitInfo) {
 			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 
 			if cache.BattleServerID != 0 {
-				checkreenterbs = true
+				//	checkreenterbs = true
 			}
 		} else {
 			AddGamePlayer(player, req.UserAgent)

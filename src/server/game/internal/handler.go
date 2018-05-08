@@ -186,7 +186,14 @@ func handleReqReConnectGS(args []interface{}) {
 		return
 	}
 
-	ReconnectGamePlayer(m.CharID, &a)
+	ret := ReconnectGamePlayer(m.CharID, &a)
+	if ret == false {
+		SendMsgToPlayer(m.CharID, &clientmsg.Rlt_Re_ConnectGS{
+			RetCode: clientmsg.Type_GameRetCode_GRC_OTHER,
+		})
+		return
+	}
+
 	SendMsgToPlayer(m.CharID, &clientmsg.Rlt_Re_ConnectGS{
 		RetCode: clientmsg.Type_GameRetCode_GRC_OK,
 	})

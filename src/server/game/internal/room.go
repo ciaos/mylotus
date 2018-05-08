@@ -392,15 +392,15 @@ func (room *Room) loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Pro
 			}
 		}
 	} else {
-		member, ok := room.members[charid]
+		member, ok := room.members[(*req).CharID]
 		if ok && member.status == MEMBER_RECONNECTING {
-			SendMsgToPlayer(charid, req)
+			room.sendmsg(member.charid, req)
 			member.progress = (*req).Progress
 			if member.progress >= 100 {
 				rsp := &clientmsg.Rlt_StartBattle{
 					RandSeed: room.seed,
 				}
-				SendMsgToPlayer(charid, rsp)
+				room.sendmsg((*req).CharID, rsp)
 				member.changeMemberStatus(MEMBER_RECONNECTED)
 			}
 		}
