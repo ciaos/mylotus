@@ -403,7 +403,7 @@ func login(req *WaitInfo) {
 			cache.ChangeGamePlayerStatus(clientmsg.UserStatus_US_PLAYER_ONLINE)
 
 			if cache.BattleServerID != 0 {
-				//	checkreenterbs = true
+				checkreenterbs = true
 			}
 		} else {
 			AddGamePlayer(player, req.UserAgent)

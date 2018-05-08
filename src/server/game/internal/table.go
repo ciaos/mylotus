@@ -251,17 +251,18 @@ func (table *Table) notifyMatchResultToTable(retcode clientmsg.Type_GameRetCode)
 
 	msg := &clientmsg.Rlt_Match{
 		RetCode: retcode,
-		Members: []*clientmsg.Rlt_Match_MemberInfo{},
+		Members: []*clientmsg.MemberInfo{},
 	}
 
 	if retcode == clientmsg.Type_GameRetCode_GRC_MATCH_OK {
 		for _, seat := range table.seats {
-			member := &clientmsg.Rlt_Match_MemberInfo{}
+			member := &clientmsg.MemberInfo{}
 			member.CharID = (*seat).charid
 			member.OwnerID = (*seat).ownerid
 			member.TeamID = (*seat).teamid
 			member.CharName = (*seat).charname
 			member.CharType = (*seat).chartype
+			member.SkinID = (*seat).skinid
 			member.Status = clientmsg.MemberStatus(seat.status)
 
 			msg.Members = append(msg.Members, member)
@@ -725,12 +726,13 @@ func (table *Table) ConfirmTable(charid uint32, matchmode int32) {
 			seat.status = SEAT_CONFIRM
 			log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
 
-			member := &clientmsg.Rlt_Match_MemberInfo{}
+			member := &clientmsg.MemberInfo{}
 			member.CharID = (*seat).charid
 			member.OwnerID = (*seat).ownerid
 			member.TeamID = (*seat).teamid
 			member.CharName = (*seat).charname
 			member.CharType = (*seat).chartype
+			member.SkinID = (*seat).skinid
 			member.Status = clientmsg.MemberStatus(seat.status)
 			msg.Members = append(msg.Members, member)
 		}
@@ -768,7 +770,7 @@ func (table *Table) ReconnectTable(charid uint32) *clientmsg.Rlt_Match {
 
 	msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_RECONNECT_OK
 	for _, seat := range table.seats {
-		member := &clientmsg.Rlt_Match_MemberInfo{}
+		member := &clientmsg.MemberInfo{}
 		member.CharID = (*seat).charid
 		member.OwnerID = (*seat).ownerid
 		member.TeamID = (*seat).teamid
@@ -801,7 +803,7 @@ func (table *Table) RejectTable(charid uint32, matchmode int32) {
 			seat.status = SEAT_REJECT
 			log.Debug("RejectTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
 
-			member := &clientmsg.Rlt_Match_MemberInfo{}
+			member := &clientmsg.MemberInfo{}
 			member.CharID = (*seat).charid
 			member.OwnerID = (*seat).ownerid
 			member.TeamID = (*seat).teamid

@@ -376,11 +376,12 @@ func (room *Room) notifyBattleStart() {
 }
 
 func (room *Room) loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Progress) {
+	log.Debug("SetLoadingProgress RoomID %v CharID %v PlayerID %v Progress %v RoomStatus %v", room.roomid, charid, (*req).CharID, (*req).Progress, room.status)
 	if room.status == ROOM_CONNECTING {
 		member, ok := room.members[(*req).CharID]
 		if ok {
 			member.progress = (*req).Progress
-			log.Debug("SetLoadingProgress RoomID %v CharID %v PlayerID %v Progress %v", room.roomid, charid, (*req).CharID, (*req).Progress)
+
 			room.broadcast(req)
 
 			if member.progress >= 100 {
@@ -415,7 +416,7 @@ func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_
 	}
 
 	for _, member := range room.members {
-		m := &clientmsg.Rlt_ConnectBS_MemberInfo{
+		m := &clientmsg.MemberInfo{
 			CharID:   member.charid,
 			CharName: member.charname,
 			CharType: member.chartype,

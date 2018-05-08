@@ -84,6 +84,16 @@ func (s *ReconnectGSSuite) TestReconnectGS_Normal(c *C) {
 		c.Fatal("Rlt_Re_ConnectGS Decode Error")
 	}
 	c.Assert(rlt.RetCode, Equals, clientmsg.Type_GameRetCode_GRC_OK)
+
+	reqMsg := &clientmsg.Ping{
+		ID: uint32(rand.Intn(10000)),
+	}
+
+	msgdata = SendAndRecvUtil(c, &s.conn, clientmsg.MessageType_MT_PING, reqMsg, clientmsg.MessageType_MT_PONG)
+	rspMsg := &clientmsg.Pong{}
+	proto.Unmarshal(msgdata, rspMsg)
+	c.Assert(rspMsg.ID, Equals, reqMsg.ID)
+
 }
 
 func (s *ReconnectGSSuite) TestReconnectGS_Match(c *C) {
