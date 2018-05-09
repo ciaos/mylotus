@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	ROOM_STATUS_NONE = "room_status_none"
-	ROOM_CONNECTING  = "room_connecting"
-	ROOM_FIGHTING    = "room_fighting"
-	ROOM_END         = "room_end"
-	ROOM_CLEAR       = "room_clear"
+	ROOM_STATUS_NONE   = "room_status_none"
+	ROOM_CONNECTING    = "room_connecting"
+	ROOM_WAIT_FIGHTING = "room_wait_fighting"
+	ROOM_FIGHTING      = "room_fighting"
+	ROOM_END           = "room_end"
+	ROOM_CLEAR         = "room_clear"
 
 	MEMBER_UNCONNECTED  = "member_unconnected"
 	MEMBER_CONNECTED    = "member_connected"
@@ -223,6 +224,12 @@ func (room *Room) update(now *time.Time) {
 			(*room).checktime = (*now)
 			room.checkOffline()
 		}
+	} else if (*room).status == ROOM_WAIT_FIGHTING {
+		//loading状态30秒直接切换
+		if (*now).Unix()-(*room).checktime.Unix() > 1 {
+			room.changeRoomStatus(ROOM_FIGHTING)
+			return
+		}
 	} else if (*room).status == ROOM_CONNECTING {
 		//loading状态30秒直接切换
 		if (*now).Unix()-(*room).createtime.Unix() > 30 {
@@ -388,7 +395,7 @@ func (room *Room) loadingRoom(charid uint32, req *clientmsg.Transfer_Loading_Pro
 				room.memberloadingok += 1
 
 				if room.memberloadingok >= len(room.members) {
-					room.changeRoomStatus(ROOM_FIGHTING)
+					room.changeRoomStatus(ROOM_WAIT_FIGHTING)
 				}
 			}
 		}
@@ -531,9 +538,12 @@ func (room *Room) EndBattle(charid uint32) {
 }
 
 func (room *Room) AddFrameMessage(charid uint32, transcmd *clientmsg.Transfer_Command) {
-	for _, message := range transcmd.Messages {
-		message.CharID = charid
-		room.messages = append(room.messages, message)
+	member, ok := room.members[charid]
+	if ok && member.status == MEMBER_CONNECTED {
+		for _, message := range transcmd.Messages {
+			message.CharID = charid
+			room.messages = append(room.messages, message)
+		}
 	}
 }
 
