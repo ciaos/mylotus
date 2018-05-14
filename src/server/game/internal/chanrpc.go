@@ -29,7 +29,7 @@ func queueMessage(args []interface{}) {
 		log.Error("queueMessage InnerMsg Decode Error %v", err)
 		return
 	}
-	if time.Now().Unix()-pmsg.Time > 4 {
+	if time.Now().Unix()-pmsg.Time > 1 {
 		log.Error("server busy proxymsg createts %v nowts %v msgtype %v", pmsg.Time, time.Now().Unix(), proxymsg.ProxyMessageType(pmsg.Msgid))
 	}
 

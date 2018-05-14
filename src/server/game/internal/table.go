@@ -332,8 +332,9 @@ func (table *Table) changeTableStatus(status string) {
 				table.changeTableStatus(MATCH_ERROR)
 			}
 		} else {
-			table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
-			table.changeTableStatus(MATCH_FINISH)
+			//	table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_ERROR)
+			//	table.changeTableStatus(MATCH_FINISH)
+			table.changeTableStatus(MATCH_CONTINUE)
 		}
 	} else if (*table).status == MATCH_CHARTYPE_FIXED {
 		//notify fixed time
