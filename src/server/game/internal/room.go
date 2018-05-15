@@ -420,6 +420,7 @@ func (room *Room) genRoomInfoPB(charid uint32, isreconnect bool) *clientmsg.Rlt_
 		IsReconnect: isreconnect,
 		RetCode:     clientmsg.Type_BattleRetCode_BRC_OK,
 		MapID:       room.mapid,
+		Mode:        clientmsg.MatchModeType(room.matchmode),
 	}
 
 	for _, member := range room.members {
