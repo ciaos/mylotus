@@ -556,6 +556,7 @@ func handleReqConnectBS(args []interface{}) {
 		return
 	}
 
+	log.Debug("handleReqConnectBS %v", m.CharID)
 	if m.IsReconnect == false {
 		room := getRoomByRoomID(m.RoomID)
 		if room == nil {
@@ -656,6 +657,7 @@ func handleTransferBattleMessage(args []interface{}) {
 
 	room := getRoomByCharID(player.CharID, false)
 	if room != nil {
+		m.CharID = player.CharID
 		room.broadcast(m)
 	}
 }
