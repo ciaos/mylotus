@@ -58,7 +58,7 @@ func getNextSeq() (int, error) {
 		defer Mongo.UnRef(s)
 
 		type Counter struct {
-			Id  bson.ObjectId "_id"
+			Id  string "_id"
 			Seq int
 		}
 

@@ -45,7 +45,7 @@ func getNextSeq() (int, error) {
 		defer Pmongo.UnRef(s)
 
 		type Counter struct {
-			Id  bson.ObjectId "_id"
+			Id  string "_id"
 			Seq int
 		}
 
