@@ -51,28 +51,6 @@ func handler(m interface{}, h interface{}) {
 	skeleton.RegisterChanRPC(reflect.TypeOf(m), h)
 }
 
-func getNextSeq() (int, error) {
-	id, err := Mongo.NextSeq(DB_NAME_GAME, TB_NAME_COUNTER, "counterid")
-	if err != nil && err.Error() == "not found" {
-		s := Mongo.Ref()
-		defer Mongo.UnRef(s)
-
-		type Counter struct {
-			Id  string "_id"
-			Seq int
-		}
-
-		id = 1
-		c := s.DB(DB_NAME_GAME).C(TB_NAME_COUNTER)
-		err = c.Insert(&Counter{
-			Id:  "counterid",
-			Seq: id,
-		})
-	}
-
-	return id, err
-}
-
 func getGSPlayer(a *gate.Agent) *Player {
 	charid := (*a).UserData()
 	if charid != nil {
