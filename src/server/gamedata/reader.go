@@ -30,6 +30,7 @@ var (
 	CSVNewPlayer   *recordfile.RecordFile
 	CSVBenchConfig *recordfile.RecordFile
 	CSVShopItem    *recordfile.RecordFile
+	CSVRandomName  *recordfile.RecordFile
 )
 
 func LoadCSV() {
@@ -38,4 +39,5 @@ func LoadCSV() {
 	CSVNewPlayer = readRf(cfg.NewPlayer{})
 	CSVBenchConfig = readRf(cfg.BenchConfig{})
 	CSVShopItem = readRf(cfg.ShopItem{})
+	CSVRandomName = readRf(cfg.RandomName{})
 }

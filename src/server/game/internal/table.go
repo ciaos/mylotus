@@ -9,7 +9,6 @@ import (
 	"server/gamedata/cfg"
 	"server/msg/clientmsg"
 	"server/msg/proxymsg"
-	"strconv"
 	"strings"
 	"time"
 
@@ -195,20 +194,26 @@ func (table *Table) fillRobotToTable() bool {
 	for i <= robotnum {
 
 		charid := 1000000000 + uint32(rand.Intn(100000000))
+
+		nr1 := gamedata.CSVRandomName.Record(rand.Intn(gamedata.CSVRandomName.NumRecord()))
+		row1 := nr1.(*cfg.RandomName)
+		nr2 := gamedata.CSVRandomName.Record(rand.Intn(gamedata.CSVRandomName.NumRecord()))
+		row2 := nr2.(*cfg.RandomName)
+
 		teamid, _ := table.getTeamID(row.TeamCnt)
 		seat := &Seat{
 			charid:     charid,
 			jointime:   time.Now(),
 			serverid:   0,
 			servertype: "",
-			charname:   strconv.Itoa(int(charid)),
+			charname:   row1.FirstName + row2.SecondName,
 			chartype:   0,
 			ownerid:    ownerid,
 			status:     SEAT_NONE,
 			teamid:     teamid,
 		}
 		(*table).seats = append((*table).seats, seat)
-		log.Debug("fillRobotToTable RobotID %v OwnerID %v", (*seat).charid, (*seat).ownerid)
+		log.Debug("fillRobotToTable RobotID %v OwnerID %v CharName %v", seat.charid, seat.ownerid, seat.charname)
 		i++
 	}
 	return true
