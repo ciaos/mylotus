@@ -329,6 +329,25 @@ func (table *Table) changeTableStatus(status string) {
 		//notify all member to choose
 		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
 		table.changeTableStatus(MATCH_CONFIRM)
+	} else if (*table).status == MATCH_CONFIRM {
+		msg := &clientmsg.Rlt_Match{}
+		for _, seat := range table.seats {
+			if (*seat).ownerid != 0 {
+				seat.status = SEAT_CONFIRM
+
+				member := &clientmsg.MemberInfo{}
+				member.CharID = (*seat).charid
+				member.OwnerID = (*seat).ownerid
+				member.TeamID = (*seat).teamid
+				member.CharName = (*seat).charname
+				member.CharType = (*seat).chartype
+				member.SkinID = (*seat).skinid
+				member.Status = clientmsg.MemberStatus(seat.status)
+				msg.Members = append(msg.Members, member)
+			}
+		}
+		msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
+		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 	} else if (*table).status == MATCH_TIMEOUT {
 		if table.matchmode == int32(clientmsg.MatchModeType_MMT_AI) {
 			//fill with robot and notify all member to choose
@@ -730,9 +749,9 @@ func (table *Table) ConfirmTable(charid uint32, matchmode int32) {
 	msg := &clientmsg.Rlt_Match{}
 
 	for _, seat := range table.seats {
-		if (*seat).charid == charid || (*seat).ownerid == charid {
+		if (*seat).charid == charid {
 			seat.status = SEAT_CONFIRM
-			log.Debug("ConfirmTable TableID %v CharID %v OwnerID %v", table.tableid, seat.charid, seat.ownerid)
+			log.Debug("ConfirmTable TableID %v CharID %v", table.tableid, seat.charid)
 
 			member := &clientmsg.MemberInfo{}
 			member.CharID = (*seat).charid
@@ -749,6 +768,8 @@ func (table *Table) ConfirmTable(charid uint32, matchmode int32) {
 			allconfirmed = false
 		}
 	}
+	msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
+	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 
 	if allconfirmed {
 		log.Debug("AllConfirmTable TableID %v", table.tableid)
@@ -756,13 +777,11 @@ func (table *Table) ConfirmTable(charid uint32, matchmode int32) {
 		r := gamedata.CSVMatchMode.Index((*table).matchmode)
 		row := r.(*cfg.MatchMode)
 		msg.WaitUntilTime = time.Now().Unix() + int64(row.ChooseTimeOutSec)
+		msg.Members = append([]*clientmsg.MemberInfo{})
+		table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 
 		table.changeTableStatus(MATCH_CHARTYPE_CHOOSING)
-	} else {
-		msg.RetCode = clientmsg.Type_GameRetCode_GRC_MATCH_CONFIRM
 	}
-
-	table.broadcast(proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, msg)
 }
 
 func (table *Table) ReconnectTable(charid uint32) *clientmsg.Rlt_Match {
