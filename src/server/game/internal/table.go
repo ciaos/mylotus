@@ -285,8 +285,14 @@ func (table *Table) notifyMatchResultToTable(retcode clientmsg.Type_GameRetCode)
 
 func (table *Table) kickBadGuy() {
 	//循环删除没有确定和拒绝的玩家
+
+	isallrobot := true
 reloop:
 	for i, seat := range (*table).seats { //kick badguy and robot
+		if seat.ownerid == 0 {
+			isallrobot = false
+		}
+
 		if seat.status != SEAT_CONFIRM {
 			if seat.ownerid == 0 {
 				SendMessageTo(seat.serverid, seat.servertype, seat.charid, proxymsg.ProxyMessageType_PMT_MS_GS_MATCH_RESULT, &clientmsg.Rlt_Match{RetCode: clientmsg.Type_GameRetCode_GRC_MATCH_ERROR})
@@ -306,11 +312,14 @@ reloop:
 		}
 	}
 
-	table.changeTableStatus(MATCH_CONTINUE)
-
-	//重置状态
-	for _, seat := range (*table).seats {
-		seat.status = SEAT_NONE
+	if isallrobot == true {
+		table.changeTableStatus(MATCH_END)
+	} else {
+		table.changeTableStatus(MATCH_CONTINUE)
+		//重置状态
+		for _, seat := range (*table).seats {
+			seat.status = SEAT_NONE
+		}
 	}
 }
 
