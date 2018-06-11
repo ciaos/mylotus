@@ -285,13 +285,8 @@ func (table *Table) notifyMatchResultToTable(retcode clientmsg.Type_GameRetCode)
 
 func (table *Table) kickBadGuy() {
 	//循环删除没有确定和拒绝的玩家
-
-	isallrobot := true
 reloop:
 	for i, seat := range (*table).seats { //kick badguy and robot
-		if seat.ownerid == 0 {
-			isallrobot = false
-		}
 
 		if seat.status != SEAT_CONFIRM {
 			if seat.ownerid == 0 {
@@ -312,13 +307,20 @@ reloop:
 		}
 	}
 
-	if isallrobot == true {
-		table.changeTableStatus(MATCH_END)
-	} else {
-		table.changeTableStatus(MATCH_CONTINUE)
-		//重置状态
-		for _, seat := range (*table).seats {
-			seat.status = SEAT_NONE
+	table.changeTableStatus(MATCH_CONTINUE)
+	//重置状态
+	for _, seat := range (*table).seats {
+		seat.status = SEAT_NONE
+	}
+}
+
+func (table *Table) clearRobot() {
+reloop:
+	for i, seat := range (*table).seats { //kick badguy and robot
+		if seat.ownerid != 0 {
+			delete(PlayerTableIDMap, seat.charid)
+			(*table).seats = append(table.seats[0:i], table.seats[i+1:]...)
+			goto reloop
 		}
 	}
 }
@@ -334,6 +336,8 @@ func (table *Table) changeTableStatus(status string) {
 		table.changeTableStatus(MATCH_FINISH)
 	} else if (*table).status == MATCH_EMPTY {
 		table.deleteTable()
+	} else if (*table).status == MATCH_CONTINUE {
+		table.clearRobot()
 	} else if (*table).status == MATCH_OK {
 		//notify all member to choose
 		table.notifyMatchResultToTable(clientmsg.Type_GameRetCode_GRC_MATCH_OK)
